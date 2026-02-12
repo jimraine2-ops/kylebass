@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAIPortfolio } from "@/hooks/useStockData";
 import { resetAIWallet } from "@/lib/api";
-import { TrendingUp, TrendingDown, Bot, Wallet, Trophy, Clock, BarChart3, RotateCcw, Target } from "lucide-react";
+import { TrendingUp, TrendingDown, Bot, Wallet, Trophy, Clock, BarChart3, RotateCcw, Target, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 export default function AITradingPage() {
   const { data, isLoading, refetch } = useAIPortfolio();
@@ -32,7 +32,6 @@ export default function AITradingPage() {
     }
   };
 
-  // Cumulative PnL chart data
   const pnlChartData = closedTrades
     .slice()
     .reverse()
@@ -47,9 +46,8 @@ export default function AITradingPage() {
       return acc;
     }, []);
 
-  // Win/Loss pie data
-  const wins = closedTrades.filter((t: any) => (t.pnl || 0) > 0).length;
-  const losses = closedTrades.filter((t: any) => (t.pnl || 0) <= 0).length;
+  const wins = stats.wins || 0;
+  const losses = stats.losses || 0;
   const pieData = [
     { name: '승', value: wins, fill: 'hsl(var(--stock-up))' },
     { name: '패', value: losses, fill: 'hsl(var(--stock-down))' },
@@ -65,11 +63,10 @@ export default function AITradingPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <Bot className="w-5 h-5 text-primary" />
-          AI 자동 거래 대시보드
+          AI 자율 매매 대시보드
         </h2>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
@@ -78,7 +75,7 @@ export default function AITradingPage() {
       </div>
 
       {/* Top Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
@@ -112,6 +109,15 @@ export default function AITradingPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
+              <Scale className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">손익비</span>
+            </div>
+            <p className="text-xl font-bold font-mono">{stats.profitFactor || 0}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
               <Target className="w-4 h-4 text-primary" />
               <span className="text-xs text-muted-foreground">총 PnL</span>
             </div>
@@ -131,13 +137,13 @@ export default function AITradingPage() {
         </Card>
       </div>
 
-      {/* Open Positions - Real-time PnL */}
+      {/* Open Positions */}
       {openPositions.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-stock-up animate-pulse" />
-              보유 중인 포지션 (실시간)
+              보유 중인 포지션 ({openPositions.length}/5)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -163,9 +169,8 @@ export default function AITradingPage() {
         </Card>
       )}
 
-      {/* Charts Row */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Cumulative PnL */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">누적 손익 (PnL)</CardTitle>
@@ -179,23 +184,19 @@ export default function AITradingPage() {
                   <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
                   <Tooltip
                     contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-                    formatter={(value: number, name: string) => [
-                      `$${value.toFixed(2)}`,
-                      name === 'cumPnl' ? '누적 PnL' : '거래 PnL'
-                    ]}
+                    formatter={(value: number, name: string) => [`$${value.toFixed(2)}`, name === 'cumPnl' ? '누적 PnL' : '거래 PnL']}
                   />
                   <Line type="monotone" dataKey="cumPnl" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">
-                아직 거래 기록이 없습니다
+                거래 기록이 없습니다. 추천 탭에서 AI 매매를 시작하세요.
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Win/Loss Pie */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">승/패 비율</CardTitle>
@@ -204,58 +205,49 @@ export default function AITradingPage() {
             {closedTrades.length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
                 <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    dataKey="value"
-                    label={({ name, value }) => `${name}: ${value}`}
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={index} fill={entry.fill} />
-                    ))}
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                    {pieData.map((entry, index) => <Cell key={index} fill={entry.fill} />)}
                   </Pie>
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">
-                데이터 없음
-              </div>
+              <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">데이터 없음</div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Trade History */}
+      {/* Trade Log */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">거래 내역</CardTitle>
+          <CardTitle className="text-sm">매매 로그</CardTitle>
         </CardHeader>
         <CardContent>
           {closedTrades.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">아직 완료된 거래가 없습니다. 소형주 페이지에서 AI 거래를 시작하세요.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">완료된 거래가 없습니다.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border text-muted-foreground">
+                    <th className="text-left py-2 px-2">시간</th>
                     <th className="text-left py-2 px-2">종목</th>
                     <th className="text-right py-2 px-2">매수가</th>
                     <th className="text-right py-2 px-2">매도가</th>
                     <th className="text-right py-2 px-2">수량</th>
                     <th className="text-right py-2 px-2">PnL</th>
                     <th className="text-left py-2 px-2">상태</th>
-                    <th className="text-left py-2 px-2">사유</th>
+                    <th className="text-left py-2 px-2">근거</th>
                   </tr>
                 </thead>
                 <tbody>
                   {closedTrades.map((trade: any) => {
                     const isProfit = (trade.pnl || 0) > 0;
+                    const time = trade.closed_at ? new Date(trade.closed_at).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit', month: '2-digit', day: '2-digit' }) : '-';
                     return (
                       <tr key={trade.id} className="border-b border-border/50 hover:bg-muted/30">
+                        <td className="py-2 px-2 text-muted-foreground font-mono">{time}</td>
                         <td className="py-2 px-2 font-bold">{trade.symbol}</td>
                         <td className="py-2 px-2 text-right font-mono">${trade.price?.toFixed(4)}</td>
                         <td className="py-2 px-2 text-right font-mono">${trade.close_price?.toFixed(4) || '-'}</td>
@@ -265,10 +257,10 @@ export default function AITradingPage() {
                         </td>
                         <td className="py-2 px-2">
                           <Badge variant={trade.status === 'profit_taken' ? 'default' : trade.status === 'stopped' ? 'destructive' : 'secondary'} className="text-[9px]">
-                            {trade.status === 'profit_taken' ? '익절' : trade.status === 'stopped' ? '손절' : '종료'}
+                            {trade.status === 'profit_taken' ? '익절' : trade.status === 'stopped' ? '손절' : trade.status === 'score_exit' ? '점수청산' : '종료'}
                           </Badge>
                         </td>
-                        <td className="py-2 px-2 text-muted-foreground max-w-[200px] truncate">{trade.ai_reason}</td>
+                        <td className="py-2 px-2 text-muted-foreground max-w-[250px] truncate">{trade.ai_reason}</td>
                       </tr>
                     );
                   })}

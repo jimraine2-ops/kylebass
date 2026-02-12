@@ -5,16 +5,32 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// Known penny stock tickers (actively traded US penny stocks)
-const PENNY_STOCK_TICKERS = [
-  'SIRI', 'TELL', 'CLOV', 'SOFI', 'PLTR', 'NIO', 'LCID', 'RIVN',
-  'WISH', 'BB', 'NOK', 'SENS', 'GNUS', 'NAKD', 'CTRM', 'ZOM',
-  'SNDL', 'BNGO', 'IDEX', 'FCEL', 'PLUG', 'WKHS', 'RIDE', 'NKLA',
-  'SKLZ', 'CLVS', 'MNMD', 'TLRY', 'ACB', 'CGC', 'GRPN', 'DNA',
-  'OPEN', 'VLD', 'PSFE', 'BARK', 'SDC', 'BODY', 'ME', 'ASTS',
-  'IONQ', 'AFRM', 'PATH', 'DKNG', 'HOOD', 'MVST', 'QS', 'CHPT',
-  'GOEV', 'FFIE', 'MULN', 'HYMC', 'BBIG', 'ATER', 'PROG', 'PHUN',
-  'DWAC', 'RDBX', 'REV', 'APRN', 'WEBR', 'BYND', 'LMND', 'COIN',
+const FINNHUB_BASE = 'https://finnhub.io/api/v1';
+
+function getToken(): string {
+  const key = Deno.env.get('FINNHUB_API_KEY');
+  if (!key) throw new Error('FINNHUB_API_KEY not configured');
+  return key;
+}
+
+async function finnhubFetch(path: string) {
+  const token = getToken();
+  const sep = path.includes('?') ? '&' : '?';
+  const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Finnhub ${res.status}`);
+  return res.json();
+}
+
+// Penny stock candidates
+const PENNY_TICKERS = [
+  'SIRI', 'TELL', 'CLOV', 'SOFI', 'NIO', 'LCID',
+  'WISH', 'BB', 'NOK', 'SENS', 'GNUS', 'SNDL',
+  'BNGO', 'IDEX', 'FCEL', 'PLUG', 'WKHS', 'NKLA',
+  'SKLZ', 'CLVS', 'MNMD', 'TLRY', 'ACB', 'CGC',
+  'DNA', 'OPEN', 'PSFE', 'SDC', 'ME', 'ASTS',
+  'IONQ', 'HOOD', 'QS', 'CHPT', 'GOEV', 'FFIE',
+  'MULN', 'BYND', 'LMND',
 ];
 
 serve(async (req) => {
@@ -23,99 +39,69 @@ serve(async (req) => {
   }
 
   try {
-    const { action, minPrice = 0.7, maxPrice = 1.5, volumeMultiplier = 2.0 } = await req.json();
+    const { action, minPrice = 0.7, maxPrice = 1.5 } = await req.json();
 
     if (action === 'scan') {
-      // Fetch quotes for all penny stock candidates in batches
-      const batchSize = 20;
       const allQuotes: any[] = [];
-      
-      for (let i = 0; i < PENNY_STOCK_TICKERS.length; i += batchSize) {
-        const batch = PENNY_STOCK_TICKERS.slice(i, i + batchSize);
-        const symbolsStr = batch.join(',');
-        
+
+      // Fetch quotes individually (Finnhub doesn't have batch quote)
+      // Limit to avoid rate limits (60/min free tier)
+      for (const sym of PENNY_TICKERS.slice(0, 25)) {
         try {
-          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${batch[0]}?interval=1d&range=5d`;
-          // Use v7 quote for batch
-          const quoteUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsStr}`;
-          const response = await fetch(quoteUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            const quotes = data.quoteResponse?.result || [];
-            allQuotes.push(...quotes);
-          } else {
-            // Fallback: fetch individually via chart API
-            for (const s of batch) {
-              try {
-                const fallbackUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${s}?interval=1d&range=5d`;
-                const fallbackRes = await fetch(fallbackUrl, {
-                  headers: { 'User-Agent': 'Mozilla/5.0' }
-                });
-                if (fallbackRes.ok) {
-                  const data = await fallbackRes.json();
-                  const result = data.chart?.result?.[0];
-                  if (result) {
-                    const meta = result.meta;
-                    const volumes = result.indicators?.quote?.[0]?.volume || [];
-                    const avgVolume = volumes.slice(0, -1).reduce((a: number, b: number) => a + (b || 0), 0) / Math.max(volumes.length - 1, 1);
-                    const lastVolume = volumes[volumes.length - 1] || 0;
-                    allQuotes.push({
-                      symbol: s,
-                      shortName: meta.shortName || s,
-                      regularMarketPrice: meta.regularMarketPrice,
-                      regularMarketChange: meta.regularMarketPrice - meta.chartPreviousClose,
-                      regularMarketChangePercent: ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100,
-                      regularMarketVolume: lastVolume,
-                      averageDailyVolume10Day: avgVolume,
-                      marketCap: 0,
-                    });
-                  }
-                }
-              } catch { /* skip */ }
-            }
+          const [quote, candles] = await Promise.all([
+            finnhubFetch(`/quote?symbol=${sym}`),
+            finnhubFetch(`/stock/candle?symbol=${sym}&resolution=D&from=${Math.floor(Date.now() / 1000) - 30 * 86400}&to=${Math.floor(Date.now() / 1000)}`),
+          ]);
+
+          const price = quote.c;
+          if (!price || price < minPrice || price > maxPrice) continue;
+
+          let avgVol = 0;
+          let currentVol = 0;
+          if (candles.s !== 'no_data' && candles.v) {
+            currentVol = candles.v[candles.v.length - 1] || 0;
+            const pastVols = candles.v.slice(0, -1);
+            avgVol = pastVols.length > 0 ? pastVols.reduce((a: number, b: number) => a + b, 0) / pastVols.length : 0;
           }
-        } catch { /* skip batch */ }
+
+          const volumeSurge = avgVol > 0 ? currentVol / avgVol : 0;
+
+          allQuotes.push({
+            symbol: sym,
+            shortName: sym,
+            regularMarketPrice: price,
+            regularMarketChange: quote.d || 0,
+            regularMarketChangePercent: quote.dp || 0,
+            regularMarketVolume: currentVol,
+            averageDailyVolume10Day: avgVol,
+            volumeSurge,
+            isVolumeSurge: volumeSurge >= 2.0,
+            previousClose: quote.pc,
+            dayHigh: quote.h,
+            dayLow: quote.l,
+          });
+        } catch { /* skip */ }
       }
 
-      // Filter by price range
-      const filtered = allQuotes.filter((q: any) => {
-        const price = q.regularMarketPrice || 0;
-        return price >= minPrice && price <= maxPrice;
-      });
-
-      // Calculate volume surge and sort
-      const withSurge = filtered.map((q: any) => {
-        const currentVol = q.regularMarketVolume || 0;
-        const avgVol = q.averageDailyVolume10Day || q.averageDailyVolume3Month || 1;
-        const volumeSurge = avgVol > 0 ? currentVol / avgVol : 0;
-        return { ...q, volumeSurge, isVolumeSurge: volumeSurge >= volumeMultiplier };
-      });
-
-      // Sort: volume surge stocks first, then by volume surge ratio
-      withSurge.sort((a: any, b: any) => {
+      // Sort by volume surge
+      allQuotes.sort((a, b) => {
         if (a.isVolumeSurge && !b.isVolumeSurge) return -1;
         if (!a.isVolumeSurge && b.isVolumeSurge) return 1;
         return (b.volumeSurge || 0) - (a.volumeSurge || 0);
       });
 
-      return new Response(JSON.stringify({ stocks: withSurge, total: withSurge.length }), {
+      return new Response(JSON.stringify({ stocks: allQuotes, total: allQuotes.length }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
     return new Response(JSON.stringify({ error: 'Invalid action' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
-
   } catch (error) {
     console.error('Penny stocks error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
