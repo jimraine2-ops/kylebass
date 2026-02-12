@@ -22,8 +22,8 @@ async function finnhubFetch(path: string) {
   return res.json();
 }
 
-// Penny stock candidates
-const PENNY_TICKERS = [
+// Under $10 stock candidates pool
+const UNDER10_TICKERS = [
   'SIRI', 'TELL', 'CLOV', 'SOFI', 'NIO', 'LCID',
   'WISH', 'BB', 'NOK', 'SENS', 'GNUS', 'SNDL',
   'BNGO', 'IDEX', 'FCEL', 'PLUG', 'WKHS', 'NKLA',
@@ -39,14 +39,12 @@ serve(async (req) => {
   }
 
   try {
-    const { action, minPrice = 0.7, maxPrice = 1.5 } = await req.json();
+    const { action } = await req.json();
 
-    if (action === 'scan') {
+    if (action === 'scan' || action === 'top10') {
       const allQuotes: any[] = [];
 
-      // Fetch quotes individually (Finnhub doesn't have batch quote)
-      // Limit to avoid rate limits (60/min free tier)
-      for (const sym of PENNY_TICKERS.slice(0, 25)) {
+      for (const sym of UNDER10_TICKERS.slice(0, 30)) {
         try {
           const [quote, candles] = await Promise.all([
             finnhubFetch(`/quote?symbol=${sym}`),
@@ -54,7 +52,8 @@ serve(async (req) => {
           ]);
 
           const price = quote.c;
-          if (!price || price < minPrice || price > maxPrice) continue;
+          // Under $10 filter
+          if (!price || price >= 10) continue;
 
           let avgVol = 0;
           let currentVol = 0;
@@ -65,13 +64,19 @@ serve(async (req) => {
           }
 
           const volumeSurge = avgVol > 0 ? currentVol / avgVol : 0;
+          const changePct = quote.dp || 0;
+
+          // Composite score: 60% volume surge weight + 40% daily change weight
+          const volScore = Math.min(volumeSurge * 20, 60); // max 60 pts
+          const changeScore = Math.min(Math.max(changePct, 0) * 4, 40); // max 40 pts
+          const compositeScore = +(volScore + changeScore).toFixed(1);
 
           allQuotes.push({
             symbol: sym,
             shortName: sym,
             regularMarketPrice: price,
             regularMarketChange: quote.d || 0,
-            regularMarketChangePercent: quote.dp || 0,
+            regularMarketChangePercent: changePct,
             regularMarketVolume: currentVol,
             averageDailyVolume10Day: avgVol,
             volumeSurge,
@@ -79,18 +84,16 @@ serve(async (req) => {
             previousClose: quote.pc,
             dayHigh: quote.h,
             dayLow: quote.l,
+            compositeScore,
           });
         } catch { /* skip */ }
       }
 
-      // Sort by volume surge
-      allQuotes.sort((a, b) => {
-        if (a.isVolumeSurge && !b.isVolumeSurge) return -1;
-        if (!a.isVolumeSurge && b.isVolumeSurge) return 1;
-        return (b.volumeSurge || 0) - (a.volumeSurge || 0);
-      });
+      // Sort by composite score descending, take TOP 10
+      allQuotes.sort((a, b) => b.compositeScore - a.compositeScore);
+      const top10 = allQuotes.slice(0, 10);
 
-      return new Response(JSON.stringify({ stocks: allQuotes, total: allQuotes.length }), {
+      return new Response(JSON.stringify({ stocks: top10, total: top10.length, allScanned: allQuotes.length }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }

@@ -49,9 +49,9 @@ export async function fetchSentimentAnalysis(symbol: string, newsHeadlines: stri
 }
 
 // Penny stocks
-export async function scanPennyStocks(minPrice = 0.7, maxPrice = 1.5, volumeMultiplier = 2.0) {
+export async function scanPennyStocks() {
   const { data, error } = await supabase.functions.invoke('penny-stocks', {
-    body: { action: 'scan', minPrice, maxPrice, volumeMultiplier },
+    body: { action: 'top10' },
   });
   if (error) throw error;
   return data;

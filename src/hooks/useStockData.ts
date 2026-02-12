@@ -61,11 +61,11 @@ export function useStockSearch(query: string) {
   });
 }
 
-export function usePennyStocks(minPrice = 0.7, maxPrice = 1.5) {
+export function usePennyStocks() {
   return useQuery({
-    queryKey: ['penny-stocks', minPrice, maxPrice],
-    queryFn: () => scanPennyStocks(minPrice, maxPrice),
-    refetchInterval: 30000, // 30 seconds (rate limit friendly)
+    queryKey: ['penny-stocks-top10'],
+    queryFn: () => scanPennyStocks(),
+    refetchInterval: 60000, // 1 minute refresh
     retry: 2,
   });
 }
