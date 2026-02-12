@@ -8,6 +8,7 @@ import { useStockQuotes, useChartData, useTechnicalAnalysis, useSentimentAnalysi
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Area, AreaChart, ComposedChart } from "recharts";
 import { TrendingUp, TrendingDown, Brain, Target, Shield, AlertTriangle } from "lucide-react";
 import { useState, useMemo } from "react";
+import CompanyNewsSection from "@/components/stock/CompanyNewsSection";
 
 export default function StockDetail() {
   const { symbol = 'AAPL' } = useParams();
@@ -222,6 +223,9 @@ export default function StockDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Company News */}
+      <CompanyNewsSection symbol={symbol} />
 
       {/* R/R Calculator */}
       <Card>
