@@ -66,7 +66,7 @@ export default function PennyStocksPage() {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs font-mono">
             <Radio className="w-3 h-3 mr-1" />
-            1분 갱신
+            3초 갱신
           </Badge>
           <div className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-stock-up animate-pulse" />
@@ -102,7 +102,7 @@ export default function PennyStocksPage() {
             const isUp = (stock.regularMarketChange || 0) >= 0;
             const rank = idx + 1;
             return (
-              <Card key={stock.symbol} className="relative overflow-hidden hover:border-primary/40 transition-all hover:shadow-md group">
+              <Card key={stock.symbol} className="relative overflow-hidden hover:border-primary/40 transition-all duration-500 ease-in-out hover:shadow-md group animate-in fade-in-0 slide-in-from-bottom-2">
                 <CardContent className="p-4 space-y-2">
                   {/* Rank + Symbol */}
                   <div className="flex items-center justify-between">
