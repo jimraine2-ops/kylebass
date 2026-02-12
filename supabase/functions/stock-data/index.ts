@@ -67,10 +67,19 @@ serve(async (req) => {
     if (action === 'chart') {
       const to = Math.floor(Date.now() / 1000);
       const from = to - 90 * 86400; // 3 months
-      const data = await finnhubFetch(`/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}`);
+      let data;
+      try {
+        data = await finnhubFetch(`/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}`);
+      } catch (e) {
+        return new Response(JSON.stringify({ chartData: [], meta: { symbol, regularMarketPrice: 0 }, error: 'Chart data unavailable for this symbol' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
       
       if (data.s === 'no_data' || !data.t) {
-        throw new Error('No chart data available');
+        return new Response(JSON.stringify({ chartData: [], meta: { symbol, regularMarketPrice: 0 }, error: 'No chart data available' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
 
       const chartData = data.t.map((t: number, i: number) => ({
