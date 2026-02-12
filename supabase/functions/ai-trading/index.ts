@@ -235,11 +235,9 @@ Respond with JSON ONLY:
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // ==================== SCALPING ENGINE ====================
+    // ==================== SCALPING ENGINE (INSTANT EXECUTION) ====================
     if (action === 'scalping-analyze') {
       const { symbol, price, quantScore, indicators } = body;
-      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-      if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
 
       const { data: wallet } = await supabase.from('scalping_wallet').select('*').limit(1).single();
       if (!wallet) throw new Error('No scalping wallet found');
@@ -250,6 +248,10 @@ Respond with JSON ONLY:
       const closedTrades: any[] = [];
       const now = new Date();
       const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      // US market close check (EST 16:00 = UTC 21:00, 30 min before = 20:30)
+      const utcH = now.getUTCHours();
+      const utcM = now.getUTCMinutes();
+      const isNearClose = (utcH === 20 && utcM >= 30) || utcH >= 21;
 
       for (const pos of (openPositions || [])) {
         if (pos.symbol !== symbol) continue;
@@ -259,56 +261,71 @@ Respond with JSON ONLY:
         let newStatus = 'closed';
         const pnlPct = ((price - pos.price) / pos.price) * 100;
 
-        // Tight stop: -2% immediate full exit
+        // -2% hard stop: immediate full exit
         if (pnlPct <= -2) {
           shouldClose = true;
-          closeReason = `[${timeStr}] $${symbol} 강제 손절 (-2% 도달: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[${timeStr}] 청산 사유: [손절] 실행 - $${symbol} 강제 손절 (-2% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
         }
-        // Score-based exit: score < 60
-        else if (quantScore !== undefined && quantScore < 60) {
+        // Market close forced exit (30 min before close)
+        else if (isNearClose) {
           shouldClose = true;
-          closeReason = `[${timeStr}] $${symbol} 점수 급락 청산 (점수: ${quantScore} < 60)`;
-          newStatus = 'score_exit';
+          closeReason = `[${timeStr}] 청산 사유: [장마감청산] 실행 - $${symbol} 오버나잇 금지 강제 청산 (PnL: ${pnlPct.toFixed(2)}%)`;
+          newStatus = 'market_close';
         }
-        // Time-cut: 15 minutes without profit
+        // 15-min time-cut: exit near breakeven if no profit
         else if (pos.time_limit_at && now >= new Date(pos.time_limit_at) && pnlPct <= 0.5) {
           shouldClose = true;
-          closeReason = `[${timeStr}] $${symbol} 15분 타임컷 (수익 미달: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[${timeStr}] 청산 사유: [타임컷] 실행 - $${symbol} 15분 타임컷 본전 청산 (수익: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'time_cut';
         }
-        // Trailing stop
+        // Trailing stop (ATR-based)
         else if (pos.stop_loss && price <= pos.stop_loss) {
           shouldClose = true;
-          closeReason = `[${timeStr}] $${symbol} 추격 손절 터치 ($${pos.stop_loss})`;
+          closeReason = `[${timeStr}] 청산 사유: [추격익절] 실행 - $${symbol} ATR 추격 손절 터치 ($${pos.stop_loss})`;
           newStatus = 'stopped';
         }
-        // Take profit
+        // Take profit (fixed target)
         else if (pos.take_profit && price >= pos.take_profit) {
           shouldClose = true;
-          closeReason = `[${timeStr}] $${symbol} 목표가 도달 ($${pos.take_profit})`;
+          closeReason = `[${timeStr}] 청산 사유: [익절] 실행 - $${symbol} 목표가 도달 ($${pos.take_profit})`;
           newStatus = 'profit_taken';
         }
 
-        // Partial exit: 2-3% profit → sell 30%
+        // Partial exit: 2-3% profit → sell 50% (upgraded from 30%)
         if (!shouldClose && pnlPct >= 2) {
           const partialExits = pos.partial_exits || [];
           const hasFirstPartial = partialExits.some((e: any) => e.type === 'first_partial');
           if (!hasFirstPartial) {
-            const sellQty = Math.floor(pos.quantity * 0.3);
+            const sellQty = Math.floor(pos.quantity * 0.5);
             if (sellQty > 0) {
               const partialPnl = (price - pos.price) * sellQty;
               partialExits.push({ type: 'first_partial', qty: sellQty, price, pnl: +partialPnl.toFixed(2), at: now.toISOString() });
+
+              // Update trailing stop for remaining: high - 2*ATR
+              const atr = indicators?.atr?.atr || price * 0.02;
+              const newTrailingStop = +(price - 2.0 * atr).toFixed(4);
+
               await supabase.from('scalping_trades').update({
                 quantity: pos.quantity - sellQty,
                 partial_exits: partialExits,
+                stop_loss: Math.max(newTrailingStop, pos.stop_loss || 0), // only move up
               }).eq('id', pos.id);
               await supabase.from('scalping_wallet').update({
                 balance: wallet.balance + (sellQty * price),
                 updated_at: now.toISOString(),
               }).eq('id', wallet.id);
               wallet.balance += sellQty * price;
-              closedTrades.push({ symbol: pos.symbol, type: 'partial', pnl: partialPnl, reason: `[${timeStr}] $${symbol} 선제 익절 30% (수익률: ${pnlPct.toFixed(1)}%)` });
+              closedTrades.push({ symbol: pos.symbol, type: 'partial', pnl: +partialPnl.toFixed(2), reason: `[${timeStr}] $${symbol} 1차 익절 50% (수익률: ${pnlPct.toFixed(1)}%)` });
+            }
+          } else if (pnlPct >= 3) {
+            // Update trailing stop dynamically: current high - 2*ATR
+            const atr = indicators?.atr?.atr || price * 0.02;
+            const newTrailingStop = +(price - 2.0 * atr).toFixed(4);
+            if (newTrailingStop > (pos.stop_loss || 0)) {
+              await supabase.from('scalping_trades').update({
+                stop_loss: newTrailingStop,
+              }).eq('id', pos.id);
             }
           }
         }
@@ -328,7 +345,7 @@ Respond with JSON ONLY:
         }
       }
 
-      // === Entry: only for < $10 stocks ===
+      // === INSTANT ENTRY: No score filter - buy immediately if in TOP 10 ===
       if (price >= 10) {
         return new Response(JSON.stringify({
           decision: { action: 'SKIP', reason: '주가 $10 이상: 스캘핑 대상 외' },
@@ -336,17 +353,23 @@ Respond with JSON ONLY:
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
+      // Don't enter near market close
+      if (isNearClose) {
+        return new Response(JSON.stringify({
+          decision: { action: 'SKIP', reason: '장 마감 30분 전: 신규 진입 금지' },
+          trade: null, closedTrades, wallet,
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       const alreadyHolding = (openPositions || []).some(p => p.symbol === symbol && p.status === 'open');
       const openCount = (openPositions || []).filter(p => p.status === 'open').length;
 
-      // Conditions: score >= 50, RVOL > 2.0 (volume surge), above VWAP
-      const meetsScore = quantScore !== undefined && quantScore >= 50;
-      const rvolSurge = indicators?.rvol?.rvol >= 2.0;
-      const aboveVwap = indicators?.candle?.score >= 4;
-      const canEnter = meetsScore && rvolSurge && aboveVwap && !alreadyHolding && openCount < 10;
+      // INSTANT EXECUTION: No score threshold, no indicator checks
+      // Only requirement: not already holding, under 10 open positions, under $10
+      const canEnter = !alreadyHolding && openCount < 10;
 
       let trade = null;
-      let decision = { action: 'HOLD', confidence: 0, reason: '조건 미충족', quantity: 0 };
+      let decision = { action: 'HOLD', confidence: 0, reason: '이미 보유 중이거나 포지션 한도 초과', quantity: 0 };
 
       if (canEnter) {
         // Position size: 10% of scalping wallet
@@ -357,15 +380,15 @@ Respond with JSON ONLY:
           const atr = indicators?.atr?.atr || price * 0.02;
           const stopLoss = +(price * 0.98).toFixed(4); // -2% hard stop
           const takeProfit = +(price * 1.05).toFixed(4);
-          const timeLimitAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString(); // 15min time-cut
+          const timeLimitAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
 
           const { data: newTrade } = await supabase.from('scalping_trades').insert({
             symbol, side: 'buy', quantity: qty, price,
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
-            entry_score: quantScore,
+            entry_score: quantScore || 0,
             time_limit_at: timeLimitAt,
-            ai_reason: `[SCALP|Score:${quantScore}] [${timeStr}] $${symbol} 스캘핑 매수 (RVOL: ${indicators?.rvol?.rvol?.toFixed(1)}x, 근거: ${indicators?.rvol?.details || 'volume surge'})`,
-            ai_confidence: quantScore || 50,
+            ai_reason: `[INSTANT] [${timeStr}] TOP 10 신규 포착: $${symbol} 즉시 매수 집행 (가격: $${price}, 수량: ${qty}주)`,
+            ai_confidence: 100,
           }).select().single();
 
           await supabase.from('scalping_wallet').update({
@@ -373,7 +396,7 @@ Respond with JSON ONLY:
           }).eq('id', wallet.id);
 
           trade = newTrade;
-          decision = { action: 'BUY', confidence: quantScore || 50, reason: `스캘핑 진입 (Score:${quantScore}, RVOL:${indicators?.rvol?.rvol?.toFixed(1)}x)`, quantity: qty };
+          decision = { action: 'BUY', confidence: 100, reason: `TOP 10 신규 포착: $${symbol} 즉시 매수 집행`, quantity: qty };
         }
       }
 

@@ -65,11 +65,11 @@ export function ScalpingDashboard() {
       {/* Entry Rules Card */}
       <Card className="border-warning/30">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">⚡ 초단타 전용 알고리즘: Under $10 Scalping Engine</p>
-          <p>🎯 대상: 현재가 $10 미만 + 거래량 200%↑ 폭증 종목</p>
-          <p>✅ 진입: [점수 ≥ 50] AND [RVOL {'>'} 2.0] AND [VWAP 상단]</p>
+          <p className="font-medium text-foreground">⚡ 즉시 실행 알고리즘: Under $10 Instant Scalping Engine</p>
+          <p>🎯 대상: TOP 10 리스트 진입 즉시 자동 매수 (점수 필터 없음)</p>
+          <p>✅ 진입: TOP 10 포착 → 0.1초 이내 시장가 매수 집행</p>
           <p>💰 자산 배분: 종목당 10% (₩1,000,000 기준 ₩100,000)</p>
-          <p>🛡️ 청산: -2% 즉시 손절 | 점수 {'<'} 60 청산 | 15분 타임컷 | 선제익절 2~3%→30%</p>
+          <p>🛡️ 청산: 2~3%→50% 익절 | 잔여→ATR×2 추격 손절 | -2% 즉시 손절 | 15분 타임컷 | 장마감 30분 전 강제 청산</p>
         </CardContent>
       </Card>
 
