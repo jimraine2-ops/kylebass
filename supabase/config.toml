@@ -1,1 +1,7 @@
 project_id = "eeoirpnqavjmvubzeqsd"
+
+[functions.penny-stocks]
+verify_jwt = false
+
+[functions.ai-trading]
+verify_jwt = false

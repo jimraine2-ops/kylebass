@@ -42,6 +42,40 @@ export async function fetchSentimentAnalysis(symbol: string, newsHeadlines: stri
   return data;
 }
 
+// Penny stocks
+export async function scanPennyStocks(minPrice = 0.7, maxPrice = 1.5, volumeMultiplier = 2.0) {
+  const { data, error } = await supabase.functions.invoke('penny-stocks', {
+    body: { action: 'scan', minPrice, maxPrice, volumeMultiplier },
+  });
+  if (error) throw error;
+  return data;
+}
+
+// AI Trading
+export async function aiAnalyzeAndTrade(symbol: string, price: number, chartData?: any[]) {
+  const { data, error } = await supabase.functions.invoke('ai-trading', {
+    body: { action: 'analyze-and-trade', symbol, price, chartData },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getAIPortfolio() {
+  const { data, error } = await supabase.functions.invoke('ai-trading', {
+    body: { action: 'get-portfolio' },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function resetAIWallet() {
+  const { data, error } = await supabase.functions.invoke('ai-trading', {
+    body: { action: 'reset-wallet' },
+  });
+  if (error) throw error;
+  return data;
+}
+
 // Mock news headlines (Yahoo Finance news API requires paid access)
 export function getMockNewsHeadlines(symbol: string): string[] {
   const headlines: Record<string, string[]> = {
