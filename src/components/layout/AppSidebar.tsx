@@ -15,7 +15,7 @@ import {
 const menuItems = [
   { title: "대시보드", url: "/", icon: BarChart3 },
   { title: "10대 지표 추천", url: "/recommendations", icon: Target },
-  { title: "소형주 스크리너", url: "/penny-stocks", icon: Coins },
+  { title: "Under $10 TOP 10", url: "/penny-stocks", icon: Coins },
   { title: "AI 자율 매매", url: "/ai-trading", icon: Bot },
   { title: "종목 분석", url: "/stock/AAPL", icon: TrendingUp },
   { title: "뉴스 & 감성", url: "/news", icon: Newspaper },
