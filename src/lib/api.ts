@@ -116,6 +116,31 @@ export async function scalpingAnalyze(symbol: string, price: number, quantScore?
   return data;
 }
 
+// Quant 10-Indicator Auto Trading
+export async function quantAutoTrade(symbol: string, price: number, quantScore: number, indicators: any) {
+  const { data, error } = await supabase.functions.invoke('ai-trading', {
+    body: { action: 'quant-auto-trade', symbol, price, quantScore, indicators },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function getQuantPortfolio() {
+  const { data, error } = await supabase.functions.invoke('ai-trading', {
+    body: { action: 'get-quant-portfolio' },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function resetQuantWallet() {
+  const { data, error } = await supabase.functions.invoke('ai-trading', {
+    body: { action: 'reset-quant-wallet' },
+  });
+  if (error) throw error;
+  return data;
+}
+
 // Mock news headlines (fallback for sentiment analysis)
 export function getMockNewsHeadlines(symbol: string): string[] {
   const headlines: Record<string, string[]> = {
