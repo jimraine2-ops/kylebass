@@ -63,15 +63,40 @@ export default function AITradingPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Bot className="w-5 h-5 text-primary" />
-          AI 자율 매매 대시보드
-        </h2>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Bot className="w-5 h-5 text-primary" />
+            AI 자율 매매 대시보드
+          </h2>
+          <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
+            🔥 공격적 모드 (Low Threshold: 50pts)
+          </Badge>
+        </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
           지갑 초기화
         </Button>
+      </div>
+
+      {/* Entry Tier Guide */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="rounded-lg border border-border p-2.5 text-center">
+          <p className="text-[10px] text-muted-foreground">50-70점</p>
+          <p className="text-xs font-bold text-warning">정찰병 매수 5%</p>
+        </div>
+        <div className="rounded-lg border border-border p-2.5 text-center">
+          <p className="text-[10px] text-muted-foreground">70-85점</p>
+          <p className="text-xs font-bold text-primary">추세 강화 15%</p>
+        </div>
+        <div className="rounded-lg border border-border p-2.5 text-center">
+          <p className="text-[10px] text-muted-foreground">85-95점</p>
+          <p className="text-xs font-bold stock-up">Strong Buy 20%</p>
+        </div>
+        <div className="rounded-lg border border-border p-2.5 text-center">
+          <p className="text-[10px] text-muted-foreground">95점+</p>
+          <p className="text-xs font-bold stock-up">풀 베팅 30%</p>
+        </div>
       </div>
 
       {/* Top Stats */}
