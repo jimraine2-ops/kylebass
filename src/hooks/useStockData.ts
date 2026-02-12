@@ -65,9 +65,9 @@ export function usePennyStocks() {
   return useQuery({
     queryKey: ['penny-stocks-top10'],
     queryFn: () => scanPennyStocks(),
-    refetchInterval: 3000, // 3-second ultra-fast refresh
+    refetchInterval: 30000, // 30s to respect Finnhub rate limits
     retry: 3,
-    staleTime: 1000,
+    staleTime: 10000,
     refetchOnWindowFocus: false,
   });
 }

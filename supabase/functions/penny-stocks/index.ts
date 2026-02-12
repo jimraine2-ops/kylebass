@@ -44,31 +44,34 @@ serve(async (req) => {
     if (action === 'scan' || action === 'top10') {
       const allQuotes: any[] = [];
 
-      for (const sym of UNDER10_TICKERS.slice(0, 30)) {
+      for (const sym of UNDER10_TICKERS.slice(0, 20)) {
         try {
-          const [quote, candles] = await Promise.all([
-            finnhubFetch(`/quote?symbol=${sym}`),
-            finnhubFetch(`/stock/candle?symbol=${sym}&resolution=D&from=${Math.floor(Date.now() / 1000) - 30 * 86400}&to=${Math.floor(Date.now() / 1000)}`),
-          ]);
+          // Delay between requests to avoid Finnhub 429 rate limit
+          await new Promise(r => setTimeout(r, 300));
 
+          const quote = await finnhubFetch(`/quote?symbol=${sym}`);
           const price = quote.c;
-          // Under $10 filter
           if (!price || price >= 10) continue;
+
+          // Delay before candle request
+          await new Promise(r => setTimeout(r, 300));
 
           let avgVol = 0;
           let currentVol = 0;
-          if (candles.s !== 'no_data' && candles.v) {
-            currentVol = candles.v[candles.v.length - 1] || 0;
-            const pastVols = candles.v.slice(0, -1);
-            avgVol = pastVols.length > 0 ? pastVols.reduce((a: number, b: number) => a + b, 0) / pastVols.length : 0;
-          }
+          try {
+            const candles = await finnhubFetch(`/stock/candle?symbol=${sym}&resolution=D&from=${Math.floor(Date.now() / 1000) - 30 * 86400}&to=${Math.floor(Date.now() / 1000)}`);
+            if (candles.s !== 'no_data' && candles.v) {
+              currentVol = candles.v[candles.v.length - 1] || 0;
+              const pastVols = candles.v.slice(0, -1);
+              avgVol = pastVols.length > 0 ? pastVols.reduce((a: number, b: number) => a + b, 0) / pastVols.length : 0;
+            }
+          } catch { /* skip candle errors */ }
 
           const volumeSurge = avgVol > 0 ? currentVol / avgVol : 0;
           const changePct = quote.dp || 0;
 
-          // Composite score: 60% volume surge weight + 40% daily change weight
-          const volScore = Math.min(volumeSurge * 20, 60); // max 60 pts
-          const changeScore = Math.min(Math.max(changePct, 0) * 4, 40); // max 40 pts
+          const volScore = Math.min(volumeSurge * 20, 60);
+          const changeScore = Math.min(Math.max(changePct, 0) * 4, 40);
           const compositeScore = +(volScore + changeScore).toFixed(1);
 
           allQuotes.push({
