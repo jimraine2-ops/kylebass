@@ -385,28 +385,48 @@ serve(async (req) => {
     const { action, symbols } = await req.json();
 
     if (action === 'analyze') {
-      // Expanded universe: premium large-caps + small/penny caps
-      const premiumSymbols = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD', 'NFLX', 'CRM', 'PLTR', 'COIN', 'UBER', 'SHOP', 'SQ'];
+      // Expanded universe: S&P 500 top large-caps + growth stocks (50+ candidates)
+      const premiumSymbols = [
+        // Mega-cap Tech
+        'AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD', 'NFLX', 'CRM',
+        // Growth & Platform
+        'PLTR', 'COIN', 'UBER', 'SHOP', 'SQ', 'SNOW', 'DDOG', 'NET', 'CRWD', 'ZS',
+        // Semiconductor & Hardware
+        'AVGO', 'QCOM', 'MU', 'INTC', 'AMAT', 'LRCX', 'KLAC', 'MRVL', 'ON', 'TXN',
+        // Finance & Fintech
+        'JPM', 'GS', 'V', 'MA', 'PYPL', 'AXP', 'BLK', 'SCHW',
+        // Healthcare & Biotech
+        'UNH', 'LLY', 'JNJ', 'ABBV', 'MRK', 'PFE', 'AMGN', 'GILD',
+        // Consumer & Industrial
+        'COST', 'WMT', 'HD', 'NKE', 'SBUX', 'DIS', 'BA', 'CAT', 'DE', 'GE',
+        // Energy & EV
+        'XOM', 'CVX', 'LNG', 'ENPH', 'FSLR',
+        // Others
+        'ABNB', 'RBLX', 'ROKU', 'TTD', 'PANW'
+      ];
       const pennySymbols = ['SOFI', 'HOOD', 'RIVN', 'LCID', 'PLUG', 'SNDL', 'NIO', 'MARA', 'RIOT', 'CLSK', 'BITF', 'HIMS', 'DNA', 'OPEN', 'WISH'];
 
       const targetSymbols: string[] = symbols || [...premiumSymbols, ...pennySymbols];
 
       const results: any[] = [];
 
-      // Process in batches of 5 to respect rate limits
+      // Process in batches of 5 to respect rate limits with 300ms delay between batches
       for (let i = 0; i < targetSymbols.length; i += 5) {
         const batch = targetSymbols.slice(i, i + 5);
         const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
         for (const r of batchResults) {
           if (r) results.push(r);
         }
+        if (i + 5 < targetSymbols.length) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
       }
 
-      // Split into two tiers
-      const premium = results.filter(r => r.price >= 10).sort((a, b) => b.totalScore - a.totalScore).slice(0, 10);
+      // Split into two tiers - Top 50 premium, Top 10 penny
+      const premium = results.filter(r => r.price >= 10).sort((a, b) => b.totalScore - a.totalScore).slice(0, 50);
       const penny = results.filter(r => r.price < 10).sort((a, b) => b.totalScore - a.totalScore).slice(0, 10);
 
-      return new Response(JSON.stringify({ premium, penny, recommendations: [...premium, ...penny].sort((a, b) => b.totalScore - a.totalScore).slice(0, 10) }), {
+      return new Response(JSON.stringify({ premium, penny, allScanned: targetSymbols.length, recommendations: [...premium, ...penny].sort((a, b) => b.totalScore - a.totalScore).slice(0, 50) }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }

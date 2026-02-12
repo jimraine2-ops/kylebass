@@ -1,16 +1,25 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuantSignals } from "@/hooks/useStockData";
 import { quantAutoTrade } from "@/lib/api";
-import { Target, BarChart3, Shield, Radio, RefreshCw, DollarSign, TrendingDown, Cpu } from "lucide-react";
+import { Target, BarChart3, Shield, Radio, RefreshCw, Cpu, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { RadarChartCard, INDICATOR_LABELS } from "@/components/recommendation/RadarChartCard";
 import { StockCard } from "@/components/recommendation/StockCard";
 import { QuantAutoBriefing } from "@/components/recommendation/QuantAutoBriefing";
+
+type SortKey = 'score' | 'changePct' | 'rvol';
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'score', label: '점수순' },
+  { value: 'changePct', label: '상승률순' },
+  { value: 'rvol', label: '거래량순' },
+];
 
 export default function RecommendationPage() {
   const { data, isLoading, refetch, isFetching } = useQuantSignals();
@@ -19,11 +28,27 @@ export default function RecommendationPage() {
   const [autoLogs, setAutoLogs] = useState<string[]>([]);
   const [lastConditions, setLastConditions] = useState<any>(null);
   const [processingSymbols, setProcessingSymbols] = useState<Set<string>>(new Set());
+  const [sortKey, setSortKey] = useState<SortKey>('score');
   const processedRef = useRef<Set<string>>(new Set());
 
   const premium = data?.premium || [];
-  const penny = data?.penny || [];
-  const allStocks = [...premium, ...penny];
+  const allStocks = premium;
+
+  const sortedStocks = useMemo(() => {
+    const sorted = [...allStocks];
+    switch (sortKey) {
+      case 'score':
+        sorted.sort((a, b) => b.totalScore - a.totalScore);
+        break;
+      case 'changePct':
+        sorted.sort((a, b) => (b.changePct || 0) - (a.changePct || 0));
+        break;
+      case 'rvol':
+        sorted.sort((a, b) => (b.indicators?.rvol?.rvol || 0) - (a.indicators?.rvol?.rvol || 0));
+        break;
+    }
+    return sorted;
+  }, [allStocks, sortKey]);
 
   // Full-Auto Trading Loop
   useEffect(() => {
@@ -84,78 +109,6 @@ export default function RecommendationPage() {
     return () => clearInterval(resetInterval);
   }, [fullAutoEnabled, data]);
 
-  const renderList = (stocks: any[]) => (
-    stocks.length === 0 ? (
-      <Card>
-        <CardContent className="p-8 text-center text-muted-foreground">
-          분석 가능한 종목이 없습니다. 잠시 후 다시 시도해주세요.
-        </CardContent>
-      </Card>
-    ) : (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-3">
-          {stocks.map((stock: any, idx: number) => (
-            <StockCard
-              key={stock.symbol}
-              stock={stock}
-              idx={idx}
-              isSelected={selectedStock?.symbol === stock.symbol}
-              onSelect={setSelectedStock}
-              onTrade={() => {}}
-              isTrading={processingSymbols.has(stock.symbol)}
-              isAutoMode={fullAutoEnabled}
-            />
-          ))}
-        </div>
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" />
-                {selectedStock ? `${selectedStock.symbol} 지표 레이더` : '종목을 선택하세요'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {selectedStock ? (
-                <RadarChartCard indicators={selectedStock.indicators} />
-              ) : (
-                <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
-                  좌측 종목 클릭 시 레이더 차트 표시
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          {selectedStock && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">지표 상세</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {Object.entries(selectedStock.indicators || {}).map(([key, ind]: [string, any]) => (
-                  <div key={key} className="flex items-start justify-between text-xs border-b border-border/50 pb-1.5">
-                    <div>
-                      <p className="font-medium">{INDICATOR_LABELS[key]}</p>
-                      <p className="text-muted-foreground text-[10px]">{ind.details}</p>
-                    </div>
-                    <Badge variant={ind.score >= 8 ? "default" : ind.score >= 5 ? "secondary" : "outline"} className="text-[10px] shrink-0">
-                      {ind.score}/10
-                    </Badge>
-                  </div>
-                ))}
-                {selectedStock.trailingStop > 0 && (
-                  <div className="flex items-center gap-2 mt-2 p-2 rounded bg-muted text-xs">
-                    <Shield className="w-3.5 h-3.5 text-warning" />
-                    <span>추적 손절선: <span className="font-mono font-bold">${selectedStock.trailingStop?.toFixed(4)}</span></span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
-    )
-  );
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -194,26 +147,120 @@ export default function RecommendationPage() {
           <p>📈 피라미딩: 80점 돌파 시 +10% 추가 매수</p>
           <p>🛡️ 청산: -2.5% 손절 | 점수{'<'}40 근거소멸 | 목표가 50% 익절 → ATR×2 추격 익절</p>
           <p className="mt-1 text-primary font-medium">💰 모든 거래는 Main Trading 잔고를 사용하며, [Quant] 태그로 구분됩니다.</p>
+          <p className="mt-1 text-muted-foreground">🔍 S&P 500 + 성장주 {data?.allScanned || 70}개 스캔 → 상위 50개 실시간 모니터링</p>
         </CardContent>
       </Card>
 
       {isLoading ? (
         <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
         </div>
       ) : (
-        <Tabs defaultValue="premium" onValueChange={() => setSelectedStock(null)}>
-          <TabsList className="w-full">
-            <TabsTrigger value="premium" className="flex items-center gap-1.5 w-full">
-              <DollarSign className="w-4 h-4" />
-              대형주 추천 리스트 ($10+)
-              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{premium.length}</Badge>
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="premium">
-            {renderList(allStocks)}
-          </TabsContent>
-        </Tabs>
+        <>
+          {/* Sorting Controls */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">
+                Top {sortedStocks.length}개 종목
+              </Badge>
+              {data?.allScanned && (
+                <span className="text-xs text-muted-foreground">
+                  (총 {data.allScanned}개 스캔)
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground" />
+              <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+                <SelectTrigger className="w-[120px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Stock List with Virtual Scroll */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <ScrollArea className="h-[calc(100vh-420px)] min-h-[400px]">
+                <div className="space-y-3 pr-3">
+                  {sortedStocks.length === 0 ? (
+                    <Card>
+                      <CardContent className="p-8 text-center text-muted-foreground">
+                        분석 가능한 종목이 없습니다. 잠시 후 다시 시도해주세요.
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    sortedStocks.map((stock: any, idx: number) => (
+                      <StockCard
+                        key={stock.symbol}
+                        stock={stock}
+                        idx={idx}
+                        isSelected={selectedStock?.symbol === stock.symbol}
+                        onSelect={setSelectedStock}
+                        onTrade={() => {}}
+                        isTrading={processingSymbols.has(stock.symbol)}
+                        isAutoMode={fullAutoEnabled}
+                      />
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4" />
+                    {selectedStock ? `${selectedStock.symbol} 지표 레이더` : '종목을 선택하세요'}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {selectedStock ? (
+                    <RadarChartCard indicators={selectedStock.indicators} />
+                  ) : (
+                    <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
+                      좌측 종목 클릭 시 레이더 차트 표시
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              {selectedStock && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">지표 상세</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {Object.entries(selectedStock.indicators || {}).map(([key, ind]: [string, any]) => (
+                      <div key={key} className="flex items-start justify-between text-xs border-b border-border/50 pb-1.5">
+                        <div>
+                          <p className="font-medium">{INDICATOR_LABELS[key]}</p>
+                          <p className="text-muted-foreground text-[10px]">{ind.details}</p>
+                        </div>
+                        <Badge variant={ind.score >= 8 ? "default" : ind.score >= 5 ? "secondary" : "outline"} className="text-[10px] shrink-0">
+                          {ind.score}/10
+                        </Badge>
+                      </div>
+                    ))}
+                    {selectedStock.trailingStop > 0 && (
+                      <div className="flex items-center gap-2 mt-2 p-2 rounded bg-muted text-xs">
+                        <Shield className="w-3.5 h-3.5 text-warning" />
+                        <span>추적 손절선: <span className="font-mono font-bold">${selectedStock.trailingStop?.toFixed(4)}</span></span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
