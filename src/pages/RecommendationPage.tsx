@@ -129,7 +129,7 @@ export default function RecommendationPage() {
         <CardContent className="p-4 text-xs text-muted-foreground">
           <p className="font-medium text-foreground mb-1">📊 10대 전문 지표 기반 AI 퀀트 분석</p>
           <p>감성분석 · RVOL · 캔들패턴 · ATR변동성 · 갭분석 · 숏스퀴즈 · 가격위치 · 섹터동조화 · 체결강도 · 프리마켓</p>
-          <p className="mt-1">합산 85점 이상 + 필수 조건 충족 시 AI 자동 매수 실행</p>
+          <p className="mt-1">합산 50점 이상 + [현재가{'>'}VWAP] + [RVOL{'>'}1.2] 충족 시 AI 자동 매수 실행 (10% 정찰병 → 80점+ 피라미딩)</p>
         </CardContent>
       </Card>
 

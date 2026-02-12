@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAIPortfolio } from "@/hooks/useStockData";
 import { resetAIWallet } from "@/lib/api";
-import { TrendingUp, TrendingDown, Bot, Wallet, Trophy, Clock, BarChart3, RotateCcw, Target, Scale } from "lucide-react";
+import { TrendingUp, TrendingDown, Bot, Wallet, Trophy, Clock, BarChart3, RotateCcw, Target, Scale, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { OpenPositionCard } from "@/components/trading/OpenPositionCard";
+import { TradeLogTable } from "@/components/trading/TradeLogTable";
 
 export default function AITradingPage() {
   const { data, isLoading, refetch } = useAIPortfolio();
@@ -79,25 +81,15 @@ export default function AITradingPage() {
         </Button>
       </div>
 
-      {/* Entry Tier Guide */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <div className="rounded-lg border border-border p-2.5 text-center">
-          <p className="text-[10px] text-muted-foreground">50-70점</p>
-          <p className="text-xs font-bold text-warning">정찰병 매수 5%</p>
-        </div>
-        <div className="rounded-lg border border-border p-2.5 text-center">
-          <p className="text-[10px] text-muted-foreground">70-85점</p>
-          <p className="text-xs font-bold text-primary">추세 강화 15%</p>
-        </div>
-        <div className="rounded-lg border border-border p-2.5 text-center">
-          <p className="text-[10px] text-muted-foreground">85-95점</p>
-          <p className="text-xs font-bold stock-up">Strong Buy 20%</p>
-        </div>
-        <div className="rounded-lg border border-border p-2.5 text-center">
-          <p className="text-[10px] text-muted-foreground">95점+</p>
-          <p className="text-xs font-bold stock-up">풀 베팅 30%</p>
-        </div>
-      </div>
+      {/* Entry Logic Guide */}
+      <Card className="border-primary/20">
+        <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
+          <p className="font-medium text-foreground">📋 진입 알고리즘: Low-Threshold Aggressive Strategy</p>
+          <p>✅ 진입 조건: [합산 점수 ≥ 50] AND [현재가 {'>'} VWAP] AND [RVOL {'>'} 1.2]</p>
+          <p>💰 자산 배분: 종목당 최대 10% (정찰병 매수) → 80점+ 돌파 시 +10% 피라미딩</p>
+          <p>🛡️ 청산: 점수 {'<'} 40 즉시 매도 | 추격 손절: ATR × 1.5</p>
+        </CardContent>
+      </Card>
 
       {/* Top Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
@@ -144,7 +136,7 @@ export default function AITradingPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
               <Target className="w-4 h-4 text-primary" />
-              <span className="text-xs text-muted-foreground">총 PnL</span>
+              <span className="text-xs text-muted-foreground">실현 PnL</span>
             </div>
             <p className={`text-xl font-bold font-mono ${(stats.totalPnl || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
               {stats.totalPnl >= 0 ? '+' : ''}${stats.totalPnl || 0}
@@ -154,42 +146,29 @@ export default function AITradingPage() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
-              <Clock className="w-4 h-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">평균 보유</span>
+              <Activity className="w-4 h-4 text-warning" />
+              <span className="text-xs text-muted-foreground">미실현 PnL</span>
             </div>
-            <p className="text-xl font-bold font-mono">{stats.avgHoldTimeMinutes || 0}분</p>
+            <p className={`text-xl font-bold font-mono ${(stats.totalUnrealizedPnl || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
+              {(stats.totalUnrealizedPnl || 0) >= 0 ? '+' : ''}${stats.totalUnrealizedPnl || 0}
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Open Positions */}
+      {/* Open Positions with Radar Charts */}
       {openPositions.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-stock-up animate-pulse" />
-              보유 중인 포지션 ({openPositions.length}/5)
+              보유 중인 포지션 ({openPositions.length}/5) — 실시간 미실현 손익
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {openPositions.map((pos: any) => (
-                <div key={pos.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
-                  <div>
-                    <span className="font-bold text-sm">{pos.symbol}</span>
-                    <span className="text-xs text-muted-foreground ml-2">{pos.quantity}주 @ ${pos.price}</span>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">
-                      SL: ${pos.stop_loss} | TP: ${pos.take_profit}
-                    </p>
-                    <Badge variant="outline" className="text-[10px]">
-                      신뢰도: {pos.ai_confidence}%
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <CardContent className="space-y-3">
+            {openPositions.map((pos: any) => (
+              <OpenPositionCard key={pos.id} position={pos} />
+            ))}
           </CardContent>
         </Card>
       )}
@@ -244,57 +223,7 @@ export default function AITradingPage() {
       </div>
 
       {/* Trade Log */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">매매 로그</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {closedTrades.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">완료된 거래가 없습니다.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border text-muted-foreground">
-                    <th className="text-left py-2 px-2">시간</th>
-                    <th className="text-left py-2 px-2">종목</th>
-                    <th className="text-right py-2 px-2">매수가</th>
-                    <th className="text-right py-2 px-2">매도가</th>
-                    <th className="text-right py-2 px-2">수량</th>
-                    <th className="text-right py-2 px-2">PnL</th>
-                    <th className="text-left py-2 px-2">상태</th>
-                    <th className="text-left py-2 px-2">근거</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {closedTrades.map((trade: any) => {
-                    const isProfit = (trade.pnl || 0) > 0;
-                    const time = trade.closed_at ? new Date(trade.closed_at).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit', month: '2-digit', day: '2-digit' }) : '-';
-                    return (
-                      <tr key={trade.id} className="border-b border-border/50 hover:bg-muted/30">
-                        <td className="py-2 px-2 text-muted-foreground font-mono">{time}</td>
-                        <td className="py-2 px-2 font-bold">{trade.symbol}</td>
-                        <td className="py-2 px-2 text-right font-mono">${trade.price?.toFixed(4)}</td>
-                        <td className="py-2 px-2 text-right font-mono">${trade.close_price?.toFixed(4) || '-'}</td>
-                        <td className="py-2 px-2 text-right font-mono">{trade.quantity}</td>
-                        <td className={`py-2 px-2 text-right font-mono font-bold ${isProfit ? 'stock-up' : 'stock-down'}`}>
-                          {isProfit ? '+' : ''}${trade.pnl?.toFixed(2)}
-                        </td>
-                        <td className="py-2 px-2">
-                          <Badge variant={trade.status === 'profit_taken' ? 'default' : trade.status === 'stopped' ? 'destructive' : 'secondary'} className="text-[9px]">
-                            {trade.status === 'profit_taken' ? '익절' : trade.status === 'stopped' ? '손절' : trade.status === 'score_exit' ? '점수청산' : '종료'}
-                          </Badge>
-                        </td>
-                        <td className="py-2 px-2 text-muted-foreground max-w-[250px] truncate">{trade.ai_reason}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <TradeLogTable closedTrades={closedTrades} />
     </div>
   );
 }
