@@ -1,19 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useAIPortfolio, useScalpingPortfolio, useQuantPortfolio } from "@/hooks/useStockData";
+import { useAIPortfolio, useScalpingPortfolio } from "@/hooks/useStockData";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trophy, TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 
 export function StrategyComparison() {
   const { data: mainData, isLoading: l1 } = useAIPortfolio();
   const { data: scalpData, isLoading: l2 } = useScalpingPortfolio();
-  const { data: quantData, isLoading: l3 } = useQuantPortfolio();
 
-  if (l1 || l2 || l3) return <Skeleton className="h-48" />;
+  if (l1 || l2) return <Skeleton className="h-48" />;
 
   const strategies = [
     {
-      name: '소형주 전략 (Main)',
+      name: 'Main Trading (Main + Quant 통합)',
       icon: '🎯',
       wallet: mainData?.wallet,
       stats: mainData?.stats || {},
@@ -25,13 +24,6 @@ export function StrategyComparison() {
       wallet: scalpData?.wallet,
       stats: scalpData?.stats || {},
       color: 'text-warning',
-    },
-    {
-      name: '10대 지표 퀀트',
-      icon: '📊',
-      wallet: quantData?.wallet,
-      stats: quantData?.stats || {},
-      color: 'text-stock-up',
     },
   ];
 

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchStockQuote, fetchChartData, fetchTechnicalAnalysis, fetchSentimentAnalysis, searchStocks, getMockNewsHeadlines, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews, getScalpingPortfolio, getQuantPortfolio } from "@/lib/api";
+import { fetchStockQuote, fetchChartData, fetchTechnicalAnalysis, fetchSentimentAnalysis, searchStocks, getMockNewsHeadlines, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews, getScalpingPortfolio } from "@/lib/api";
 
 export function useStockQuotes(symbols: string[], enabled = true) {
   return useQuery({
@@ -15,7 +15,7 @@ export function useRealtimeStockQuotes(symbols: string[], enabled = true) {
   return useQuery({
     queryKey: ['realtime-stock-quotes', symbols.join(',')],
     queryFn: () => fetchStockQuote(symbols),
-    refetchInterval: 5000, // 5 seconds (Finnhub free rate limit friendly)
+    refetchInterval: 5000,
     enabled: enabled && symbols.length > 0,
     retry: 2,
   });
@@ -65,7 +65,7 @@ export function usePennyStocks() {
   return useQuery({
     queryKey: ['penny-stocks-top10'],
     queryFn: () => scanPennyStocks(),
-    refetchInterval: 30000, // 30s to respect Finnhub rate limits
+    refetchInterval: 30000,
     retry: 3,
     staleTime: 10000,
     refetchOnWindowFocus: false,
@@ -95,17 +95,8 @@ export function useQuantSignals(symbols?: string[]) {
     queryKey: ['quant-signals', symbols?.join(',')],
     queryFn: () => fetchQuantSignals(symbols),
     staleTime: 10000,
-    refetchInterval: 30000, // 30 seconds
+    refetchInterval: 30000,
     retry: 1,
-  });
-}
-
-export function useQuantPortfolio() {
-  return useQuery({
-    queryKey: ['quant-portfolio'],
-    queryFn: () => getQuantPortfolio(),
-    refetchInterval: 10000,
-    retry: 2,
   });
 }
 

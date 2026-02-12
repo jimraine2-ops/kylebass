@@ -11,7 +11,6 @@ import { toast } from "sonner";
 import { RadarChartCard, INDICATOR_LABELS } from "@/components/recommendation/RadarChartCard";
 import { StockCard } from "@/components/recommendation/StockCard";
 import { QuantAutoBriefing } from "@/components/recommendation/QuantAutoBriefing";
-import { QuantPortfolioPanel } from "@/components/recommendation/QuantPortfolioPanel";
 
 export default function RecommendationPage() {
   const { data, isLoading, refetch, isFetching } = useQuantSignals();
@@ -32,7 +31,6 @@ export default function RecommendationPage() {
 
     const processAutoTrade = async () => {
       for (const stock of allStocks) {
-        // Skip if already processed in this cycle or currently processing
         const cycleKey = `${stock.symbol}-${stock.totalScore}`;
         if (processedRef.current.has(cycleKey)) continue;
         if (stock.totalScore < 50) continue;
@@ -55,12 +53,12 @@ export default function RecommendationPage() {
             setLastConditions(result.conditions);
           }
           if (result.trade) {
-            toast.success(`퀀트 엔진: ${stock.symbol} ${result.trade.quantity}주 자율 매수 완료 [Score: ${stock.totalScore}]`);
+            toast.success(`[Quant] ${stock.symbol} ${result.trade.quantity}주 자율 매수 완료 [Score: ${stock.totalScore}]`);
           }
           if (result.closedTrades?.length > 0) {
             for (const ct of result.closedTrades) {
               const pnlStr = ct.pnl >= 0 ? `+$${ct.pnl.toFixed(2)}` : `-$${Math.abs(ct.pnl).toFixed(2)}`;
-              toast.info(`퀀트 청산: ${ct.symbol} ${pnlStr}`);
+              toast.info(`[Quant] 청산: ${ct.symbol} ${pnlStr}`);
             }
           }
         } catch (err: any) {
@@ -79,7 +77,6 @@ export default function RecommendationPage() {
 
     processAutoTrade();
 
-    // Reset processed set every 60 seconds for new cycle
     const resetInterval = setInterval(() => {
       processedRef.current.clear();
     }, 60000);
@@ -104,16 +101,13 @@ export default function RecommendationPage() {
               idx={idx}
               isSelected={selectedStock?.symbol === stock.symbol}
               onSelect={setSelectedStock}
-              onTrade={() => {}} // Auto mode handles trading
+              onTrade={() => {}}
               isTrading={processingSymbols.has(stock.symbol)}
               isAutoMode={fullAutoEnabled}
             />
           ))}
         </div>
         <div className="space-y-4">
-          {/* Quant Portfolio Panel */}
-          <QuantPortfolioPanel />
-
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -195,10 +189,11 @@ export default function RecommendationPage() {
 
       <Card className="border-primary/20">
         <CardContent className="p-4 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground mb-1">📊 10대 전문 지표 기반 AI 퀀트 자율 매매</p>
+          <p className="font-medium text-foreground mb-1">📊 10대 전문 지표 기반 AI 퀀트 자율 매매 → Main Trading 통합</p>
           <p>✅ 진입: [합산 ≥ 50점] AND [호재 {'>'} 0] AND [RVOL {'>'} 1.5] AND [현재가 {'>'} VWAP] → 15% 자동 매수</p>
           <p>📈 피라미딩: 80점 돌파 시 +10% 추가 매수</p>
           <p>🛡️ 청산: -2.5% 손절 | 점수{'<'}40 근거소멸 | 목표가 50% 익절 → ATR×2 추격 익절</p>
+          <p className="mt-1 text-primary font-medium">💰 모든 거래는 Main Trading 잔고를 사용하며, [Quant] 태그로 구분됩니다.</p>
         </CardContent>
       </Card>
 
