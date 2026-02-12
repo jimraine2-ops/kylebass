@@ -5,7 +5,7 @@ import { TrendingUp, TrendingDown, Activity, BarChart3, AlertTriangle, Bot, Wall
 import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const INDICES = ['^GSPC', '^IXIC', '^DJI', '^VIX'];
+const INDICES = ['SPY', 'QQQ', 'DIA', 'UVXY'];
 const POPULAR_STOCKS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD'];
 const SECTORS = [
   { name: '기술', symbol: 'XLK', color: 'bg-primary/20 text-primary' },
@@ -17,10 +17,10 @@ const SECTORS = [
 ];
 
 const INDEX_NAMES: Record<string, string> = {
-  '^GSPC': 'S&P 500',
-  '^IXIC': 'NASDAQ',
-  '^DJI': 'Dow Jones',
-  '^VIX': 'VIX',
+  'SPY': 'S&P 500',
+  'QQQ': 'NASDAQ',
+  'DIA': 'Dow Jones',
+  'UVXY': 'VIX',
 };
 
 export default function Dashboard() {
@@ -29,7 +29,7 @@ export default function Dashboard() {
   const { data: sectors, isLoading: sectorsLoading } = useStockQuotes(SECTORS.map(s => s.symbol));
   const { data: portfolio } = useAIPortfolio();
 
-  const vixData = indices?.find((q: any) => q.symbol === '^VIX');
+  const vixData = indices?.find((q: any) => q.symbol === 'UVXY');
   const vixValue = vixData?.regularMarketPrice || 0;
   const isHighVix = vixValue > 25;
   const aiStats = portfolio?.stats;
@@ -109,7 +109,7 @@ export default function Dashboard() {
           ) : (
             (indices || []).map((index: any) => {
               const isUp = (index.regularMarketChange || 0) >= 0;
-              const isVix = index.symbol === '^VIX';
+              const isVix = index.symbol === 'UVXY';
               return (
                 <Card key={index.symbol} className="hover:border-primary/30 transition-colors">
                   <CardContent className="p-4">
