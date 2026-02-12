@@ -161,7 +161,7 @@ export default function RecommendationPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <Target className="w-5 h-5 text-primary" />
-          10대 지표 종목 추천
+          대형주 실시간 거래 현황
         </h2>
         <div className="flex items-center gap-2">
           <Button
@@ -203,23 +203,15 @@ export default function RecommendationPage() {
         </div>
       ) : (
         <Tabs defaultValue="premium" onValueChange={() => setSelectedStock(null)}>
-          <TabsList className="w-full grid grid-cols-2">
-            <TabsTrigger value="premium" className="flex items-center gap-1.5">
+          <TabsList className="w-full">
+            <TabsTrigger value="premium" className="flex items-center gap-1.5 w-full">
               <DollarSign className="w-4 h-4" />
-              Premium Picks ($10+)
+              대형주 추천 리스트 ($10+)
               <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{premium.length}</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="penny" className="flex items-center gap-1.5">
-              <TrendingDown className="w-4 h-4" />
-              Penny/Small-Cap (&lt;$10)
-              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5">{penny.length}</Badge>
             </TabsTrigger>
           </TabsList>
           <TabsContent value="premium">
-            {renderList(premium)}
-          </TabsContent>
-          <TabsContent value="penny">
-            {renderList(penny)}
+            {renderList(allStocks)}
           </TabsContent>
         </Tabs>
       )}
