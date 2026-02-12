@@ -10,15 +10,25 @@ import { useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { OpenPositionCard } from "@/components/trading/OpenPositionCard";
 import { TradeLogTable } from "@/components/trading/TradeLogTable";
+import { RadarChartCard } from "@/components/recommendation/RadarChartCard";
+import { useQuantSignals } from "@/hooks/useStockData";
 
 export function MainTradingDashboard() {
   const { data, isLoading, refetch } = useAIPortfolio();
+  const { data: quantData } = useQuantSignals();
   const [resetting, setResetting] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
 
   const wallet = data?.wallet;
   const openPositions = data?.openPositions || [];
   const closedTrades = data?.closedTrades || [];
   const stats = data?.stats || {};
+
+  // Find quant indicators for selected symbol
+  const allQuantStocks = [...(quantData?.premium || []), ...(quantData?.penny || [])];
+  const selectedQuantStock = selectedSymbol
+    ? allQuantStocks.find((s: any) => s.symbol === selectedSymbol)
+    : null;
 
   const handleReset = async () => {
     if (!confirm('가상 지갑을 초기화하시겠습니까? 모든 거래 기록이 삭제됩니다.')) return;
@@ -57,9 +67,14 @@ export function MainTradingDashboard() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-          🔥 공격적 모드 (Low Threshold: 50pts)
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
+            🔥 공격적 모드 (Low Threshold: 50pts)
+          </Badge>
+          <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
+            📊 Quant + Main 통합 포트폴리오
+          </Badge>
+        </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
           지갑 초기화
@@ -68,10 +83,10 @@ export function MainTradingDashboard() {
 
       <Card className="border-primary/20">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📋 진입 알고리즘: Low-Threshold Aggressive Strategy</p>
-          <p>✅ 진입 조건: [합산 점수 ≥ 50] AND [현재가 {'>'} VWAP] AND [RVOL {'>'} 1.2]</p>
-          <p>💰 자산 배분: 종목당 최대 10% (정찰병 매수) → 80점+ 돌파 시 +10% 피라미딩</p>
-          <p>🛡️ 청산: 점수 {'<'} 40 즉시 매도 | 추격 손절: ATR × 1.5</p>
+          <p className="font-medium text-foreground">📋 통합 트레이딩 엔진: Main + Quant 10-Index 전략</p>
+          <p>✅ Main 진입: [합산 점수 ≥ 50] AND [현재가 {'>'} VWAP] AND [RVOL {'>'} 1.2]</p>
+          <p>✅ Quant 진입: [합산 점수 ≥ 50] AND [호재 {'>'} 0] AND [RVOL {'>'} 1.5] AND [현재가 {'>'} VWAP] → 15%</p>
+          <p>🏷️ 거래 태그: [Main] 또는 [Quant] 태그로 전략 구분</p>
         </CardContent>
       </Card>
 
@@ -144,13 +159,33 @@ export function MainTradingDashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-stock-up animate-pulse" />
-              보유 중인 포지션 ({openPositions.length}/5) — 실시간 미실현 손익
+              통합 보유 포지션 ({openPositions.length}) — 실시간 미실현 손익
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {openPositions.map((pos: any) => (
-              <OpenPositionCard key={pos.id} position={pos} />
+              <OpenPositionCard
+                key={pos.id}
+                position={pos}
+                onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
+                isSelected={pos.symbol === selectedSymbol}
+              />
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Radar Chart for selected position */}
+      {selectedSymbol && selectedQuantStock && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              {selectedSymbol} 퀀트 레이더 차트 (점수: {selectedQuantStock.totalScore}/100)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RadarChartCard indicators={selectedQuantStock.indicators} />
           </CardContent>
         </Card>
       )}

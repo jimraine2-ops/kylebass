@@ -3,16 +3,34 @@ import { TrendingUp, TrendingDown, Shield } from "lucide-react";
 
 interface OpenPositionCardProps {
   position: any;
+  onSelect?: () => void;
+  isSelected?: boolean;
 }
 
-export function OpenPositionCard({ position: pos }: OpenPositionCardProps) {
+function getStrategyTag(aiReason: string | null): { label: string; color: string } {
+  if (!aiReason) return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
+  if (aiReason.startsWith('[Quant]')) return { label: 'Quant', color: 'bg-stock-up/20 text-stock-up border-stock-up/30' };
+  if (aiReason.startsWith('[Scalp]')) return { label: 'Scalp', color: 'bg-warning/20 text-warning border-warning/30' };
+  return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
+}
+
+export function OpenPositionCard({ position: pos, onSelect, isSelected }: OpenPositionCardProps) {
   const isProfit = (pos.unrealizedPnl || 0) >= 0;
   const pnlColor = isProfit ? 'stock-up' : 'stock-down';
+  const tag = getStrategyTag(pos.ai_reason);
 
   return (
-    <div className="p-3 rounded-lg bg-muted/50 border border-border space-y-2">
+    <div
+      className={`p-3 rounded-lg bg-muted/50 border space-y-2 transition-all ${
+        onSelect ? 'cursor-pointer hover:border-primary/40' : ''
+      } ${isSelected ? 'border-primary ring-1 ring-primary/20' : 'border-border'}`}
+      onClick={onSelect}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
+          <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${tag.color}`}>
+            {tag.label}
+          </Badge>
           <span className="font-bold text-sm">{pos.symbol}</span>
           <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ${pos.price}</span>
           <Badge variant="outline" className="text-[10px]">
@@ -42,6 +60,11 @@ export function OpenPositionCard({ position: pos }: OpenPositionCardProps) {
           {isProfit ? <TrendingUp className="w-3 h-3 text-stock-up" /> : <TrendingDown className="w-3 h-3 text-stock-down" />}
           TP: ${pos.take_profit}
         </span>
+        {onSelect && (
+          <span className="text-primary text-[9px]">
+            {isSelected ? '▲ 레이더 차트 닫기' : '▼ 클릭하여 레이더 차트 보기'}
+          </span>
+        )}
       </div>
     </div>
   );
