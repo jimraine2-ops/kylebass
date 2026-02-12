@@ -6,11 +6,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePennyStocks, useScalpingPortfolio } from "@/hooks/useStockData";
 import { scalpingAnalyze } from "@/lib/api";
-import { TrendingUp, TrendingDown, Activity, Zap, Bot, Radio, Crown, BarChart3, Power, ShieldCheck, Crosshair } from "lucide-react";
+import { TrendingUp, TrendingDown, Zap, Bot, Radio, Crown, BarChart3, Power, ShieldCheck, Crosshair, Flame, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import StockCardItem from "@/components/penny/StockCardItem";
+import BriefingFeed from "@/components/penny/BriefingFeed";
 
-interface BriefingEntry {
+export interface BriefingEntry {
   id: number;
   text: string;
   time: string;
@@ -18,30 +20,6 @@ interface BriefingEntry {
 }
 
 let briefingId = 0;
-
-function RankBadge({ rank }: { rank: number }) {
-  const colors = rank <= 3
-    ? "bg-warning/20 text-warning border-warning/30"
-    : "bg-muted text-muted-foreground border-border";
-  return (
-    <Badge variant="outline" className={`text-[10px] font-bold ${colors}`}>
-      {rank <= 3 && <Crown className="w-2.5 h-2.5 mr-0.5" />}
-      #{rank}
-    </Badge>
-  );
-}
-
-function VolumeBar({ surge }: { surge: number }) {
-  const pct = Math.min(surge * 20, 100);
-  return (
-    <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden mt-1">
-      <div
-        className="h-full rounded-full bg-primary transition-all"
-        style={{ width: `${pct}%` }}
-      />
-    </div>
-  );
-}
 
 export default function PennyStocksPage() {
   const { data, isLoading } = usePennyStocks();
@@ -56,10 +34,14 @@ export default function PennyStocksPage() {
   const openPositions = portfolioData?.openPositions || [];
   const holdingSymbols = new Set(openPositions.map((p: any) => String(p.symbol)));
 
+  // +20% filter: only these are auto-trade targets
+  const hotStocks = stocks.filter((s: any) => (s.regularMarketChangePercent || 0) >= 20);
+  const hotSymbols = new Set(hotStocks.map((s: any) => s.symbol));
+
   const addBriefing = useCallback((text: string, type: BriefingEntry['type']) => {
     const now = new Date();
     const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-    setBriefings(prev => [{ id: ++briefingId, text, time, type }, ...prev].slice(0, 30));
+    setBriefings(prev => [{ id: ++briefingId, text, time, type }, ...prev].slice(0, 50));
   }, []);
 
   const handleScalpingTrade = useCallback(async (stock: any) => {
@@ -69,7 +51,7 @@ export default function PennyStocksPage() {
     try {
       const result = await scalpingAnalyze(stock.symbol, stock.regularMarketPrice);
       if (result.trade) {
-        const msg = `AI가 $${stock.symbol} 종목에서 강한 수급을 발견하여 0.2초 만에 매수를 완료했습니다 (${result.trade.quantity}주 @ $${result.trade.price})`;
+        const msg = `+20% 돌파 확인 - $${stock.symbol} 초단타 자동 매매 개시 (${result.trade.quantity}주 @ $${result.trade.price})`;
         toast.success(msg);
         addBriefing(msg, 'buy');
       } else if (result.closedTrades?.length > 0) {
@@ -80,8 +62,6 @@ export default function PennyStocksPage() {
             addBriefing(reason, 'sell');
           }
         });
-      } else if (result.decision?.action === 'HOLD' && result.decision?.reason) {
-        // Silent in auto mode - no spam
       }
     } catch (err: any) {
       if (!err.message?.includes('Rate limit')) {
@@ -97,20 +77,20 @@ export default function PennyStocksPage() {
     }
   }, [addBriefing]);
 
-  // Auto-scan loop: instantly trade new stocks appearing in TOP 10
+  // Auto-scan: only trade +20% stocks
   useEffect(() => {
-    if (!autoMode || stocks.length === 0) return;
+    if (!autoMode || hotStocks.length === 0) return;
 
-    const currentSymbols: Set<string> = new Set(stocks.map((s: any) => String(s.symbol)));
+    const currentHot: Set<string> = new Set(hotStocks.map((s: any) => String(s.symbol)));
     const prevSymbols = prevSymbolsRef.current;
 
-    const newEntries = stocks.filter((s: any) => !prevSymbols.has(s.symbol));
-    prevSymbolsRef.current = currentSymbols;
+    const newEntries = hotStocks.filter((s: any) => !prevSymbols.has(s.symbol));
+    prevSymbolsRef.current = currentHot;
 
-    const toTrade = prevSymbols.size === 0 ? stocks : newEntries;
+    const toTrade = prevSymbols.size === 0 ? hotStocks : newEntries;
 
     if (newEntries.length > 0 && prevSymbols.size > 0) {
-      addBriefing(`TOP 10 리스트 변동 감지: ${newEntries.map((s: any) => s.symbol).join(', ')} 신규 진입`, 'info');
+      addBriefing(`🔥 +20% 돌파 종목 감지: ${newEntries.map((s: any) => `$${s.symbol}(+${s.regularMarketChangePercent?.toFixed(1)}%)`).join(', ')}`, 'info');
     }
 
     for (const stock of toTrade) {
@@ -118,14 +98,14 @@ export default function PennyStocksPage() {
         handleScalpingTrade(stock);
       }
     }
-  }, [stocks, autoMode, handleScalpingTrade, addBriefing]);
+  }, [hotStocks, autoMode, handleScalpingTrade, addBriefing]);
 
-  // Periodically re-check existing positions (exit logic) every 30s
+  // Re-check exit conditions every 30s for held positions
   useEffect(() => {
     if (!autoMode || stocks.length === 0) return;
     const interval = setInterval(() => {
       for (const stock of stocks) {
-        if (!autoTradeInProgress.current.has(stock.symbol)) {
+        if (holdingSymbols.has(stock.symbol) && !autoTradeInProgress.current.has(stock.symbol)) {
           handleScalpingTrade(stock);
         }
       }
@@ -137,6 +117,13 @@ export default function PennyStocksPage() {
 
   return (
     <div className="space-y-4">
+      {/* Strategy Banner */}
+      <div className="rounded-lg p-2 border border-destructive/40 bg-destructive/5 flex items-center justify-center gap-2">
+        <Flame className="w-4 h-4 text-destructive" />
+        <span className="text-xs font-bold text-destructive">Target: Stocks &lt; $10 &amp; Gain &gt; +20%</span>
+        <span className="text-[10px] text-muted-foreground">| TOP 50 실시간 모니터링 | +20% 이상만 자동 매매</span>
+      </div>
+
       {/* AI Agent Status Bar */}
       <div className={`rounded-lg p-3 flex items-center justify-between flex-wrap gap-2 border ${autoMode ? 'border-primary/50 bg-primary/5' : 'border-border bg-muted/30'}`}>
         <div className="flex items-center gap-3">
@@ -154,6 +141,10 @@ export default function PennyStocksPage() {
             <ShieldCheck className="w-3 h-3 mr-1" />
             보유: {openPositions.length}/10
           </Badge>
+          <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">
+            <Flame className="w-3 h-3 mr-1" />
+            +20% 타겟: {hotStocks.length}개
+          </Badge>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs font-mono">
@@ -166,7 +157,7 @@ export default function PennyStocksPage() {
             className="text-xs h-7"
             onClick={() => {
               setAutoMode(!autoMode);
-              addBriefing(autoMode ? 'AI 자동매매 모드 OFF' : 'AI 자동매매 모드 ON - 전종목 자율 거래 시작', 'info');
+              addBriefing(autoMode ? 'AI 자동매매 모드 OFF' : 'AI 자동매매 모드 ON - +20% 급등주 자율 거래 시작', 'info');
             }}
           >
             <Power className="w-3 h-3 mr-1" />
@@ -176,39 +167,22 @@ export default function PennyStocksPage() {
       </div>
 
       {/* Live Briefing Feed */}
-      {briefings.length > 0 && (
-        <Card className="border-primary/20">
-          <CardContent className="p-0">
-            <ScrollArea className="h-[100px]">
-              <div className="p-3 space-y-1">
-                {briefings.map(b => (
-                  <div key={b.id} className="flex items-start gap-2 text-[11px] animate-in fade-in-0 slide-in-from-top-1 duration-300">
-                    <span className="text-muted-foreground font-mono shrink-0">{b.time}</span>
-                    <span className={`${b.type === 'buy' ? 'text-primary font-medium' : b.type === 'sell' ? 'text-warning font-medium' : 'text-muted-foreground'}`}>
-                      {b.type === 'buy' ? '🟢' : b.type === 'sell' ? '🔴' : '📡'} {b.text}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      )}
+      <BriefingFeed briefings={briefings} />
 
       {/* Info Card */}
       <Card className="border-primary/30">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">🤖 Full-Auto Direct Trading System</p>
-          <p>• AI 에이전트가 TOP 10 리스트를 감시하여 <span className="text-primary font-medium">신규 종목 포착 즉시 자동 매수</span></p>
-          <p>• 청산: 2~3%→50% 익절 | ATR×2 추격 손절 | -2% 즉시 손절 | 15분 타임컷 | 장마감 강제 청산</p>
+          <p className="font-medium text-foreground">🤖 Full-Auto +20% Surge Trading System</p>
+          <p>• 100+ 종목 스캔 → <span className="text-primary font-medium">TOP 50 실시간 표시</span> → <span className="text-destructive font-medium">+20% 이상만 자동 매수</span></p>
+          <p>• 청산: 2~3%→50% 익절 | ATR×1.5 추격 손절 | -2% 즉시 손절 | 15분 타임컷 | 장마감 강제 청산</p>
           <p>• 최대 동시 보유: 10종목 | 종목당 지갑의 10% 배분</p>
         </CardContent>
       </Card>
 
-      {/* Stock Grid */}
+      {/* Stock Grid - TOP 50 */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-          {Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-40" />)}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+          {Array.from({ length: 20 }).map((_, i) => <Skeleton key={i} className="h-36" />)}
         </div>
       ) : stocks.length === 0 ? (
         <Card>
@@ -217,122 +191,26 @@ export default function PennyStocksPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-          {stocks.map((stock: any, idx: number) => {
-            const isUp = (stock.regularMarketChange || 0) >= 0;
-            const rank = idx + 1;
-            const isCurrentlyTrading = tradingSymbols.has(stock.symbol);
-            const isHolding = holdingSymbols.has(stock.symbol);
-            
-            // Glow effect classes
-            const glowClass = isCurrentlyTrading
-              ? 'border-warning/60 shadow-[0_0_15px_rgba(234,179,8,0.3)] ring-1 ring-warning/30'
-              : isHolding
-              ? 'border-primary/50 shadow-[0_0_10px_rgba(var(--primary),0.2)] ring-1 ring-primary/20'
-              : 'hover:border-primary/40';
-
-            return (
-              <Card key={stock.symbol} className={`relative overflow-hidden transition-all duration-500 ease-in-out hover:shadow-md group animate-in fade-in-0 slide-in-from-bottom-2 ${glowClass}`}>
-                {/* Trading indicator overlay */}
-                {isCurrentlyTrading && (
-                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-warning via-primary to-warning animate-pulse" />
-                )}
-                {isHolding && !isCurrentlyTrading && (
-                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary/60" />
-                )}
-
-                <CardContent className="p-4 space-y-2">
-                  {/* Rank + Symbol + Status */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <RankBadge rank={rank} />
-                      <Link to={`/stock/${stock.symbol}`} className="font-bold text-sm hover:text-primary transition-colors">
-                        {stock.symbol}
-                      </Link>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {isCurrentlyTrading && (
-                        <Badge className="text-[8px] px-1 py-0 bg-warning/20 text-warning border-warning/30 animate-pulse">
-                          <Bot className="w-2.5 h-2.5 mr-0.5" />
-                          매매중
-                        </Badge>
-                      )}
-                      {isHolding && !isCurrentlyTrading && (
-                        <Badge className="text-[8px] px-1 py-0 bg-primary/20 text-primary border-primary/30">
-                          보유중
-                        </Badge>
-                      )}
-                      {stock.isVolumeSurge && (
-                        <Badge variant="destructive" className="text-[9px] px-1 py-0">
-                          <Zap className="w-2.5 h-2.5 mr-0.5" />
-                          급등
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Price */}
-                  <p className="text-2xl font-bold font-mono">
-                    ${stock.regularMarketPrice?.toFixed(4)}
-                  </p>
-
-                  {/* Change */}
-                  <div className={`flex items-center gap-1 ${isUp ? 'stock-up' : 'stock-down'}`}>
-                    {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                    <span className="text-xs font-mono">
-                      {isUp ? '+' : ''}{stock.regularMarketChangePercent?.toFixed(2)}%
-                    </span>
-                  </div>
-
-                  {/* Volume Strength */}
-                  <div className="space-y-0.5">
-                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <BarChart3 className="w-2.5 h-2.5" />
-                        거래량 강도
-                      </span>
-                      <span className="font-mono">{stock.volumeSurge?.toFixed(1)}x</span>
-                    </div>
-                    <VolumeBar surge={stock.volumeSurge || 0} />
-                  </div>
-
-                  {/* Composite Score */}
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-muted-foreground">복합점수</span>
-                    <Badge variant="secondary" className="text-[10px] font-mono">
-                      {stock.compositeScore || 0}점
-                    </Badge>
-                  </div>
-
-                  {/* Auto mode: status indicator instead of button */}
-                  {autoMode ? (
-                    <div className="w-full text-center text-[10px] h-7 mt-1 flex items-center justify-center rounded-md border border-border/50 bg-muted/30 text-muted-foreground">
-                      <Bot className="w-3 h-3 mr-1" />
-                      {isCurrentlyTrading ? '🔄 AI 분석 실행중...' : isHolding ? '✅ AI 자동 관리중' : '⏳ AI 감시중'}
-                    </div>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full text-[10px] h-7 mt-1"
-                      onClick={() => handleScalpingTrade(stock)}
-                      disabled={tradingSymbols.has(stock.symbol)}
-                    >
-                      <Bot className="w-3 h-3 mr-1" />
-                      {tradingSymbols.has(stock.symbol) ? '분석중...' : '수동 매매'}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+          {stocks.map((stock: any, idx: number) => (
+            <StockCardItem
+              key={stock.symbol}
+              stock={stock}
+              rank={idx + 1}
+              isHot={hotSymbols.has(stock.symbol)}
+              isTrading={tradingSymbols.has(stock.symbol)}
+              isHolding={holdingSymbols.has(stock.symbol)}
+              autoMode={autoMode}
+              onManualTrade={() => handleScalpingTrade(stock)}
+            />
+          ))}
         </div>
       )}
 
       {/* Scanned Info */}
       {data?.allScanned && (
         <p className="text-xs text-muted-foreground text-center">
-          총 {data.allScanned}개 종목 스캔 → 상위 {stocks.length}개 타겟팅 중 {autoMode && '| 🤖 AI Full-Auto 모드 활성'}
+          총 {data.allScanned}개 종목 스캔 → 상위 {stocks.length}개 모니터링 | 🔥 +20% 급등 {hotStocks.length}개 타겟 {autoMode && '| 🤖 AI Full-Auto 활성'}
         </p>
       )}
     </div>
