@@ -50,7 +50,7 @@ serve(async (req) => {
         // Price-based stop-loss
         if (pos.stop_loss && price <= pos.stop_loss && pos.symbol === symbol) {
           shouldClose = true;
-          closeReason = `손절가 $${pos.stop_loss} 도달 (0.1초 내 전량 매도)`;
+          closeReason = `손절가 $${pos.stop_loss} 도달 (즉시 전량 매도)`;
           newStatus = 'stopped';
         }
         // Take-profit: 50% at first target
@@ -59,10 +59,10 @@ serve(async (req) => {
           closeReason = `1차 목표가 $${pos.take_profit} 도달 (익절)`;
           newStatus = 'profit_taken';
         }
-        // Logic-based exit: score below 60
-        else if (quantScore !== undefined && quantScore < 60 && pos.symbol === symbol) {
+        // Logic-based exit: score below 40 (stricter - was 60)
+        else if (quantScore !== undefined && quantScore < 40 && pos.symbol === symbol) {
           shouldClose = true;
-          closeReason = `지표 점수 ${quantScore}점 (<60) 급락 즉시 매도`;
+          closeReason = `지표 점수 ${quantScore}점 (<40) 매수 근거 소멸 - 즉시 전량 매도`;
           newStatus = 'score_exit';
         }
 
@@ -86,7 +86,7 @@ serve(async (req) => {
         }
       }
 
-      // === Entry Algorithm: Selective Aggression Strategy ===
+      // === Entry Algorithm: Aggressive Low-Threshold Strategy (50pts) ===
       const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
       if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
 
@@ -94,15 +94,33 @@ serve(async (req) => {
       const openCount = (openPositions || []).filter(p => p.status === 'open').length;
       const availableBalance = wallet.balance;
 
-      // Entry threshold: quant score >= 85
-      const meetsScoreThreshold = quantScore !== undefined ? quantScore >= 85 : true;
-      // Check mandatory overlap conditions
-      const sentimentTier1 = indicators?.sentiment?.score >= 7;
-      const rvolAbove3 = indicators?.rvol?.rvol >= 3.0;
-      const aggressionAbove80 = indicators?.aggression?.score >= 8;
-      const mandatoryConditions = sentimentTier1 && rvolAbove3 && aggressionAbove80;
+      // Entry threshold lowered: quant score >= 50
+      const meetsScoreThreshold = quantScore !== undefined ? quantScore >= 50 : false;
 
-      const prompt = `You are an AI quant trading analyst. Analyze this stock and decide whether to BUY, SELL, or HOLD.
+      // Tiered position sizing
+      let positionSizePct = 0;
+      let entryTier = 'NONE';
+      if (quantScore !== undefined) {
+        if (quantScore >= 95) { positionSizePct = 0.30; entryTier = 'STRONG_BUY_MAX'; }
+        else if (quantScore >= 85) { positionSizePct = 0.20; entryTier = 'STRONG_BUY'; }
+        else if (quantScore >= 70) { positionSizePct = 0.15; entryTier = 'CONFIRMED'; }
+        else if (quantScore >= 50) { positionSizePct = 0.05; entryTier = 'AGGRESSIVE'; }
+      }
+
+      // Relaxed mandatory conditions: sentiment > 0 + RVOL > 1.5 + price above VWAP
+      const sentimentPositive = indicators?.sentiment?.score > 0;
+      const rvolAbove1_5 = indicators?.rvol?.rvol >= 1.5;
+      const aboveVwap = indicators?.confluence?.vwapCross || indicators?.confluence?.score >= 5;
+      const basicConditionsMet = sentimentPositive && rvolAbove1_5 && aboveVwap;
+
+      // Trailing stop tighter for low-score entries: ATR * 1.5 instead of 2.0
+      const trailingMultiplier = (quantScore && quantScore < 70) ? 1.5 : 2.0;
+
+      const now = new Date();
+      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+      const prompt = `You are an AI quant trading analyst operating in AGGRESSIVE MODE (Low Threshold: 50pts).
+Analyze this stock and decide whether to BUY, SELL, or HOLD.
 
 Symbol: ${symbol}
 Current Price: $${price}
@@ -110,21 +128,31 @@ Available Balance: $${availableBalance.toFixed(2)}
 Already Holding: ${alreadyHolding ? 'Yes' : 'No'}
 Open Positions: ${openCount}/5
 Quant Score: ${quantScore || 'N/A'}/100
-Score Threshold Met (>=85): ${meetsScoreThreshold}
-Mandatory Conditions Met: ${mandatoryConditions ? 'Yes' : 'No'}
+Entry Tier: ${entryTier} (Position Size: ${(positionSizePct * 100).toFixed(0)}%)
+Score Threshold Met (>=50): ${meetsScoreThreshold}
+Basic Conditions Met (Sentiment>0 + RVOL>1.5 + VWAP상단): ${basicConditionsMet ? 'Yes' : 'No'}
+Trailing Stop Multiplier: ATR × ${trailingMultiplier}
 Indicator Details: ${JSON.stringify(indicators || {})}
 Recent Price Data: ${JSON.stringify(chartData?.slice(-10) || [])}
 
-Rules:
-- Only BUY if quant score >= 85 AND mandatory conditions met (sentiment Tier1 + RVOL>3 + aggression>80%)
-- If score >= 95, allow up to 30% position size instead of 20%
+Entry Rules (Aggressive Mode):
+- BUY if quant score >= 50 AND basic conditions met (sentiment>0 + RVOL>1.5 + above VWAP)
+- 50-70pts: Aggressive Entry (5% position) - 정찰병 매수
+- 70-85pts: Confirmed Entry (15% position) - 추세 강화
+- 85-95pts: Strong Buy (20% position) - Perfect Setup
+- 95+pts: Max Buy (30% position) - 풀 베팅
 - Maximum 5 simultaneous positions
-- Stop loss: entry - 2*ATR or 5% below entry
-- Take profit: 10% above entry (1st target)
-- If already holding and score >= 80, consider pyramiding (additional buy)
+- Stop loss: entry - ${trailingMultiplier}*ATR or 5% below entry
+- Take profit: 8% for aggressive entries, 10% for confirmed+
+
+Exit Rules:
+- If score drops below 40: immediate full exit (매수 근거 소멸)
+- Trailing stop: ATR × ${trailingMultiplier} for tighter profit protection
+
+Log format: "${timeStr}분 - $${symbol} 매수 집행 (근거: 합산 점수 ${quantScore}점 및 기초 수급 포착)"
 
 Respond with JSON ONLY:
-{"action": "BUY"|"SELL"|"HOLD", "confidence": 0-100, "reason": "specific indicator-based explanation", "quantity": number, "stopLoss": number, "takeProfit": number}`;
+{"action": "BUY"|"SELL"|"HOLD", "confidence": 0-100, "reason": "specific indicator-based explanation with score tier", "quantity": number, "stopLoss": number, "takeProfit": number}`;
 
       const aiResponse = await fetch(AI_GATEWAY, {
         method: 'POST',
@@ -154,15 +182,15 @@ Respond with JSON ONLY:
 
       let trade = null;
 
-      if (decision.action === 'BUY' && decision.confidence >= 50 && !alreadyHolding && openCount < 5 && meetsScoreThreshold) {
-        // Position Sizing: 20% default, 30% if score >= 95
-        const maxPct = (quantScore && quantScore >= 95) ? 0.30 : 0.20;
-        const maxInvestment = availableBalance * maxPct;
+      if (decision.action === 'BUY' && decision.confidence >= 40 && !alreadyHolding && openCount < 5 && meetsScoreThreshold && basicConditionsMet) {
+        // Tiered Position Sizing based on score
+        const maxInvestment = availableBalance * positionSizePct;
         const qty = Math.min(decision.quantity || Math.floor(maxInvestment / price), Math.floor(maxInvestment / price));
 
         if (qty > 0 && qty * price <= availableBalance) {
+          const tpPct = (quantScore && quantScore < 70) ? 1.08 : 1.10; // 8% for aggressive, 10% for confirmed+
           const stopLoss = decision.stopLoss || +(price * 0.95).toFixed(4);
-          const takeProfit = decision.takeProfit || +(price * 1.10).toFixed(4);
+          const takeProfit = decision.takeProfit || +(price * tpPct).toFixed(4);
 
           const { data: newTrade } = await supabase.from('ai_trades').insert({
             symbol,
@@ -172,7 +200,7 @@ Respond with JSON ONLY:
             stop_loss: stopLoss,
             take_profit: takeProfit,
             status: 'open',
-            ai_reason: `[Score:${quantScore || 'N/A'}] ${decision.reason}`,
+            ai_reason: `[${entryTier}|Score:${quantScore || 'N/A'}|${(positionSizePct*100).toFixed(0)}%] ${timeStr}분 - $${symbol} 매수 집행 (근거: ${decision.reason})`,
             ai_confidence: decision.confidence,
           }).select().single();
 
