@@ -125,6 +125,15 @@ export async function quantAutoTrade(symbol: string, price: number, quantScore: 
   return data;
 }
 
+// Update wallet balance
+export async function updateWalletBalance(walletType: 'main' | 'scalping', newBalance: number) {
+  const { data, error } = await supabase.functions.invoke('ai-trading', {
+    body: { action: 'update-balance', walletType, newBalance },
+  });
+  if (error) throw error;
+  return data;
+}
+
 // Mock news headlines (fallback for sentiment analysis)
 export function getMockNewsHeadlines(symbol: string): string[] {
   const headlines: Record<string, string[]> = {

@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAIPortfolio } from "@/hooks/useStockData";
-import { resetAIWallet } from "@/lib/api";
+import { resetAIWallet, updateWalletBalance } from "@/lib/api";
 import { Wallet, Trophy, BarChart3, RotateCcw, Target, Scale, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -12,6 +12,7 @@ import { OpenPositionCard } from "@/components/trading/OpenPositionCard";
 import { TradeLogTable } from "@/components/trading/TradeLogTable";
 import { RadarChartCard } from "@/components/recommendation/RadarChartCard";
 import { useQuantSignals } from "@/hooks/useStockData";
+import { EditableBalance } from "@/components/trading/EditableBalance";
 
 export function MainTradingDashboard() {
   const { data, isLoading, refetch } = useAIPortfolio();
@@ -97,7 +98,10 @@ export function MainTradingDashboard() {
               <Wallet className="w-4 h-4 text-primary" />
               <span className="text-xs text-muted-foreground">잔고</span>
             </div>
-            <p className="text-xl font-bold font-mono">${wallet?.balance?.toFixed(2) || '10,000.00'}</p>
+            <EditableBalance
+              balance={wallet?.balance || 10000}
+              onSave={async (val) => { await updateWalletBalance('main', val); await refetch(); }}
+            />
           </CardContent>
         </Card>
         <Card>

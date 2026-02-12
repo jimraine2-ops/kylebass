@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useScalpingPortfolio } from "@/hooks/useStockData";
-import { resetScalpingWallet } from "@/lib/api";
+import { resetScalpingWallet, updateWalletBalance } from "@/lib/api";
 import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap } from "lucide-react";
+import { EditableBalance } from "@/components/trading/EditableBalance";
 import { toast } from "sonner";
 import { useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -81,7 +82,11 @@ export function ScalpingDashboard() {
               <Wallet className="w-4 h-4 text-warning" />
               <span className="text-xs text-muted-foreground">잔고</span>
             </div>
-            <p className="text-lg font-bold font-mono">₩{wallet?.balance?.toLocaleString() || '1,000,000'}</p>
+            <EditableBalance
+              balance={wallet?.balance || 1000000}
+              currencyPrefix="₩"
+              onSave={async (val) => { await updateWalletBalance('scalping', val); await refetch(); }}
+            />
           </CardContent>
         </Card>
         <Card>
