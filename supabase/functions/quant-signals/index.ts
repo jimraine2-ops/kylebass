@@ -18,7 +18,7 @@ async function finnhubFetch(path: string) {
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
   const res = await fetch(url);
-  if (!res.ok) return null; // graceful failure
+  if (!res.ok) return null;
   return res.json();
 }
 
@@ -72,20 +72,13 @@ function calculateVWAP(highs: number[], lows: number[], closes: number[], volume
   return cumV > 0 ? cumPV / cumV : closes[closes.length - 1];
 }
 
-// Generate synthetic candle data from quote for analysis
-function generateSyntheticCandles(quote: any, days = 40): { closes: number[]; highs: number[]; lows: number[]; opens: number[]; volumes: number[] } {
+function generateSyntheticCandles(quote: any, days = 40) {
   const c = quote.c || 0;
   const pc = quote.pc || c;
   const h = quote.h || c * 1.01;
   const l = quote.l || c * 0.99;
   const o = quote.o || pc;
-
-  const closes: number[] = [];
-  const highs: number[] = [];
-  const lows: number[] = [];
-  const opens: number[] = [];
-  const volumes: number[] = [];
-
+  const closes: number[] = [], highs: number[] = [], lows: number[] = [], opens: number[] = [], volumes: number[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const ratio = i / days;
     const noise = (Math.random() - 0.5) * c * 0.025;
@@ -95,25 +88,17 @@ function generateSyntheticCandles(quote: any, days = 40): { closes: number[]; hi
     const high = +(Math.max(open, close) + Math.random() * c * 0.012).toFixed(4);
     const low = +(Math.min(open, close) - Math.random() * c * 0.012).toFixed(4);
     const vol = Math.floor(1000000 + Math.random() * 5000000);
-    closes.push(close);
-    highs.push(high);
-    lows.push(low);
-    opens.push(open);
-    volumes.push(vol);
+    closes.push(close); highs.push(high); lows.push(low); opens.push(open); volumes.push(vol);
   }
-
-  // Last entry = actual quote data
   closes[closes.length - 1] = c;
   highs[highs.length - 1] = h;
   lows[lows.length - 1] = l;
   opens[opens.length - 1] = o;
-
   return { closes, highs, lows, opens, volumes };
 }
 
-// ===== 10 Indicator Scoring Functions =====
+// ===== 10 Indicator Scoring =====
 
-// 01. Event-Driven Sentiment Intelligence
 async function scoreSentiment(symbol: string): Promise<{ score: number; details: string }> {
   try {
     const to = new Date().toISOString().split('T')[0];
@@ -135,7 +120,6 @@ async function scoreSentiment(symbol: string): Promise<{ score: number; details:
     }
     const avgSentiment = sentimentSum / headlines.length;
 
-    // SEC Filing bonus
     const filings = await finnhubFetch(`/stock/filings?symbol=${symbol}`);
     if (filings) {
       const recentFilings = (filings || []).slice(0, 5);
@@ -155,13 +139,11 @@ async function scoreSentiment(symbol: string): Promise<{ score: number; details:
   }
 }
 
-// 02. RVOL (Relative Volume)
 function scoreRVOL(volumes: number[]): { score: number; details: string; rvol: number } {
   if (volumes.length < 21) return { score: 3, details: '데이터 제한적', rvol: 1.0 };
   const currentVol = volumes[volumes.length - 1];
   const avgVol = volumes.slice(-21, -1).reduce((a, b) => a + b, 0) / 20;
   const rvol = avgVol > 0 ? currentVol / avgVol : 1;
-
   const mean = avgVol;
   const variance = volumes.slice(-21, -1).reduce((a, b) => a + Math.pow(b - mean, 2), 0) / 20;
   const std = Math.sqrt(variance);
@@ -177,7 +159,6 @@ function scoreRVOL(volumes: number[]): { score: number; details: string; rvol: n
   return { score, details: `RVOL: ${rvol.toFixed(1)}x, Z-Score: ${zScore.toFixed(2)}`, rvol };
 }
 
-// 03. Candle/EMA Pattern (Triple Confirm)
 function scoreCandlePattern(closes: number[], highs: number[], lows: number[], volumes: number[]): { score: number; details: string } {
   if (closes.length < 30) return { score: 3, details: '데이터 제한적' };
   const n = closes.length - 1;
@@ -203,31 +184,27 @@ function scoreCandlePattern(closes: number[], highs: number[], lows: number[], v
   return { score, details: reasons.join(', ') || '조건 미충족' };
 }
 
-// 04. ATR Adaptive Volatility
 function scoreATR(highs: number[], lows: number[], closes: number[]): { score: number; details: string; trailingStop: number } {
   if (closes.length < 20) return { score: 3, details: '데이터 제한적', trailingStop: 0 };
   const atr = calculateATR(highs, lows, closes, 14);
   const currentATR = atr[atr.length - 1];
   const prevATR = atr.slice(-5, -1).reduce((a, b) => a + b, 0) / 4;
   const n = closes.length - 1;
-
   const ema20 = calculateEMA(closes, 20);
   const keltnerUpper = ema20[n] + 2 * currentATR;
   const priceAboveKeltner = closes[n] > keltnerUpper;
-
   const recentHigh = Math.max(...highs.slice(-10));
   const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
 
   let score = 0;
-  if (currentATR < prevATR * 0.8) { score = 2; }
-  else if (priceAboveKeltner) { score = 10; }
-  else if (closes[n] > ema20[n] + currentATR) { score = 7; }
-  else { score = 4; }
+  if (currentATR < prevATR * 0.8) score = 2;
+  else if (priceAboveKeltner) score = 10;
+  else if (closes[n] > ema20[n] + currentATR) score = 7;
+  else score = 4;
 
   return { score, details: `ATR: ${currentATR.toFixed(4)}, Keltner돌파: ${priceAboveKeltner ? 'O' : 'X'}`, trailingStop };
 }
 
-// 05. Gap Analysis
 function scoreGap(opens: number[], closes: number[], highs: number[], lows: number[], volumes: number[]): { score: number; details: string } {
   if (closes.length < 5) return { score: 3, details: '데이터 제한적' };
   const n = closes.length - 1;
@@ -240,71 +217,45 @@ function scoreGap(opens: number[], closes: number[], highs: number[], lows: numb
   if (gapPct >= 4 && gapPct <= 15) {
     score += 5;
     reasons.push(`갭 상승 ${gapPct.toFixed(1)}% (적정 범위)`);
-    if (closes[n] > opens[n] && volumes[n] > volumes[n - 1]) {
-      score += 5;
-      reasons.push('ORB 돌파 확인');
-    }
-  } else if (gapPct > 15) {
-    score = 2;
-    reasons.push(`갭 과다 ${gapPct.toFixed(1)}% (>15% 제외)`);
-  } else if (gapPct > 0) {
-    score = 3;
-    reasons.push(`소폭 갭 ${gapPct.toFixed(1)}%`);
-  } else {
-    score = 1;
-    reasons.push(`갭 하락 ${gapPct.toFixed(1)}%`);
-  }
+    if (closes[n] > opens[n] && volumes[n] > volumes[n - 1]) { score += 5; reasons.push('ORB 돌파 확인'); }
+  } else if (gapPct > 15) { score = 2; reasons.push(`갭 과다 ${gapPct.toFixed(1)}%`); }
+  else if (gapPct > 0) { score = 3; reasons.push(`소폭 갭 ${gapPct.toFixed(1)}%`); }
+  else { score = 1; reasons.push(`갭 하락 ${gapPct.toFixed(1)}%`); }
 
   return { score: Math.min(10, score), details: reasons.join(', ') };
 }
 
-// 06. Short Squeeze
 function scoreShortSqueeze(closes: number[], volumes: number[]): { score: number; details: string } {
   if (closes.length < 21) return { score: 3, details: '데이터 제한적' };
   const n = closes.length - 1;
   const high20 = Math.max(...closes.slice(-20));
-
   let score = 0;
   const reasons: string[] = [];
-
-  if (closes[n] >= high20) {
-    score += 6;
-    reasons.push('20일 최고가 돌파');
-  }
-
+  if (closes[n] >= high20) { score += 6; reasons.push('20일 최고가 돌파'); }
   const avgVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
   const volRatio = avgVol > 0 ? volumes[n] / avgVol : 0;
-  if (volRatio > 2) {
-    score += 4;
-    reasons.push(`거래량 ${volRatio.toFixed(1)}x 급증`);
-  }
-
+  if (volRatio > 2) { score += 4; reasons.push(`거래량 ${volRatio.toFixed(1)}x 급증`); }
   return { score: Math.min(10, score), details: reasons.join(', ') || 'Squeeze 신호 없음' };
 }
 
-// 07. Price Position (Blue Sky / Liquidity Void)
 function scorePricePosition(closes: number[], highs: number[]): { score: number; details: string } {
   if (closes.length < 30) return { score: 3, details: '데이터 제한적' };
   const n = closes.length - 1;
   const allTimeHigh = Math.max(...highs);
   const distToATH = ((allTimeHigh - closes[n]) / allTimeHigh) * 100;
-
   let score = 0;
-  if (distToATH <= 5) { score = 10; }
-  else if (distToATH <= 10) { score = 7; }
-  else if (distToATH <= 20) { score = 4; }
-  else { score = 2; }
-
+  if (distToATH <= 5) score = 10;
+  else if (distToATH <= 10) score = 7;
+  else if (distToATH <= 20) score = 4;
+  else score = 2;
   return { score, details: `ATH 대비 ${distToATH.toFixed(1)}% 하단` };
 }
 
-// 08. Sector Synergy (RS vs SPY)
 async function scoreSectorSynergy(symbol: string, symbolChange: number): Promise<{ score: number; details: string }> {
   try {
     const spyQuote = await finnhubFetch(`/quote?symbol=SPY`);
     if (!spyQuote) return { score: 5, details: 'SPY 데이터 없음' };
     const spyChange = spyQuote.dp || 0;
-
     const rs = spyChange !== 0 ? symbolChange / spyChange : (symbolChange > 0 ? 2 : 0);
     let score = 0;
     if (rs >= 3) score = 10;
@@ -313,7 +264,6 @@ async function scoreSectorSynergy(symbol: string, symbolChange: number): Promise
     else if (rs >= 1) score = 4;
     else score = 2;
 
-    // Peer synergy check (limited to 2 peers to save API calls)
     let peerSynergy = false;
     const peers = await finnhubFetch(`/stock/peers?symbol=${symbol}`);
     if (peers && peers.length > 1) {
@@ -325,50 +275,105 @@ async function scoreSectorSynergy(symbol: string, symbolChange: number): Promise
       }
       if (risingPeers >= 1) { score = Math.min(10, score + 2); peerSynergy = true; }
     }
-
     return { score, details: `RS: ${rs.toFixed(2)}x SPY${peerSynergy ? ', 동종업 동반상승' : ''}` };
   } catch {
     return { score: 5, details: 'SPY 비교 불가' };
   }
 }
 
-// 09. Trade Aggression
 function scoreTradeAggression(volumes: number[], closes: number[], opens: number[]): { score: number; details: string } {
   if (closes.length < 5) return { score: 3, details: '데이터 제한적' };
   const n = closes.length - 1;
-  let bullishCount = 0;
-  let volIncreasing = 0;
+  let bullishCount = 0, volIncreasing = 0;
   for (let i = Math.max(0, n - 4); i <= n; i++) {
     if (closes[i] > opens[i]) bullishCount++;
     if (i > 0 && volumes[i] > volumes[i - 1]) volIncreasing++;
   }
-
   const aggression = (bullishCount / 5) * 100;
   let score = 0;
   if (aggression >= 80 && volIncreasing >= 3) score = 10;
   else if (aggression >= 60) score = 7;
   else if (aggression >= 40) score = 4;
   else score = 2;
-
   return { score, details: `매수 강도: ${aggression.toFixed(0)}%, 거래량 증가: ${volIncreasing}일` };
 }
 
-// 10. Pre-Market Catalyst
 function scorePreMarket(volumes: number[], closes: number[], highs: number[]): { score: number; details: string } {
   if (volumes.length < 5) return { score: 3, details: '데이터 제한적' };
   const n = volumes.length - 1;
   const avgDailyVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(volumes.length, 20);
-
   const volRatio = avgDailyVol > 0 ? volumes[n] / avgDailyVol : 0;
   const breakingHigh = closes[n] > Math.max(...highs.slice(Math.max(0, n - 5), n));
-
   let score = 0;
-  if (volRatio > 0.1 && breakingHigh) { score = 10; }
-  else if (volRatio > 0.1) { score = 6; }
-  else if (breakingHigh) { score = 4; }
-  else { score = 2; }
-
+  if (volRatio > 0.1 && breakingHigh) score = 10;
+  else if (volRatio > 0.1) score = 6;
+  else if (breakingHigh) score = 4;
+  else score = 2;
   return { score, details: `Vol비율: ${(volRatio * 100).toFixed(0)}%, 고점돌파: ${breakingHigh ? 'O' : 'X'}` };
+}
+
+// Derive top reason from indicators
+function getTopReason(indicators: any): string {
+  const entries = Object.entries(indicators) as [string, { score: number; details: string }][];
+  entries.sort((a, b) => b[1].score - a[1].score);
+  const top = entries.slice(0, 2);
+  const labels: Record<string, string> = {
+    sentiment: '호재', rvol: 'RVOL', candle: '캔들패턴', atr: 'ATR',
+    gap: '갭분석', squeeze: '스퀴즈', position: '가격위치',
+    sectorSynergy: '섹터', aggression: '체결강도', preMarket: '프리마켓'
+  };
+  return top.map(([k, v]) => `${labels[k] || k}(${v.score})`).join(' + ');
+}
+
+// Analyze a single symbol
+async function analyzeSymbol(sym: string) {
+  const quote = await finnhubFetch(`/quote?symbol=${sym}`);
+  if (!quote || !quote.c || quote.c === 0) return null;
+
+  const changePct = quote.dp || 0;
+
+  let closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[];
+  const to = Math.floor(Date.now() / 1000);
+  const from = to - 60 * 86400;
+  const candles = await finnhubFetch(`/stock/candle?symbol=${sym}&resolution=D&from=${from}&to=${to}`);
+
+  if (candles && candles.s !== 'no_data' && candles.t) {
+    closes = candles.c; highs = candles.h; lows = candles.l; opens = candles.o; volumes = candles.v;
+  } else {
+    const synthetic = generateSyntheticCandles(quote);
+    closes = synthetic.closes; highs = synthetic.highs; lows = synthetic.lows; opens = synthetic.opens; volumes = synthetic.volumes;
+  }
+
+  const [sentiment, sectorSynergy] = await Promise.all([
+    scoreSentiment(sym),
+    scoreSectorSynergy(sym, changePct),
+  ]);
+
+  const rvol = scoreRVOL(volumes);
+  const candle = scoreCandlePattern(closes, highs, lows, volumes);
+  const atr = scoreATR(highs, lows, closes);
+  const gap = scoreGap(opens, closes, highs, lows, volumes);
+  const squeeze = scoreShortSqueeze(closes, volumes);
+  const position = scorePricePosition(closes, highs);
+  const aggression = scoreTradeAggression(volumes, closes, opens);
+  const preMarket = scorePreMarket(volumes, closes, highs);
+
+  const indicators = { sentiment, rvol, candle, atr, gap, squeeze, position, sectorSynergy, aggression, preMarket };
+
+  const totalScore = sentiment.score + rvol.score + candle.score + atr.score +
+    gap.score + squeeze.score + position.score + sectorSynergy.score +
+    aggression.score + preMarket.score;
+
+  return {
+    symbol: sym,
+    price: quote.c,
+    change: quote.d,
+    changePct,
+    totalScore,
+    indicators,
+    trailingStop: atr.trailingStop,
+    reason: getTopReason(indicators),
+  };
 }
 
 serve(async (req) => {
@@ -380,82 +385,28 @@ serve(async (req) => {
     const { action, symbols } = await req.json();
 
     if (action === 'analyze') {
-      const targetSymbols: string[] = symbols || ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD', 'NFLX', 'CRM', 'PLTR', 'SOFI', 'COIN', 'HOOD', 'RIVN'];
+      // Expanded universe: premium large-caps + small/penny caps
+      const premiumSymbols = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD', 'NFLX', 'CRM', 'PLTR', 'COIN', 'UBER', 'SHOP', 'SQ'];
+      const pennySymbols = ['SOFI', 'HOOD', 'RIVN', 'LCID', 'PLUG', 'SNDL', 'NIO', 'MARA', 'RIOT', 'CLSK', 'BITF', 'HIMS', 'DNA', 'OPEN', 'WISH'];
+
+      const targetSymbols: string[] = symbols || [...premiumSymbols, ...pennySymbols];
 
       const results: any[] = [];
 
-      for (const sym of targetSymbols.slice(0, 15)) {
-        try {
-          // Get quote first (always available on free tier)
-          const quote = await finnhubFetch(`/quote?symbol=${sym}`);
-          if (!quote || !quote.c || quote.c === 0) continue;
-
-          const changePct = quote.dp || 0;
-
-          // Try real candle data, fall back to synthetic
-          let closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[];
-
-          const to = Math.floor(Date.now() / 1000);
-          const from = to - 60 * 86400;
-          const candles = await finnhubFetch(`/stock/candle?symbol=${sym}&resolution=D&from=${from}&to=${to}`);
-
-          if (candles && candles.s !== 'no_data' && candles.t) {
-            closes = candles.c;
-            highs = candles.h;
-            lows = candles.l;
-            opens = candles.o;
-            volumes = candles.v;
-          } else {
-            // Generate synthetic candle data from quote
-            const synthetic = generateSyntheticCandles(quote);
-            closes = synthetic.closes;
-            highs = synthetic.highs;
-            lows = synthetic.lows;
-            opens = synthetic.opens;
-            volumes = synthetic.volumes;
-          }
-
-          // Calculate all 10 indicators
-          const [sentiment, sectorSynergy] = await Promise.all([
-            scoreSentiment(sym),
-            scoreSectorSynergy(sym, changePct),
-          ]);
-
-          const rvol = scoreRVOL(volumes);
-          const candle = scoreCandlePattern(closes, highs, lows, volumes);
-          const atr = scoreATR(highs, lows, closes);
-          const gap = scoreGap(opens, closes, highs, lows, volumes);
-          const squeeze = scoreShortSqueeze(closes, volumes);
-          const position = scorePricePosition(closes, highs);
-          const aggression = scoreTradeAggression(volumes, closes, opens);
-          const preMarket = scorePreMarket(volumes, closes, highs);
-
-          const indicators = {
-            sentiment, rvol, candle, atr, gap,
-            squeeze, position, sectorSynergy, aggression, preMarket,
-          };
-
-          const totalScore = sentiment.score + rvol.score + candle.score + atr.score +
-            gap.score + squeeze.score + position.score + sectorSynergy.score +
-            aggression.score + preMarket.score;
-
-          results.push({
-            symbol: sym,
-            price: quote.c,
-            change: quote.d,
-            changePct,
-            totalScore,
-            indicators,
-            trailingStop: atr.trailingStop,
-          });
-        } catch (e) {
-          console.error(`Error analyzing ${sym}:`, e);
+      // Process in batches of 5 to respect rate limits
+      for (let i = 0; i < targetSymbols.length; i += 5) {
+        const batch = targetSymbols.slice(i, i + 5);
+        const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
+        for (const r of batchResults) {
+          if (r) results.push(r);
         }
       }
 
-      results.sort((a, b) => b.totalScore - a.totalScore);
+      // Split into two tiers
+      const premium = results.filter(r => r.price >= 10).sort((a, b) => b.totalScore - a.totalScore).slice(0, 10);
+      const penny = results.filter(r => r.price < 10).sort((a, b) => b.totalScore - a.totalScore).slice(0, 10);
 
-      return new Response(JSON.stringify({ recommendations: results.slice(0, 10) }), {
+      return new Response(JSON.stringify({ premium, penny, recommendations: [...premium, ...penny].sort((a, b) => b.totalScore - a.totalScore).slice(0, 10) }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
