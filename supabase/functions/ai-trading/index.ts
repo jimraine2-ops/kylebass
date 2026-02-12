@@ -460,6 +460,234 @@ Respond with JSON ONLY:
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // ==================== QUANT 10-INDICATOR AUTO TRADING ====================
+    if (action === 'quant-auto-trade') {
+      const { symbol, price, quantScore, indicators } = body;
+      const { data: wallet } = await supabase.from('quant_wallet').select('*').limit(1).single();
+      if (!wallet) {
+        // Auto-create wallet
+        const { data: newWallet } = await supabase.from('quant_wallet').insert({ balance: 50000, initial_balance: 50000 }).select().single();
+        if (!newWallet) throw new Error('Failed to create quant wallet');
+        Object.assign(wallet || {}, newWallet);
+      }
+      const w = wallet!;
+
+      const { data: openPositions } = await supabase.from('quant_trades').select('*').eq('status', 'open');
+      const now = new Date();
+      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+      // === EXIT CHECKS ===
+      const closedTrades: any[] = [];
+      const logs: string[] = [];
+
+      for (const pos of (openPositions || [])) {
+        if (pos.symbol !== symbol) continue;
+
+        let shouldClose = false;
+        let closeReason = '';
+        let newStatus = 'closed';
+        const pnlPct = ((price - pos.price) / pos.price) * 100;
+
+        // -2.5% hard stop
+        if (pnlPct <= -2.5) {
+          shouldClose = true;
+          closeReason = `[${timeStr}] 10대지표 퀀트엔진: [$${symbol}] 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
+          newStatus = 'stopped';
+        }
+        // Score < 40: basis evaporated
+        else if (quantScore !== undefined && quantScore < 40) {
+          shouldClose = true;
+          closeReason = `[${timeStr}] 10대지표 퀀트엔진: [$${symbol}] 매수 근거 소멸 (점수 ${quantScore}점 < 40)`;
+          newStatus = 'score_exit';
+        }
+        // Take profit: 50% partial at target
+        else if (pos.take_profit && price >= pos.take_profit) {
+          const partialExits = pos.partial_exits || [];
+          const hasFirstPartial = partialExits.some((e: any) => e.type === 'profit_partial');
+          if (!hasFirstPartial && pos.quantity > 1) {
+            const sellQty = Math.floor(pos.quantity * 0.5);
+            if (sellQty > 0) {
+              const partialPnl = (price - pos.price) * sellQty;
+              partialExits.push({ type: 'profit_partial', qty: sellQty, price, pnl: +partialPnl.toFixed(2), at: now.toISOString() });
+              const atr = indicators?.atr?.atr || price * 0.02;
+              const newTrailingStop = +(price - 2.0 * atr).toFixed(4);
+
+              await supabase.from('quant_trades').update({
+                quantity: pos.quantity - sellQty,
+                partial_exits: partialExits,
+                trailing_stop: Math.max(newTrailingStop, pos.trailing_stop || 0),
+                peak_price: Math.max(price, pos.peak_price || price),
+              }).eq('id', pos.id);
+              await supabase.from('quant_wallet').update({
+                balance: w.balance + (sellQty * price), updated_at: now.toISOString(),
+              }).eq('id', w.id);
+              w.balance += sellQty * price;
+              const logMsg = `10대지표 퀀트엔진: [$${symbol}] 목표가 도달 50% 익절 (${sellQty}주, PnL: $${partialPnl.toFixed(2)})`;
+              logs.push(logMsg);
+              closedTrades.push({ symbol, type: 'partial', pnl: +partialPnl.toFixed(2), reason: logMsg });
+            }
+            continue;
+          } else {
+            shouldClose = true;
+            closeReason = `[${timeStr}] 10대지표 퀀트엔진: [$${symbol}] 잔여 물량 목표가 청산`;
+            newStatus = 'profit_taken';
+          }
+        }
+        // Trailing stop (ATR × 2.0 from peak)
+        else if (pos.trailing_stop && price <= pos.trailing_stop) {
+          shouldClose = true;
+          closeReason = `[${timeStr}] 10대지표 퀀트엔진: [$${symbol}] ATR×2 추격 익절 터치 ($${pos.trailing_stop})`;
+          newStatus = 'trailing_stop';
+        }
+
+        // Update peak price and trailing stop dynamically
+        if (!shouldClose && pos.peak_price && price > pos.peak_price) {
+          const atr = indicators?.atr?.atr || price * 0.02;
+          const newTrailing = +(price - 2.0 * atr).toFixed(4);
+          await supabase.from('quant_trades').update({
+            peak_price: price,
+            trailing_stop: Math.max(newTrailing, pos.trailing_stop || 0),
+          }).eq('id', pos.id);
+        }
+
+        if (shouldClose) {
+          const pnl = (price - pos.price) * pos.quantity;
+          await supabase.from('quant_trades').update({
+            status: newStatus, close_price: price, pnl: +pnl.toFixed(2),
+            closed_at: now.toISOString(), ai_reason: closeReason,
+          }).eq('id', pos.id);
+          await supabase.from('quant_wallet').update({
+            balance: w.balance + (pos.price * pos.quantity) + pnl, updated_at: now.toISOString(),
+          }).eq('id', w.id);
+          w.balance += (pos.price * pos.quantity) + pnl;
+          logs.push(closeReason);
+          closedTrades.push({ ...pos, pnl: +pnl.toFixed(2), closeReason });
+        }
+      }
+
+      // === ENTRY LOGIC: Quant-Focus ===
+      const alreadyHolding = (openPositions || []).some(p => p.symbol === symbol && p.status === 'open');
+      const openCount = (openPositions || []).filter(p => p.status === 'open').length;
+
+      // Confirmation conditions
+      const sentimentPositive = (indicators?.sentiment?.score || 0) > 0;
+      const rvolAbove = (indicators?.rvol?.rvol || 0) >= 1.5;
+      const aboveVwap = (indicators?.candle?.score || 0) >= 4; // VWAP check embedded in candle pattern
+      const meetsScore = (quantScore || 0) >= 50;
+      const allConditionsMet = sentimentPositive && rvolAbove && aboveVwap && meetsScore;
+
+      // Pyramiding check
+      let isPyramiding = false;
+      if (alreadyHolding && (quantScore || 0) >= 80) {
+        isPyramiding = true;
+      }
+
+      let trade = null;
+      let decision = { action: 'HOLD', confidence: 0, reason: '조건 미충족', quantity: 0 };
+
+      const canEnter = (!alreadyHolding || isPyramiding) && openCount < 10 && allConditionsMet;
+
+      if (canEnter) {
+        const positionPct = isPyramiding ? 0.10 : 0.15;
+        const maxInvestment = w.balance * positionPct;
+        const qty = Math.floor(maxInvestment / price);
+
+        if (qty > 0 && qty * price <= w.balance) {
+          const atr = indicators?.atr?.atr || price * 0.02;
+          const stopLoss = +(price * 0.975).toFixed(4); // -2.5%
+          const takeProfit = +(price * 1.06).toFixed(4); // +6%
+          const trailingStop = +(price - 2.0 * atr).toFixed(4);
+          const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
+
+          const logMsg = `10대지표 퀀트엔진: [$${symbol}] ${quantScore}점 포착 및 자율 매수 완료 [${tier}|${(positionPct*100).toFixed(0)}%|${qty}주@$${price}]`;
+
+          const { data: newTrade } = await supabase.from('quant_trades').insert({
+            symbol, side: 'buy', quantity: qty, price,
+            stop_loss: stopLoss, take_profit: takeProfit,
+            trailing_stop: trailingStop, peak_price: price,
+            entry_score: quantScore || 0, status: 'open',
+            ai_reason: `[${timeStr}] ${logMsg}`,
+            ai_confidence: quantScore || 0,
+          }).select().single();
+
+          await supabase.from('quant_wallet').update({
+            balance: w.balance - (qty * price), updated_at: now.toISOString(),
+          }).eq('id', w.id);
+
+          trade = newTrade;
+          decision = { action: 'BUY', confidence: quantScore || 0, reason: logMsg, quantity: qty };
+          logs.push(logMsg);
+        }
+      } else if (!allConditionsMet && meetsScore) {
+        const missing: string[] = [];
+        if (!sentimentPositive) missing.push('호재스코어≤0');
+        if (!rvolAbove) missing.push('RVOL<1.5');
+        if (!aboveVwap) missing.push('VWAP하단');
+        decision = { action: 'HOLD', confidence: quantScore || 0, reason: `점수 ${quantScore}점 충족, 중첩조건 미달: ${missing.join(', ')}`, quantity: 0 };
+      }
+
+      return new Response(JSON.stringify({
+        decision, trade, closedTrades, logs, wallet: w,
+        conditions: { sentimentPositive, rvolAbove, aboveVwap, meetsScore, isPyramiding, allConditionsMet },
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (action === 'get-quant-portfolio') {
+      let wallet;
+      const { data: existingWallet } = await supabase.from('quant_wallet').select('*').limit(1).single();
+      if (!existingWallet) {
+        const { data: newWallet } = await supabase.from('quant_wallet').insert({ balance: 50000, initial_balance: 50000 }).select().single();
+        wallet = newWallet;
+      } else {
+        wallet = existingWallet;
+      }
+
+      const { data: openPositions } = await supabase.from('quant_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
+      const { data: allTrades } = await supabase.from('quant_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(100);
+
+      const openSymbols = [...new Set((openPositions || []).map((p: any) => p.symbol))];
+      const realTimePrices: Record<string, number> = {};
+      for (const sym of openSymbols) {
+        try {
+          const quoteData = await finnhubFetch(`/quote?symbol=${sym}`);
+          if (quoteData?.c) realTimePrices[sym] = quoteData.c;
+        } catch { /* skip */ }
+      }
+
+      const enrichedPositions = (openPositions || []).map((pos: any) => {
+        const currentPrice = realTimePrices[pos.symbol] || pos.price;
+        const unrealizedPnl = (currentPrice - pos.price) * pos.quantity;
+        const unrealizedPnlPct = ((currentPrice - pos.price) / pos.price) * 100;
+        return { ...pos, currentPrice, unrealizedPnl: +unrealizedPnl.toFixed(2), unrealizedPnlPct: +unrealizedPnlPct.toFixed(2) };
+      });
+
+      const closedTrades = allTrades || [];
+      const wins = closedTrades.filter(t => (t.pnl || 0) > 0).length;
+      const losses = closedTrades.filter(t => (t.pnl || 0) <= 0).length;
+      const totalClosed = closedTrades.length;
+      const winRate = totalClosed > 0 ? (wins / totalClosed) * 100 : 0;
+      const totalPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+      const grossProfit = closedTrades.filter(t => (t.pnl || 0) > 0).reduce((s, t) => s + t.pnl, 0);
+      const grossLoss = Math.abs(closedTrades.filter(t => (t.pnl || 0) < 0).reduce((s, t) => s + t.pnl, 0));
+      const profitFactor = grossLoss > 0 ? +(grossProfit / grossLoss).toFixed(2) : grossProfit > 0 ? 999 : 0;
+      const totalUnrealizedPnl = enrichedPositions.reduce((sum, p) => sum + p.unrealizedPnl, 0);
+
+      return new Response(JSON.stringify({
+        wallet, openPositions: enrichedPositions, closedTrades,
+        stats: {
+          winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(2), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(2),
+          totalTrades: totalClosed, wins, losses, profitFactor,
+          cumulativeReturn: wallet ? +((wallet.balance - wallet.initial_balance) / wallet.initial_balance * 100).toFixed(2) : 0,
+        }
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (action === 'reset-quant-wallet') {
+      await supabase.from('quant_trades').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('quant_wallet').update({ balance: 50000, initial_balance: 50000, updated_at: new Date().toISOString() }).not('id', 'is', null);
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('AI Trading error:', error);

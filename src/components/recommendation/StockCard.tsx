@@ -21,9 +21,10 @@ interface StockCardProps {
   onSelect: (stock: any) => void;
   onTrade: (stock: any) => void;
   isTrading: boolean;
+  isAutoMode?: boolean;
 }
 
-export function StockCard({ stock, idx, isSelected, onSelect, onTrade, isTrading }: StockCardProps) {
+export function StockCard({ stock, idx, isSelected, onSelect, onTrade, isTrading, isAutoMode }: StockCardProps) {
   const isUp = (stock.changePct || 0) >= 0;
 
   return (
@@ -55,16 +56,26 @@ export function StockCard({ stock, idx, isSelected, onSelect, onTrade, isTrading
               <p className="text-2xl font-bold font-mono">{stock.totalScore}</p>
               <p className="text-[10px] text-muted-foreground">/100점</p>
             </div>
-            <Button
-              size="sm"
-              variant={stock.totalScore >= 85 ? "default" : "outline"}
-              onClick={(e) => { e.stopPropagation(); onTrade(stock); }}
-              disabled={isTrading}
-              className="text-xs"
-            >
-              <Bot className="w-3 h-3 mr-1" />
-              {isTrading ? '분석중...' : 'AI 매매'}
-            </Button>
+            {isAutoMode ? (
+              <Badge
+                variant={isTrading ? "default" : stock.totalScore >= 50 ? "secondary" : "outline"}
+                className={`text-[10px] ${isTrading ? 'animate-pulse bg-stock-up/20 text-stock-up border-stock-up/30' : ''}`}
+              >
+                <Bot className="w-3 h-3 mr-1" />
+                {isTrading ? '분석중...' : stock.totalScore >= 50 ? '대기' : '미달'}
+              </Badge>
+            ) : (
+              <Button
+                size="sm"
+                variant={stock.totalScore >= 85 ? "default" : "outline"}
+                onClick={(e) => { e.stopPropagation(); onTrade(stock); }}
+                disabled={isTrading}
+                className="text-xs"
+              >
+                <Bot className="w-3 h-3 mr-1" />
+                {isTrading ? '분석중...' : 'AI 매매'}
+              </Button>
+            )}
           </div>
         </div>
         <ScoreBar score={stock.totalScore} />

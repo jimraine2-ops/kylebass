@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchStockQuote, fetchChartData, fetchTechnicalAnalysis, fetchSentimentAnalysis, searchStocks, getMockNewsHeadlines, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews, getScalpingPortfolio } from "@/lib/api";
+import { fetchStockQuote, fetchChartData, fetchTechnicalAnalysis, fetchSentimentAnalysis, searchStocks, getMockNewsHeadlines, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews, getScalpingPortfolio, getQuantPortfolio } from "@/lib/api";
 
 export function useStockQuotes(symbols: string[], enabled = true) {
   return useQuery({
@@ -97,6 +97,15 @@ export function useQuantSignals(symbols?: string[]) {
     staleTime: 10000,
     refetchInterval: 30000, // 30 seconds
     retry: 1,
+  });
+}
+
+export function useQuantPortfolio() {
+  return useQuery({
+    queryKey: ['quant-portfolio'],
+    queryFn: () => getQuantPortfolio(),
+    refetchInterval: 10000,
+    retry: 2,
   });
 }
 

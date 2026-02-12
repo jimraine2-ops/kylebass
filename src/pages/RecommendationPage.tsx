@@ -1,39 +1,91 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuantSignals } from "@/hooks/useStockData";
-import { aiAnalyzeAndTrade } from "@/lib/api";
-import { Target, BarChart3, Shield, Radio, RefreshCw, DollarSign, TrendingDown } from "lucide-react";
+import { quantAutoTrade } from "@/lib/api";
+import { Target, BarChart3, Shield, Radio, RefreshCw, DollarSign, TrendingDown, Cpu } from "lucide-react";
 import { toast } from "sonner";
 import { RadarChartCard, INDICATOR_LABELS } from "@/components/recommendation/RadarChartCard";
 import { StockCard } from "@/components/recommendation/StockCard";
+import { QuantAutoBriefing } from "@/components/recommendation/QuantAutoBriefing";
+import { QuantPortfolioPanel } from "@/components/recommendation/QuantPortfolioPanel";
 
 export default function RecommendationPage() {
   const { data, isLoading, refetch, isFetching } = useQuantSignals();
-  const [tradingSymbol, setTradingSymbol] = useState<string | null>(null);
   const [selectedStock, setSelectedStock] = useState<any>(null);
+  const [fullAutoEnabled, setFullAutoEnabled] = useState(true);
+  const [autoLogs, setAutoLogs] = useState<string[]>([]);
+  const [lastConditions, setLastConditions] = useState<any>(null);
+  const [processingSymbols, setProcessingSymbols] = useState<Set<string>>(new Set());
+  const processedRef = useRef<Set<string>>(new Set());
 
   const premium = data?.premium || [];
   const penny = data?.penny || [];
+  const allStocks = [...premium, ...penny];
 
-  const handleAITrade = useCallback(async (stock: any) => {
-    setTradingSymbol(stock.symbol);
-    try {
-      const result = await aiAnalyzeAndTrade(stock.symbol, stock.price, undefined, stock.totalScore, stock.indicators);
-      if (result.trade) {
-        toast.success(`AI가 ${stock.symbol} ${result.trade.quantity}주를 $${result.trade.price}에 매수! [Score: ${stock.totalScore}]`);
-      } else {
-        toast.info(`AI 판단: ${result.decision?.action} (${result.decision?.confidence}%) - ${result.decision?.reason}`);
+  // Full-Auto Trading Loop
+  useEffect(() => {
+    if (!fullAutoEnabled || allStocks.length === 0) return;
+
+    const processAutoTrade = async () => {
+      for (const stock of allStocks) {
+        // Skip if already processed in this cycle or currently processing
+        const cycleKey = `${stock.symbol}-${stock.totalScore}`;
+        if (processedRef.current.has(cycleKey)) continue;
+        if (stock.totalScore < 50) continue;
+
+        processedRef.current.add(cycleKey);
+        setProcessingSymbols(prev => new Set(prev).add(stock.symbol));
+
+        try {
+          const result = await quantAutoTrade(
+            stock.symbol,
+            stock.price,
+            stock.totalScore,
+            stock.indicators
+          );
+
+          if (result.logs?.length > 0) {
+            setAutoLogs(prev => [...result.logs, ...prev].slice(0, 50));
+          }
+          if (result.conditions) {
+            setLastConditions(result.conditions);
+          }
+          if (result.trade) {
+            toast.success(`퀀트 엔진: ${stock.symbol} ${result.trade.quantity}주 자율 매수 완료 [Score: ${stock.totalScore}]`);
+          }
+          if (result.closedTrades?.length > 0) {
+            for (const ct of result.closedTrades) {
+              const pnlStr = ct.pnl >= 0 ? `+$${ct.pnl.toFixed(2)}` : `-$${Math.abs(ct.pnl).toFixed(2)}`;
+              toast.info(`퀀트 청산: ${ct.symbol} ${pnlStr}`);
+            }
+          }
+        } catch (err: any) {
+          if (!err.message?.includes('Rate limit')) {
+            console.error(`Quant auto-trade error for ${stock.symbol}:`, err);
+          }
+        } finally {
+          setProcessingSymbols(prev => {
+            const next = new Set(prev);
+            next.delete(stock.symbol);
+            return next;
+          });
+        }
       }
-    } catch (err: any) {
-      toast.error(`거래 오류: ${err.message}`);
-    } finally {
-      setTradingSymbol(null);
-    }
-  }, []);
+    };
+
+    processAutoTrade();
+
+    // Reset processed set every 60 seconds for new cycle
+    const resetInterval = setInterval(() => {
+      processedRef.current.clear();
+    }, 60000);
+
+    return () => clearInterval(resetInterval);
+  }, [fullAutoEnabled, data]);
 
   const renderList = (stocks: any[]) => (
     stocks.length === 0 ? (
@@ -52,12 +104,16 @@ export default function RecommendationPage() {
               idx={idx}
               isSelected={selectedStock?.symbol === stock.symbol}
               onSelect={setSelectedStock}
-              onTrade={handleAITrade}
-              isTrading={tradingSymbol === stock.symbol}
+              onTrade={() => {}} // Auto mode handles trading
+              isTrading={processingSymbols.has(stock.symbol)}
+              isAutoMode={fullAutoEnabled}
             />
           ))}
         </div>
         <div className="space-y-4">
+          {/* Quant Portfolio Panel */}
+          <QuantPortfolioPanel />
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -114,22 +170,35 @@ export default function RecommendationPage() {
           10대 지표 종목 추천
         </h2>
         <div className="flex items-center gap-2">
+          <Button
+            variant={fullAutoEnabled ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFullAutoEnabled(!fullAutoEnabled)}
+            className={fullAutoEnabled ? "bg-stock-up hover:bg-stock-up/80" : ""}
+          >
+            <Cpu className={`w-3.5 h-3.5 mr-1 ${fullAutoEnabled ? 'animate-pulse' : ''}`} />
+            {fullAutoEnabled ? 'QUANT AI: ACTIVE' : 'QUANT AI: OFF'}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${isFetching ? 'animate-spin' : ''}`} />
             새로고침
           </Button>
           <Badge variant="outline" className="font-mono text-xs">
             <Radio className="w-3 h-3 mr-1" />
-            2분 자동갱신
+            30초 자동갱신
           </Badge>
         </div>
       </div>
 
+      {/* Auto-Trade Briefing */}
+      <QuantAutoBriefing logs={autoLogs} conditions={lastConditions} isActive={fullAutoEnabled} />
+
       <Card className="border-primary/20">
         <CardContent className="p-4 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground mb-1">📊 10대 전문 지표 기반 AI 퀀트 분석</p>
-          <p>감성분석 · RVOL · 캔들패턴 · ATR변동성 · 갭분석 · 숏스퀴즈 · 가격위치 · 섹터동조화 · 체결강도 · 프리마켓</p>
-          <p className="mt-1">합산 50점 이상 + [현재가{'>'}VWAP] + [RVOL{'>'}1.2] 충족 시 AI 자동 매수 실행 (10% 정찰병 → 80점+ 피라미딩)</p>
+          <p className="font-medium text-foreground mb-1">📊 10대 전문 지표 기반 AI 퀀트 자율 매매</p>
+          <p>✅ 진입: [합산 ≥ 50점] AND [호재 {'>'} 0] AND [RVOL {'>'} 1.5] AND [현재가 {'>'} VWAP] → 15% 자동 매수</p>
+          <p>📈 피라미딩: 80점 돌파 시 +10% 추가 매수</p>
+          <p>🛡️ 청산: -2.5% 손절 | 점수{'<'}40 근거소멸 | 목표가 50% 익절 → ATR×2 추격 익절</p>
         </CardContent>
       </Card>
 

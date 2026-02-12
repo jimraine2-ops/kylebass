@@ -1,7 +1,8 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bot, Zap } from "lucide-react";
+import { Bot, Zap, BarChart3 } from "lucide-react";
 import { MainTradingDashboard } from "@/components/trading/MainTradingDashboard";
 import { ScalpingDashboard } from "@/components/trading/ScalpingDashboard";
+import { StrategyComparison } from "@/components/trading/StrategyComparison";
 
 export default function AITradingPage() {
   return (
@@ -10,6 +11,9 @@ export default function AITradingPage() {
         <Bot className="w-5 h-5 text-primary" />
         AI 자율 매매 대시보드
       </h2>
+
+      {/* Strategy Comparison */}
+      <StrategyComparison />
 
       <Tabs defaultValue="main">
         <TabsList className="w-full grid grid-cols-2">
