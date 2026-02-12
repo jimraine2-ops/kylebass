@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchStockQuote, fetchChartData, fetchTechnicalAnalysis, fetchSentimentAnalysis, searchStocks, getMockNewsHeadlines, scanPennyStocks, getAIPortfolio, fetchQuantSignals } from "@/lib/api";
+import { fetchStockQuote, fetchChartData, fetchTechnicalAnalysis, fetchSentimentAnalysis, searchStocks, getMockNewsHeadlines, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews } from "@/lib/api";
 
 export function useStockQuotes(symbols: string[], enabled = true) {
   return useQuery({
@@ -86,5 +86,15 @@ export function useQuantSignals(symbols?: string[]) {
     staleTime: 2 * 60 * 1000,
     refetchInterval: 120000, // 2 minutes
     retry: 1,
+  });
+}
+
+export function useCompanyNews(symbol: string) {
+  return useQuery({
+    queryKey: ['company-news', symbol],
+    queryFn: () => fetchCompanyNews(symbol),
+    enabled: !!symbol,
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
   });
 }
