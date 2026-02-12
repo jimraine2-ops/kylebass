@@ -2,10 +2,29 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// Yahoo Finance API proxy
+const FINNHUB_BASE = 'https://finnhub.io/api/v1';
+
+function getToken(): string {
+  const key = Deno.env.get('FINNHUB_API_KEY');
+  if (!key) throw new Error('FINNHUB_API_KEY not configured');
+  return key;
+}
+
+async function finnhubFetch(path: string) {
+  const token = getToken();
+  const sep = path.includes('?') ? '&' : '?';
+  const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Finnhub error ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -15,96 +34,58 @@ serve(async (req) => {
     const { action, symbol, symbols } = await req.json();
 
     if (action === 'quote') {
-      // Get real-time quote for single or multiple symbols
-      const tickerList = symbols || [symbol];
-      const symbolsStr = tickerList.join(',');
-      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsStr}`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      });
-      
-      if (!response.ok) {
-        // Fallback to v6 API
-        const quotes = [];
-        for (const s of tickerList) {
+      const tickerList: string[] = symbols || [symbol];
+      const quotes = await Promise.all(
+        tickerList.map(async (s: string) => {
           try {
-            const fallbackUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${s}?interval=1d&range=1d`;
-            const fallbackRes = await fetch(fallbackUrl, {
-              headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
-            if (fallbackRes.ok) {
-              const data = await fallbackRes.json();
-              const result = data.chart?.result?.[0];
-              if (result) {
-                const meta = result.meta;
-                quotes.push({
-                  symbol: s,
-                  shortName: s,
-                  regularMarketPrice: meta.regularMarketPrice,
-                  regularMarketChange: meta.regularMarketPrice - meta.chartPreviousClose,
-                  regularMarketChangePercent: ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100,
-                  regularMarketVolume: result.indicators?.quote?.[0]?.volume?.slice(-1)?.[0] || 0,
-                  marketCap: 0,
-                  fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh || meta.regularMarketPrice * 1.3,
-                  fiftyTwoWeekLow: meta.fiftyTwoWeekLow || meta.regularMarketPrice * 0.7,
-                });
-              }
-            }
-          } catch { /* skip */ }
-        }
-        return new Response(JSON.stringify({ quotes }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-      
-      const data = await response.json();
-      const quotes = data.quoteResponse?.result || [];
-      
+            const q = await finnhubFetch(`/quote?symbol=${encodeURIComponent(s)}`);
+            return {
+              symbol: s,
+              shortName: s,
+              regularMarketPrice: q.c,
+              regularMarketChange: q.d,
+              regularMarketChangePercent: q.dp,
+              regularMarketVolume: 0, // quote endpoint doesn't return volume
+              marketCap: 0,
+              fiftyTwoWeekHigh: q.h, // day high as proxy
+              fiftyTwoWeekLow: q.l,  // day low as proxy
+              previousClose: q.pc,
+              dayHigh: q.h,
+              dayLow: q.l,
+              openPrice: q.o,
+            };
+          } catch {
+            return { symbol: s, shortName: s, regularMarketPrice: 0, regularMarketChange: 0, regularMarketChangePercent: 0, regularMarketVolume: 0, marketCap: 0, fiftyTwoWeekHigh: 0, fiftyTwoWeekLow: 0 };
+          }
+        })
+      );
       return new Response(JSON.stringify({ quotes }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
     if (action === 'chart') {
-      // Get historical chart data
-      const range = symbol === '^VIX' ? '5d' : '3mo';
-      const interval = symbol === '^VIX' ? '1d' : '1d';
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
+      const to = Math.floor(Date.now() / 1000);
+      const from = to - 90 * 86400; // 3 months
+      const data = await finnhubFetch(`/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}`);
       
-      const response = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Yahoo Finance API error: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      const result = data.chart?.result?.[0];
-      
-      if (!result) {
+      if (data.s === 'no_data' || !data.t) {
         throw new Error('No chart data available');
       }
-      
-      const timestamps = result.timestamp || [];
-      const quote = result.indicators?.quote?.[0] || {};
-      
-      const chartData = timestamps.map((t: number, i: number) => ({
+
+      const chartData = data.t.map((t: number, i: number) => ({
         date: new Date(t * 1000).toISOString().split('T')[0],
         timestamp: t,
-        open: quote.open?.[i],
-        high: quote.high?.[i],
-        low: quote.low?.[i],
-        close: quote.close?.[i],
-        volume: quote.volume?.[i],
-      })).filter((d: any) => d.close !== null && d.close !== undefined);
-      
-      return new Response(JSON.stringify({ 
+        open: data.o[i],
+        high: data.h[i],
+        low: data.l[i],
+        close: data.c[i],
+        volume: data.v[i],
+      }));
+
+      return new Response(JSON.stringify({
         chartData,
-        meta: result.meta 
+        meta: { symbol, regularMarketPrice: data.c[data.c.length - 1] }
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -112,16 +93,44 @@ serve(async (req) => {
 
     if (action === 'search') {
       const query = symbol;
-      const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=10&newsCount=0`;
-      
-      const response = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
+      const data = await finnhubFetch(`/search?q=${encodeURIComponent(query)}`);
+      const results = (data.result || []).map((r: any) => ({
+        symbol: r.symbol,
+        shortname: r.description,
+        exchange: r.displaySymbol,
+        type: r.type,
+      }));
+      return new Response(JSON.stringify({ results }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
-      
-      if (!response.ok) throw new Error('Search failed');
-      
-      const data = await response.json();
-      return new Response(JSON.stringify({ results: data.quotes || [] }), {
+    }
+
+    if (action === 'company-news') {
+      const to = new Date().toISOString().split('T')[0];
+      const fromDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+      const news = await finnhubFetch(`/company-news?symbol=${encodeURIComponent(symbol)}&from=${fromDate}&to=${to}`);
+      return new Response(JSON.stringify({ news: (news || []).slice(0, 20) }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (action === 'basic-financials') {
+      const data = await finnhubFetch(`/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`);
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (action === 'sec-filings') {
+      const data = await finnhubFetch(`/stock/filings?symbol=${encodeURIComponent(symbol)}`);
+      return new Response(JSON.stringify({ filings: (data || []).slice(0, 20) }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (action === 'peers') {
+      const data = await finnhubFetch(`/stock/peers?symbol=${encodeURIComponent(symbol)}`);
+      return new Response(JSON.stringify({ peers: data || [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }

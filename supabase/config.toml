@@ -5,3 +5,12 @@ verify_jwt = false
 
 [functions.ai-trading]
 verify_jwt = false
+
+[functions.quant-signals]
+verify_jwt = false
+
+[functions.stock-data]
+verify_jwt = false
+
+[functions.ai-analysis]
+verify_jwt = false

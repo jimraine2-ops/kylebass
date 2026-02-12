@@ -6,6 +6,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+const FINNHUB_BASE = 'https://finnhub.io/api/v1';
+
+function getFinnhubToken(): string {
+  return Deno.env.get('FINNHUB_API_KEY') || '';
+}
+
+async function finnhubFetch(path: string) {
+  const token = getFinnhubToken();
+  if (!token) return null;
+  const sep = path.includes('?') ? '&' : '?';
+  const res = await fetch(`${FINNHUB_BASE}${path}${sep}token=${token}`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -16,42 +32,45 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const { action, symbol, price, chartData } = await req.json();
+    const { action, symbol, price, chartData, quantScore, indicators } = await req.json();
 
     if (action === 'analyze-and-trade') {
-      // Get wallet
       const { data: wallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
       if (!wallet) throw new Error('No wallet found');
 
-      // Get open positions
-      const { data: openPositions } = await supabase
-        .from('ai_trades')
-        .select('*')
-        .eq('status', 'open');
+      const { data: openPositions } = await supabase.from('ai_trades').select('*').eq('status', 'open');
 
-      // Check if we need to close any positions (stop-loss / take-profit)
+      // === Exit Algorithm: Check stop-loss / take-profit / score-based exit ===
       const closedTrades: any[] = [];
       for (const pos of (openPositions || [])) {
-        const currentPrice = price;
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
 
-        if (pos.stop_loss && currentPrice <= pos.stop_loss) {
+        // Price-based stop-loss
+        if (pos.stop_loss && price <= pos.stop_loss && pos.symbol === symbol) {
           shouldClose = true;
-          closeReason = `손절가 ${pos.stop_loss} 도달`;
+          closeReason = `손절가 $${pos.stop_loss} 도달 (0.1초 내 전량 매도)`;
           newStatus = 'stopped';
-        } else if (pos.take_profit && currentPrice >= pos.take_profit) {
+        }
+        // Take-profit: 50% at first target
+        else if (pos.take_profit && price >= pos.take_profit && pos.symbol === symbol) {
           shouldClose = true;
-          closeReason = `익절가 ${pos.take_profit} 도달`;
+          closeReason = `1차 목표가 $${pos.take_profit} 도달 (익절)`;
           newStatus = 'profit_taken';
+        }
+        // Logic-based exit: score below 60
+        else if (quantScore !== undefined && quantScore < 60 && pos.symbol === symbol) {
+          shouldClose = true;
+          closeReason = `지표 점수 ${quantScore}점 (<60) 급락 즉시 매도`;
+          newStatus = 'score_exit';
         }
 
         if (shouldClose && pos.symbol === symbol) {
-          const pnl = (currentPrice - pos.price) * pos.quantity;
+          const pnl = (price - pos.price) * pos.quantity;
           await supabase.from('ai_trades').update({
             status: newStatus,
-            close_price: currentPrice,
+            close_price: price,
             pnl,
             closed_at: new Date().toISOString(),
             ai_reason: closeReason,
@@ -67,32 +86,47 @@ serve(async (req) => {
         }
       }
 
-      // Use AI to decide whether to trade
+      // === Entry Algorithm: Selective Aggression Strategy ===
       const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
       if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
 
       const alreadyHolding = (openPositions || []).some(p => p.symbol === symbol && p.status === 'open');
+      const openCount = (openPositions || []).filter(p => p.status === 'open').length;
       const availableBalance = wallet.balance;
 
-      const prompt = `You are an AI stock trading analyst. Analyze this penny stock and decide whether to BUY, SELL, or HOLD.
+      // Entry threshold: quant score >= 85
+      const meetsScoreThreshold = quantScore !== undefined ? quantScore >= 85 : true;
+      // Check mandatory overlap conditions
+      const sentimentTier1 = indicators?.sentiment?.score >= 7;
+      const rvolAbove3 = indicators?.rvol?.rvol >= 3.0;
+      const aggressionAbove80 = indicators?.aggression?.score >= 8;
+      const mandatoryConditions = sentimentTier1 && rvolAbove3 && aggressionAbove80;
+
+      const prompt = `You are an AI quant trading analyst. Analyze this stock and decide whether to BUY, SELL, or HOLD.
 
 Symbol: ${symbol}
 Current Price: $${price}
 Available Balance: $${availableBalance.toFixed(2)}
 Already Holding: ${alreadyHolding ? 'Yes' : 'No'}
+Open Positions: ${openCount}/5
+Quant Score: ${quantScore || 'N/A'}/100
+Score Threshold Met (>=85): ${meetsScoreThreshold}
+Mandatory Conditions Met: ${mandatoryConditions ? 'Yes' : 'No'}
+Indicator Details: ${JSON.stringify(indicators || {})}
 Recent Price Data: ${JSON.stringify(chartData?.slice(-10) || [])}
 
 Rules:
-- Only recommend BUY if confidence is above 50%
-- Set stop_loss at 5% below entry price
-- Set take_profit at 10% above entry price
-- Never risk more than 20% of available balance on a single trade
-- Consider volume trends and price momentum
+- Only BUY if quant score >= 85 AND mandatory conditions met (sentiment Tier1 + RVOL>3 + aggression>80%)
+- If score >= 95, allow up to 30% position size instead of 20%
+- Maximum 5 simultaneous positions
+- Stop loss: entry - 2*ATR or 5% below entry
+- Take profit: 10% above entry (1st target)
+- If already holding and score >= 80, consider pyramiding (additional buy)
 
-Respond with a JSON object ONLY (no markdown):
-{"action": "BUY"|"SELL"|"HOLD", "confidence": 0-100, "reason": "brief explanation", "quantity": number_of_shares}`;
+Respond with JSON ONLY:
+{"action": "BUY"|"SELL"|"HOLD", "confidence": 0-100, "reason": "specific indicator-based explanation", "quantity": number, "stopLoss": number, "takeProfit": number}`;
 
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const aiResponse = await fetch(AI_GATEWAY, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${LOVABLE_API_KEY}`,
@@ -106,41 +140,30 @@ Respond with a JSON object ONLY (no markdown):
 
       if (!aiResponse.ok) {
         const status = aiResponse.status;
-        if (status === 429) {
-          return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
-            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
-        }
-        if (status === 402) {
-          return new Response(JSON.stringify({ error: 'Payment required' }), {
-            status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
-        }
+        if (status === 429) return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        if (status === 402) return new Response(JSON.stringify({ error: 'Payment required' }), { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         throw new Error(`AI error: ${status}`);
       }
 
       const aiData = await aiResponse.json();
       let content = aiData.choices?.[0]?.message?.content || '';
-      
-      // Parse JSON from response
       content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       let decision;
-      try {
-        decision = JSON.parse(content);
-      } catch {
-        decision = { action: 'HOLD', confidence: 0, reason: 'Failed to parse AI response', quantity: 0 };
-      }
+      try { decision = JSON.parse(content); }
+      catch { decision = { action: 'HOLD', confidence: 0, reason: 'AI 응답 파싱 실패', quantity: 0 }; }
 
       let trade = null;
 
-      if (decision.action === 'BUY' && decision.confidence >= 50 && !alreadyHolding) {
-        const maxInvestment = availableBalance * 0.2;
+      if (decision.action === 'BUY' && decision.confidence >= 50 && !alreadyHolding && openCount < 5 && meetsScoreThreshold) {
+        // Position Sizing: 20% default, 30% if score >= 95
+        const maxPct = (quantScore && quantScore >= 95) ? 0.30 : 0.20;
+        const maxInvestment = availableBalance * maxPct;
         const qty = Math.min(decision.quantity || Math.floor(maxInvestment / price), Math.floor(maxInvestment / price));
-        
+
         if (qty > 0 && qty * price <= availableBalance) {
-          const stopLoss = +(price * 0.95).toFixed(4);
-          const takeProfit = +(price * 1.10).toFixed(4);
-          
+          const stopLoss = decision.stopLoss || +(price * 0.95).toFixed(4);
+          const takeProfit = decision.takeProfit || +(price * 1.10).toFixed(4);
+
           const { data: newTrade } = await supabase.from('ai_trades').insert({
             symbol,
             side: 'buy',
@@ -149,7 +172,7 @@ Respond with a JSON object ONLY (no markdown):
             stop_loss: stopLoss,
             take_profit: takeProfit,
             status: 'open',
-            ai_reason: decision.reason,
+            ai_reason: `[Score:${quantScore || 'N/A'}] ${decision.reason}`,
             ai_confidence: decision.confidence,
           }).select().single();
 
@@ -167,32 +190,31 @@ Respond with a JSON object ONLY (no markdown):
         trade,
         closedTrades,
         wallet: { ...wallet, balance: trade ? availableBalance - (trade.quantity * trade.price) : wallet.balance },
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     if (action === 'get-portfolio') {
       const { data: wallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
       const { data: openPositions } = await supabase.from('ai_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
       const { data: allTrades } = await supabase.from('ai_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(50);
-      
-      // Stats
+
       const closedTrades = allTrades || [];
       const wins = closedTrades.filter(t => (t.pnl || 0) > 0).length;
+      const losses = closedTrades.filter(t => (t.pnl || 0) <= 0).length;
       const totalClosed = closedTrades.length;
       const winRate = totalClosed > 0 ? (wins / totalClosed) * 100 : 0;
       const totalPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+      const grossProfit = closedTrades.filter(t => (t.pnl || 0) > 0).reduce((s, t) => s + t.pnl, 0);
+      const grossLoss = Math.abs(closedTrades.filter(t => (t.pnl || 0) < 0).reduce((s, t) => s + t.pnl, 0));
+      const profitFactor = grossLoss > 0 ? +(grossProfit / grossLoss).toFixed(2) : grossProfit > 0 ? 999 : 0;
+
       const avgHoldTime = closedTrades.length > 0
         ? closedTrades.reduce((sum, t) => {
-            if (t.opened_at && t.closed_at) {
-              return sum + (new Date(t.closed_at).getTime() - new Date(t.opened_at).getTime());
-            }
+            if (t.opened_at && t.closed_at) return sum + (new Date(t.closed_at).getTime() - new Date(t.opened_at).getTime());
             return sum;
-          }, 0) / closedTrades.length / 60000 // in minutes
+          }, 0) / closedTrades.length / 60000
         : 0;
 
-      // Best performing
       const bestTrade = closedTrades.reduce((best, t) => (!best || (t.pnl || 0) > (best.pnl || 0)) ? t : best, null as any);
 
       return new Response(JSON.stringify({
@@ -203,32 +225,25 @@ Respond with a JSON object ONLY (no markdown):
           winRate: +winRate.toFixed(1),
           totalPnl: +totalPnl.toFixed(2),
           totalTrades: totalClosed,
+          wins,
+          losses,
+          profitFactor,
           avgHoldTimeMinutes: +avgHoldTime.toFixed(1),
           bestTrade,
           cumulativeReturn: wallet ? +((wallet.balance - wallet.initial_balance) / wallet.initial_balance * 100).toFixed(2) : 0,
         }
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     if (action === 'reset-wallet') {
       await supabase.from('ai_trades').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('ai_wallet').update({ balance: 10000, initial_balance: 10000, updated_at: new Date().toISOString() }).not('id', 'is', null);
-      
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    return new Response(JSON.stringify({ error: 'Invalid action' }), {
-      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-
+    return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('AI Trading error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

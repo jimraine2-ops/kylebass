@@ -1,4 +1,4 @@
-import { BarChart3, TrendingUp, Newspaper, Building2, Bell, Search, Eye, Coins, Bot } from "lucide-react";
+import { BarChart3, TrendingUp, Newspaper, Building2, Bell, Search, Eye, Coins, Bot, Target } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import {
   Sidebar,
@@ -14,8 +14,9 @@ import {
 
 const menuItems = [
   { title: "대시보드", url: "/", icon: BarChart3 },
+  { title: "10대 지표 추천", url: "/recommendations", icon: Target },
   { title: "소형주 스크리너", url: "/penny-stocks", icon: Coins },
-  { title: "AI 자동 거래", url: "/ai-trading", icon: Bot },
+  { title: "AI 자율 매매", url: "/ai-trading", icon: Bot },
   { title: "종목 분석", url: "/stock/AAPL", icon: TrendingUp },
   { title: "뉴스 & 감성", url: "/news", icon: Newspaper },
   { title: "섹터 & 시장", url: "/sectors", icon: Building2 },
