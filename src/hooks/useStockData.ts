@@ -94,8 +94,8 @@ export function useQuantSignals(symbols?: string[]) {
   return useQuery({
     queryKey: ['quant-signals', symbols?.join(',')],
     queryFn: () => fetchQuantSignals(symbols),
-    staleTime: 2 * 60 * 1000,
-    refetchInterval: 120000, // 2 minutes
+    staleTime: 10000,
+    refetchInterval: 30000, // 30 seconds
     retry: 1,
   });
 }
