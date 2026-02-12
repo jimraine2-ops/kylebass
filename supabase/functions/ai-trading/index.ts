@@ -235,6 +235,29 @@ Respond with JSON ONLY:
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    // ==================== UPDATE WALLET BALANCE ====================
+    if (action === 'update-balance') {
+      const { walletType, newBalance } = body;
+      if (typeof newBalance !== 'number' || newBalance < 0 || newBalance > 999999999) {
+        return new Response(JSON.stringify({ error: 'Invalid balance value' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const table = walletType === 'scalping' ? 'scalping_wallet' : 'ai_wallet';
+      const { error } = await supabase.from(table).update({
+        balance: newBalance,
+        initial_balance: newBalance,
+        updated_at: new Date().toISOString()
+      }).not('id', 'is', null);
+
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true, balance: newBalance }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // ==================== SCALPING ENGINE (INSTANT EXECUTION) ====================
     if (action === 'scalping-analyze') {
       const { symbol, price, quantScore, indicators } = body;
