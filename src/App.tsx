@@ -10,6 +10,8 @@ import NewsPage from "@/pages/NewsPage";
 import SectorsPage from "@/pages/SectorsPage";
 import AlertsPage from "@/pages/AlertsPage";
 import WatchlistPage from "@/pages/WatchlistPage";
+import PennyStocksPage from "@/pages/PennyStocksPage";
+import AITradingPage from "@/pages/AITradingPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +30,8 @@ const App = () => (
             <Route path="/sectors" element={<SectorsPage />} />
             <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/watchlist" element={<WatchlistPage />} />
+            <Route path="/penny-stocks" element={<PennyStocksPage />} />
+            <Route path="/ai-trading" element={<AITradingPage />} />
             <Route path="/search" element={<WatchlistPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

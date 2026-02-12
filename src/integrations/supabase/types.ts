@@ -14,7 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      ai_trades: {
+        Row: {
+          ai_confidence: number | null
+          ai_reason: string | null
+          close_price: number | null
+          closed_at: string | null
+          id: string
+          opened_at: string
+          pnl: number | null
+          price: number
+          quantity: number
+          side: string
+          status: string
+          stop_loss: number | null
+          symbol: string
+          take_profit: number | null
+        }
+        Insert: {
+          ai_confidence?: number | null
+          ai_reason?: string | null
+          close_price?: number | null
+          closed_at?: string | null
+          id?: string
+          opened_at?: string
+          pnl?: number | null
+          price: number
+          quantity: number
+          side: string
+          status?: string
+          stop_loss?: number | null
+          symbol: string
+          take_profit?: number | null
+        }
+        Update: {
+          ai_confidence?: number | null
+          ai_reason?: string | null
+          close_price?: number | null
+          closed_at?: string | null
+          id?: string
+          opened_at?: string
+          pnl?: number | null
+          price?: number
+          quantity?: number
+          side?: string
+          status?: string
+          stop_loss?: number | null
+          symbol?: string
+          take_profit?: number | null
+        }
+        Relationships: []
+      }
+      ai_wallet: {
+        Row: {
+          balance: number
+          created_at: string
+          id: string
+          initial_balance: number
+          updated_at: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          id?: string
+          initial_balance?: number
+          updated_at?: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          id?: string
+          initial_balance?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

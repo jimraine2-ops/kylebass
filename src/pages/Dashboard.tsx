@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useStockQuotes } from "@/hooks/useStockData";
-import { TrendingUp, TrendingDown, Activity, BarChart3, AlertTriangle } from "lucide-react";
+import { useStockQuotes, useAIPortfolio } from "@/hooks/useStockData";
+import { TrendingUp, TrendingDown, Activity, BarChart3, AlertTriangle, Bot, Wallet, Radio } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -27,13 +27,63 @@ export default function Dashboard() {
   const { data: indices, isLoading: indicesLoading } = useStockQuotes(INDICES);
   const { data: stocks, isLoading: stocksLoading } = useStockQuotes(POPULAR_STOCKS);
   const { data: sectors, isLoading: sectorsLoading } = useStockQuotes(SECTORS.map(s => s.symbol));
+  const { data: portfolio } = useAIPortfolio();
 
   const vixData = indices?.find((q: any) => q.symbol === '^VIX');
   const vixValue = vixData?.regularMarketPrice || 0;
   const isHighVix = vixValue > 25;
+  const aiStats = portfolio?.stats;
 
   return (
     <div className="space-y-6">
+      {/* Live Indicator */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">시장 대시보드</h2>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2 h-2 rounded-full bg-stock-up animate-pulse" />
+          <span className="text-xs text-muted-foreground">LIVE</span>
+          <Badge variant="outline" className="text-[10px] ml-2">
+            <Radio className="w-3 h-3 mr-1" />
+            실시간
+          </Badge>
+        </div>
+      </div>
+
+      {/* AI Portfolio Summary - Top */}
+      {portfolio?.wallet && (
+        <Link to="/ai-trading" className="block">
+          <Card className="border-primary/30 hover:border-primary/50 transition-colors">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Bot className="w-5 h-5 text-primary" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">AI 포트폴리오 실시간 PnL</p>
+                    <p className={`text-xl font-bold font-mono ${(aiStats?.cumulativeReturn || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
+                      {(aiStats?.cumulativeReturn || 0) >= 0 ? '+' : ''}{aiStats?.cumulativeReturn || 0}%
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 text-right">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">잔고</p>
+                    <p className="text-sm font-bold font-mono">${portfolio.wallet.balance?.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">승률</p>
+                    <p className="text-sm font-bold font-mono">{aiStats?.winRate || 0}%</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">보유</p>
+                    <Badge variant="outline">{portfolio.openPositions?.length || 0}종목</Badge>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      )}
+
       {/* Market Warning Banner */}
       {isHighVix && (
         <div className="bg-stock-down/10 border border-stock-down/30 rounded-lg p-4 flex items-center gap-3">
