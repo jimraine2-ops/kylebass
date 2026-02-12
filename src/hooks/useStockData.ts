@@ -65,8 +65,10 @@ export function usePennyStocks() {
   return useQuery({
     queryKey: ['penny-stocks-top10'],
     queryFn: () => scanPennyStocks(),
-    refetchInterval: 60000, // 1 minute refresh
-    retry: 2,
+    refetchInterval: 3000, // 3-second ultra-fast refresh
+    retry: 3,
+    staleTime: 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
