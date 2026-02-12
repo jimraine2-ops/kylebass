@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useStockSearch } from "@/hooks/useStockData";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function TopBar() {
   const [query, setQuery] = useState("");
@@ -104,6 +105,7 @@ export function TopBar() {
         <span className="text-xs text-muted-foreground font-mono">
           {new Date().toLocaleDateString('ko-KR')}
         </span>
+        <ThemeToggle />
       </div>
     </header>
   );
