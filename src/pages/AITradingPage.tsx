@@ -19,11 +19,11 @@ export default function AITradingPage() {
         <TabsList className="w-full grid grid-cols-2">
           <TabsTrigger value="main" className="flex items-center gap-1.5">
             <Bot className="w-4 h-4" />
-            Main Trading
+            대형주 KPI
           </TabsTrigger>
           <TabsTrigger value="scalping" className="flex items-center gap-1.5">
             <Zap className="w-4 h-4" />
-            Under $10 Scalping
+            소형주 KPI
           </TabsTrigger>
         </TabsList>
         <TabsContent value="main">

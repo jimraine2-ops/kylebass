@@ -69,10 +69,10 @@ export function MainTradingDashboard() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔥 공격적 모드 (Low Threshold: 50pts)
+            🔥 대형주 퀀트 전략 (진입 임계: 50점)
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            📊 Quant + Main 통합 포트폴리오
+            📊 10대 지표 기반 통합 포트폴리오
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
@@ -83,7 +83,7 @@ export function MainTradingDashboard() {
 
       <Card className="border-primary/20">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📋 통합 트레이딩 엔진: Main + Quant 10-Index 전략</p>
+          <p className="font-medium text-foreground">📋 대형주 트레이딩 엔진: 10대 지표 퀀트 전략</p>
           <p>✅ Main 진입: [합산 점수 ≥ 50] AND [현재가 {'>'} VWAP] AND [RVOL {'>'} 1.2]</p>
           <p>✅ Quant 진입: [합산 점수 ≥ 50] AND [호재 {'>'} 0] AND [RVOL {'>'} 1.5] AND [현재가 {'>'} VWAP] → 15%</p>
           <p>🏷️ 거래 태그: [Main] 또는 [Quant] 태그로 전략 구분</p>

@@ -12,14 +12,14 @@ export function StrategyComparison() {
 
   const strategies = [
     {
-      name: 'Main Trading (Main + Quant 통합)',
+      name: '대형주 전략 (10대 지표 퀀트)',
       icon: '🎯',
       wallet: mainData?.wallet,
       stats: mainData?.stats || {},
       color: 'text-primary',
     },
     {
-      name: '스캘핑 전략',
+      name: '소형주 전략 (초단타 스캘핑)',
       icon: '⚡',
       wallet: scalpData?.wallet,
       stats: scalpData?.stats || {},
