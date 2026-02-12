@@ -1,0 +1,209 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAIPortfolio } from "@/hooks/useStockData";
+import { resetAIWallet } from "@/lib/api";
+import { Wallet, Trophy, BarChart3, RotateCcw, Target, Scale, Activity } from "lucide-react";
+import { toast } from "sonner";
+import { useState } from "react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { OpenPositionCard } from "@/components/trading/OpenPositionCard";
+import { TradeLogTable } from "@/components/trading/TradeLogTable";
+
+export function MainTradingDashboard() {
+  const { data, isLoading, refetch } = useAIPortfolio();
+  const [resetting, setResetting] = useState(false);
+
+  const wallet = data?.wallet;
+  const openPositions = data?.openPositions || [];
+  const closedTrades = data?.closedTrades || [];
+  const stats = data?.stats || {};
+
+  const handleReset = async () => {
+    if (!confirm('가상 지갑을 초기화하시겠습니까? 모든 거래 기록이 삭제됩니다.')) return;
+    setResetting(true);
+    try {
+      await resetAIWallet();
+      await refetch();
+      toast.success('가상 지갑이 $10,000으로 초기화되었습니다.');
+    } catch {
+      toast.error('초기화 실패');
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const pnlChartData = closedTrades
+    .slice()
+    .reverse()
+    .reduce((acc: any[], trade: any, i: number) => {
+      const prev = acc[i - 1]?.cumPnl || 0;
+      acc.push({ name: `#${i + 1}`, pnl: trade.pnl || 0, cumPnl: +(prev + (trade.pnl || 0)).toFixed(2), symbol: trade.symbol });
+      return acc;
+    }, []);
+
+  const wins = stats.wins || 0;
+  const losses = stats.losses || 0;
+  const pieData = [
+    { name: '승', value: wins, fill: 'hsl(var(--stock-up))' },
+    { name: '패', value: losses, fill: 'hsl(var(--stock-down))' },
+  ];
+
+  if (isLoading) {
+    return <div className="space-y-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
+          🔥 공격적 모드 (Low Threshold: 50pts)
+        </Badge>
+        <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
+          <RotateCcw className="w-3.5 h-3.5 mr-1" />
+          지갑 초기화
+        </Button>
+      </div>
+
+      <Card className="border-primary/20">
+        <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
+          <p className="font-medium text-foreground">📋 진입 알고리즘: Low-Threshold Aggressive Strategy</p>
+          <p>✅ 진입 조건: [합산 점수 ≥ 50] AND [현재가 {'>'} VWAP] AND [RVOL {'>'} 1.2]</p>
+          <p>💰 자산 배분: 종목당 최대 10% (정찰병 매수) → 80점+ 돌파 시 +10% 피라미딩</p>
+          <p>🛡️ 청산: 점수 {'<'} 40 즉시 매도 | 추격 손절: ATR × 1.5</p>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Wallet className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">잔고</span>
+            </div>
+            <p className="text-xl font-bold font-mono">${wallet?.balance?.toFixed(2) || '10,000.00'}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <BarChart3 className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">누적 수익률</span>
+            </div>
+            <p className={`text-xl font-bold font-mono ${(stats.cumulativeReturn || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
+              {stats.cumulativeReturn >= 0 ? '+' : ''}{stats.cumulativeReturn || 0}%
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Trophy className="w-4 h-4 text-warning" />
+              <span className="text-xs text-muted-foreground">승률</span>
+            </div>
+            <p className="text-xl font-bold font-mono">{stats.winRate || 0}%</p>
+            <p className="text-[10px] text-muted-foreground">{wins}승 {losses}패</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Scale className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">손익비</span>
+            </div>
+            <p className="text-xl font-bold font-mono">{stats.profitFactor || 0}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Target className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">실현 PnL</span>
+            </div>
+            <p className={`text-xl font-bold font-mono ${(stats.totalPnl || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
+              {stats.totalPnl >= 0 ? '+' : ''}${stats.totalPnl || 0}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Activity className="w-4 h-4 text-warning" />
+              <span className="text-xs text-muted-foreground">미실현 PnL</span>
+            </div>
+            <p className={`text-xl font-bold font-mono ${(stats.totalUnrealizedPnl || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
+              {(stats.totalUnrealizedPnl || 0) >= 0 ? '+' : ''}${stats.totalUnrealizedPnl || 0}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {openPositions.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-stock-up animate-pulse" />
+              보유 중인 포지션 ({openPositions.length}/5) — 실시간 미실현 손익
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {openPositions.map((pos: any) => (
+              <OpenPositionCard key={pos.id} position={pos} />
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">누적 손익 (PnL)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {pnlChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={pnlChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                  <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                  <Tooltip
+                    contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                    formatter={(value: number, name: string) => [`$${value.toFixed(2)}`, name === 'cumPnl' ? '누적 PnL' : '거래 PnL']}
+                  />
+                  <Line type="monotone" dataKey="cumPnl" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">
+                거래 기록이 없습니다. 추천 탭에서 AI 매매를 시작하세요.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">승/패 비율</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {closedTrades.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                    {pieData.map((entry, index) => <Cell key={index} fill={entry.fill} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">데이터 없음</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <TradeLogTable closedTrades={closedTrades} />
+    </div>
+  );
+}

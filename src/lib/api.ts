@@ -91,6 +91,31 @@ export async function resetAIWallet() {
   return data;
 }
 
+// Scalping
+export async function getScalpingPortfolio() {
+  const { data, error } = await supabase.functions.invoke('ai-trading', {
+    body: { action: 'get-scalping-portfolio' },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function resetScalpingWallet() {
+  const { data, error } = await supabase.functions.invoke('ai-trading', {
+    body: { action: 'reset-scalping-wallet' },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function scalpingAnalyze(symbol: string, price: number, quantScore?: number, indicators?: any) {
+  const { data, error } = await supabase.functions.invoke('ai-trading', {
+    body: { action: 'scalping-analyze', symbol, price, quantScore, indicators },
+  });
+  if (error) throw error;
+  return data;
+}
+
 // Mock news headlines (fallback for sentiment analysis)
 export function getMockNewsHeadlines(symbol: string): string[] {
   const headlines: Record<string, string[]> = {

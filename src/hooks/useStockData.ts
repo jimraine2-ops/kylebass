@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchStockQuote, fetchChartData, fetchTechnicalAnalysis, fetchSentimentAnalysis, searchStocks, getMockNewsHeadlines, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews } from "@/lib/api";
+import { fetchStockQuote, fetchChartData, fetchTechnicalAnalysis, fetchSentimentAnalysis, searchStocks, getMockNewsHeadlines, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews, getScalpingPortfolio } from "@/lib/api";
 
 export function useStockQuotes(symbols: string[], enabled = true) {
   return useQuery({
@@ -75,6 +75,15 @@ export function useAIPortfolio() {
     queryKey: ['ai-portfolio'],
     queryFn: () => getAIPortfolio(),
     refetchInterval: 10000,
+    retry: 2,
+  });
+}
+
+export function useScalpingPortfolio() {
+  return useQuery({
+    queryKey: ['scalping-portfolio'],
+    queryFn: () => getScalpingPortfolio(),
+    refetchInterval: 5000,
     retry: 2,
   });
 }

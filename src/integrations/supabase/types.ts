@@ -89,6 +89,90 @@ export type Database = {
         }
         Relationships: []
       }
+      scalping_trades: {
+        Row: {
+          ai_confidence: number | null
+          ai_reason: string | null
+          close_price: number | null
+          closed_at: string | null
+          entry_score: number | null
+          id: string
+          opened_at: string
+          partial_exits: Json | null
+          pnl: number | null
+          price: number
+          quantity: number
+          side: string
+          status: string
+          stop_loss: number | null
+          symbol: string
+          take_profit: number | null
+          time_limit_at: string | null
+        }
+        Insert: {
+          ai_confidence?: number | null
+          ai_reason?: string | null
+          close_price?: number | null
+          closed_at?: string | null
+          entry_score?: number | null
+          id?: string
+          opened_at?: string
+          partial_exits?: Json | null
+          pnl?: number | null
+          price: number
+          quantity: number
+          side?: string
+          status?: string
+          stop_loss?: number | null
+          symbol: string
+          take_profit?: number | null
+          time_limit_at?: string | null
+        }
+        Update: {
+          ai_confidence?: number | null
+          ai_reason?: string | null
+          close_price?: number | null
+          closed_at?: string | null
+          entry_score?: number | null
+          id?: string
+          opened_at?: string
+          partial_exits?: Json | null
+          pnl?: number | null
+          price?: number
+          quantity?: number
+          side?: string
+          status?: string
+          stop_loss?: number | null
+          symbol?: string
+          take_profit?: number | null
+          time_limit_at?: string | null
+        }
+        Relationships: []
+      }
+      scalping_wallet: {
+        Row: {
+          balance: number
+          created_at: string
+          id: string
+          initial_balance: number
+          updated_at: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          id?: string
+          initial_balance?: number
+          updated_at?: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          id?: string
+          initial_balance?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
