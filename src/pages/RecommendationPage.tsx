@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ export default function RecommendationPage() {
   const [lastConditions, setLastConditions] = useState<any>(null);
   const [processingSymbols, setProcessingSymbols] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>('score');
-  const processedRef = useRef<Set<string>>(new Set());
+  
 
   const premium = data?.premium || [];
   const allStocks = premium;
@@ -50,17 +50,17 @@ export default function RecommendationPage() {
     return sorted;
   }, [allStocks, sortKey]);
 
-  // Full-Auto Trading Loop
+  // Full-Auto Trading Loop - Continuous
   useEffect(() => {
     if (!fullAutoEnabled || allStocks.length === 0) return;
 
+    let cancelled = false;
+
     const processAutoTrade = async () => {
       for (const stock of allStocks) {
-        const cycleKey = `${stock.symbol}-${stock.totalScore}`;
-        if (processedRef.current.has(cycleKey)) continue;
+        if (cancelled) return;
         if (stock.totalScore < 50) continue;
 
-        processedRef.current.add(cycleKey);
         setProcessingSymbols(prev => new Set(prev).add(stock.symbol));
 
         try {
@@ -100,13 +100,16 @@ export default function RecommendationPage() {
       }
     };
 
+    // Run immediately, then repeat every 15 seconds
     processAutoTrade();
+    const loopInterval = setInterval(() => {
+      if (!cancelled) processAutoTrade();
+    }, 15000);
 
-    const resetInterval = setInterval(() => {
-      processedRef.current.clear();
-    }, 60000);
-
-    return () => clearInterval(resetInterval);
+    return () => {
+      cancelled = true;
+      clearInterval(loopInterval);
+    };
   }, [fullAutoEnabled, data]);
 
   return (
