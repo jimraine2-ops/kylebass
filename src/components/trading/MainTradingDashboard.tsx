@@ -100,6 +100,7 @@ export function MainTradingDashboard() {
             </div>
             <EditableBalance
               balance={wallet?.balance || 10000}
+              currencyPrefix="₩"
               onSave={async (val) => { await updateWalletBalance('main', val); await refetch(); }}
             />
           </CardContent>
@@ -141,7 +142,7 @@ export function MainTradingDashboard() {
               <span className="text-xs text-muted-foreground">실현 PnL</span>
             </div>
             <p className={`text-xl font-bold font-mono ${(stats.totalPnl || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
-              {stats.totalPnl >= 0 ? '+' : ''}${stats.totalPnl || 0}
+              {stats.totalPnl >= 0 ? '+' : ''}₩{(stats.totalPnl || 0).toLocaleString()}
             </p>
           </CardContent>
         </Card>
@@ -152,7 +153,7 @@ export function MainTradingDashboard() {
               <span className="text-xs text-muted-foreground">미실현 PnL</span>
             </div>
             <p className={`text-xl font-bold font-mono ${(stats.totalUnrealizedPnl || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
-              {(stats.totalUnrealizedPnl || 0) >= 0 ? '+' : ''}${stats.totalUnrealizedPnl || 0}
+              {(stats.totalUnrealizedPnl || 0) >= 0 ? '+' : ''}₩{(stats.totalUnrealizedPnl || 0).toLocaleString()}
             </p>
           </CardContent>
         </Card>
@@ -208,7 +209,7 @@ export function MainTradingDashboard() {
                   <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
                   <Tooltip
                     contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-                    formatter={(value: number, name: string) => [`$${value.toFixed(2)}`, name === 'cumPnl' ? '누적 PnL' : '거래 PnL']}
+                    formatter={(value: number, name: string) => [`₩${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, name === 'cumPnl' ? '누적 PnL' : '거래 PnL']}
                   />
                   <Line type="monotone" dataKey="cumPnl" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
