@@ -135,7 +135,7 @@ export function ScalpingDashboard() {
               <span className="text-xs text-muted-foreground">미실현 PnL</span>
             </div>
             <p className={`text-lg font-bold font-mono ${(stats.totalUnrealizedPnl || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
-              {(stats.totalUnrealizedPnl || 0) >= 0 ? '+' : ''}${stats.totalUnrealizedPnl || 0}
+              {(stats.totalUnrealizedPnl || 0) >= 0 ? '+' : ''}₩{(stats.totalUnrealizedPnl || 0).toLocaleString()}
             </p>
           </CardContent>
         </Card>
