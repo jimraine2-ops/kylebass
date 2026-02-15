@@ -271,10 +271,7 @@ Respond with JSON ONLY:
       const closedTrades: any[] = [];
       const now = new Date();
       const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      // US market close check (EST 16:00 = UTC 21:00, 30 min before = 20:30)
-      const utcH = now.getUTCHours();
-      const utcM = now.getUTCMinutes();
-      const isNearClose = (utcH === 20 && utcM >= 30) || utcH >= 21;
+      // 24/7 trading: no market close restriction
 
       for (const pos of (openPositions || [])) {
         if (pos.symbol !== symbol) continue;
@@ -289,12 +286,6 @@ Respond with JSON ONLY:
           shouldClose = true;
           closeReason = `[${timeStr}] 청산 사유: [손절] 실행 - $${symbol} 강제 손절 (-2% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
-        }
-        // Market close forced exit (30 min before close)
-        else if (isNearClose) {
-          shouldClose = true;
-          closeReason = `[${timeStr}] 청산 사유: [장마감청산] 실행 - $${symbol} 오버나잇 금지 강제 청산 (PnL: ${pnlPct.toFixed(2)}%)`;
-          newStatus = 'market_close';
         }
         // 15-min time-cut: exit near breakeven if no profit
         else if (pos.time_limit_at && now >= new Date(pos.time_limit_at) && pnlPct <= 0.5) {
@@ -376,13 +367,7 @@ Respond with JSON ONLY:
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      // Don't enter near market close
-      if (isNearClose) {
-        return new Response(JSON.stringify({
-          decision: { action: 'SKIP', reason: '장 마감 30분 전: 신규 진입 금지' },
-          trade: null, closedTrades, wallet,
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
+      // 24/7 trading: no market close entry restriction
 
       const alreadyHolding = (openPositions || []).some(p => p.symbol === symbol && p.status === 'open');
       const openCount = (openPositions || []).filter(p => p.status === 'open').length;
