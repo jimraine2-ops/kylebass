@@ -54,11 +54,11 @@ export function TradeLogTable({ closedTrades }: TradeLogTableProps) {
                         </td>
                         <td className="py-2 px-2 text-muted-foreground font-mono">{time}</td>
                         <td className="py-2 px-2 font-bold">{trade.symbol}</td>
-                        <td className="py-2 px-2 text-right font-mono">${trade.price?.toFixed(4)}</td>
-                        <td className="py-2 px-2 text-right font-mono">${trade.close_price?.toFixed(4) || '-'}</td>
+                        <td className="py-2 px-2 text-right font-mono">₩{trade.price?.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
+                        <td className="py-2 px-2 text-right font-mono">₩{trade.close_price?.toLocaleString(undefined, { maximumFractionDigits: 4 }) || '-'}</td>
                         <td className="py-2 px-2 text-right font-mono">{trade.quantity}</td>
                         <td className={`py-2 px-2 text-right font-mono font-bold ${isProfit ? 'stock-up' : 'stock-down'}`}>
-                          {isProfit ? '+' : ''}${trade.pnl?.toFixed(2)}
+                          {isProfit ? '+' : ''}₩{trade.pnl?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                         </td>
                         <td className="py-2 px-2">
                           <Badge variant={trade.status === 'profit_taken' || trade.status === 'trailing_stop' ? 'default' : trade.status === 'stopped' ? 'destructive' : 'secondary'} className="text-[9px]">

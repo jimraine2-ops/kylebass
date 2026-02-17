@@ -158,7 +158,7 @@ export function ScalpingDashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="font-bold text-sm">{pos.symbol}</span>
-                      <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ${pos.price}</span>
+                      <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{pos.price?.toLocaleString()}</span>
                       <Badge variant="outline" className="text-[9px]">
                         <Clock className="w-2.5 h-2.5 mr-0.5" />
                         {pos.timeElapsedMin}분 경과
@@ -167,20 +167,20 @@ export function ScalpingDashboard() {
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <p className="text-xs text-muted-foreground">현재가</p>
-                        <p className="text-sm font-mono font-bold">${pos.currentPrice?.toFixed(4) || '-'}</p>
+                        <p className="text-sm font-mono font-bold">₩{pos.currentPrice?.toLocaleString(undefined, { maximumFractionDigits: 4 }) || '-'}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-muted-foreground">미실현 PnL</p>
                         <p className={`text-sm font-mono font-bold ${isProfit ? 'stock-up' : 'stock-down'}`}>
-                          {isProfit ? '+' : ''}${pos.unrealizedPnl?.toFixed(2) || '0.00'}
+                          {isProfit ? '+' : ''}₩{pos.unrealizedPnl?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || '0'}
                           <span className="text-[10px] ml-1">({isProfit ? '+' : ''}{pos.unrealizedPnlPct?.toFixed(2) || '0'}%)</span>
                         </p>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-                    <span>SL: ${pos.stop_loss} (-2%)</span>
-                    <span>TP: ${pos.take_profit}</span>
+                    <span>SL: ₩{pos.stop_loss?.toLocaleString()} (-2%)</span>
+                    <span>TP: ₩{pos.take_profit?.toLocaleString()}</span>
                     <span>타임컷: 15분</span>
                     {pos.entry_score && <Badge variant="secondary" className="text-[9px]">진입점수: {pos.entry_score}</Badge>}
                   </div>
@@ -250,11 +250,11 @@ export function ScalpingDashboard() {
                         <tr key={trade.id} className="border-b border-border/50 hover:bg-muted/30">
                           <td className="py-2 px-2 text-muted-foreground font-mono">{time}</td>
                           <td className="py-2 px-2 font-bold">{trade.symbol}</td>
-                          <td className="py-2 px-2 text-right font-mono">${trade.price?.toFixed(4)}</td>
-                          <td className="py-2 px-2 text-right font-mono">${trade.close_price?.toFixed(4) || '-'}</td>
+                          <td className="py-2 px-2 text-right font-mono">₩{trade.price?.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
+                          <td className="py-2 px-2 text-right font-mono">₩{trade.close_price?.toLocaleString(undefined, { maximumFractionDigits: 4 }) || '-'}</td>
                           <td className="py-2 px-2 text-right font-mono">{trade.quantity}</td>
                           <td className={`py-2 px-2 text-right font-mono font-bold ${isProfit ? 'stock-up' : 'stock-down'}`}>
-                            {isProfit ? '+' : ''}${trade.pnl?.toFixed(2)}
+                            {isProfit ? '+' : ''}₩{trade.pnl?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                           </td>
                           <td className="py-2 px-2">
                             <Badge variant={trade.status === 'profit_taken' ? 'default' : trade.status === 'time_cut' ? 'secondary' : 'destructive'} className="text-[9px]">
