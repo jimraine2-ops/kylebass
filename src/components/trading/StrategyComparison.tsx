@@ -61,7 +61,7 @@ export function StrategyComparison() {
                       {s.name}
                     </td>
                     <td className="py-2.5 px-2 text-right font-mono">
-                      ${s.wallet?.balance?.toFixed(0) || '-'}
+                      ₩{s.wallet?.balance?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '-'}
                     </td>
                     <td className={`py-2.5 px-2 text-right font-mono font-bold ${isUp ? 'stock-up' : 'stock-down'}`}>
                       {isUp ? '+' : ''}{ret}%
@@ -71,10 +71,10 @@ export function StrategyComparison() {
                       <span className="text-muted-foreground ml-1">({s.stats.wins || 0}W/{s.stats.losses || 0}L)</span>
                     </td>
                     <td className={`py-2.5 px-2 text-right font-mono ${(s.stats.totalPnl || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
-                      ${s.stats.totalPnl || 0}
+                      ₩{(s.stats.totalPnl || 0).toLocaleString()}
                     </td>
                     <td className={`py-2.5 px-2 text-right font-mono ${(s.stats.totalUnrealizedPnl || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
-                      ${s.stats.totalUnrealizedPnl || 0}
+                      ₩{(s.stats.totalUnrealizedPnl || 0).toLocaleString()}
                     </td>
                     <td className="py-2.5 px-2 text-right font-mono">{s.stats.profitFactor || 0}</td>
                     <td className="py-2.5 px-2 text-right font-mono">{s.stats.totalTrades || 0}</td>
