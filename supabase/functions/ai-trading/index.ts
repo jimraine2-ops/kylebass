@@ -8,6 +8,19 @@ const corsHeaders = {
 
 const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
+const KRW_RATE = 1350; // Fixed exchange rate: 1 USD = 1,350 KRW
+
+function toKRW(usd: number): number {
+  return usd * KRW_RATE;
+}
+
+function fmtKRW(usd: number): string {
+  return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`;
+}
+
+function fmtKRWRaw(krw: number): string {
+  return `₩${krw.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`;
+}
 
 function getFinnhubToken(): string {
   return Deno.env.get('FINNHUB_API_KEY') || '';
@@ -43,6 +56,9 @@ serve(async (req) => {
 
       const { data: openPositions } = await supabase.from('ai_trades').select('*').eq('status', 'open');
 
+      // Price in KRW for calculations
+      const priceKRW = toKRW(price);
+
       const closedTrades: any[] = [];
       for (const pos of (openPositions || [])) {
         let shouldClose = false;
@@ -51,11 +67,11 @@ serve(async (req) => {
 
         if (pos.stop_loss && price <= pos.stop_loss && pos.symbol === symbol) {
           shouldClose = true;
-          closeReason = `손절가 $${pos.stop_loss} 도달 (즉시 전량 매도)`;
+          closeReason = `손절가 ${fmtKRW(pos.stop_loss)} 도달 (즉시 전량 매도)`;
           newStatus = 'stopped';
         } else if (pos.take_profit && price >= pos.take_profit && pos.symbol === symbol) {
           shouldClose = true;
-          closeReason = `목표가 $${pos.take_profit} 도달 (추격 익절)`;
+          closeReason = `목표가 ${fmtKRW(pos.take_profit)} 도달 (추격 익절)`;
           newStatus = 'profit_taken';
         } else if (quantScore !== undefined && quantScore < 40 && pos.symbol === symbol) {
           shouldClose = true;
@@ -64,19 +80,20 @@ serve(async (req) => {
         }
 
         if (shouldClose && pos.symbol === symbol) {
-          const pnl = (price - pos.price) * pos.quantity;
+          const pnl = toKRW((price - pos.price) * pos.quantity);
+          const investmentKRW = toKRW(pos.price * pos.quantity);
           await supabase.from('ai_trades').update({
             status: newStatus, close_price: price, pnl,
             closed_at: new Date().toISOString(), ai_reason: closeReason,
           }).eq('id', pos.id);
 
           await supabase.from('ai_wallet').update({
-            balance: wallet.balance + (pos.price * pos.quantity) + pnl,
+            balance: wallet.balance + investmentKRW + pnl,
             updated_at: new Date().toISOString(),
           }).eq('id', wallet.id);
 
-          wallet.balance += (pos.price * pos.quantity) + pnl;
-          closedTrades.push({ ...pos, pnl, closeReason });
+          wallet.balance += investmentKRW + pnl;
+          closedTrades.push({ ...pos, pnl: +pnl.toFixed(0), closeReason });
         }
       }
 
@@ -85,7 +102,7 @@ serve(async (req) => {
 
       const alreadyHolding = (openPositions || []).some(p => p.symbol === symbol && p.status === 'open');
       const openCount = (openPositions || []).filter(p => p.status === 'open').length;
-      const availableBalance = wallet.balance;
+      const availableBalance = wallet.balance; // KRW
 
       const meetsScoreThreshold = quantScore !== undefined ? quantScore >= 50 : false;
       let positionSizePct = 0;
@@ -115,8 +132,8 @@ serve(async (req) => {
 Analyze this stock and decide whether to BUY, SELL, or HOLD.
 
 Symbol: ${symbol}
-Current Price: $${price}
-Available Balance: $${availableBalance.toFixed(2)}
+Current Price: ${fmtKRW(price)} (USD $${price})
+Available Balance: ${fmtKRWRaw(availableBalance)}
 Already Holding: ${alreadyHolding ? 'Yes' : 'No'}
 Pyramiding Eligible: ${isPyramiding ? 'Yes' : 'No'}
 Open Positions: ${openCount}/5
@@ -154,21 +171,22 @@ Respond with JSON ONLY:
       const canBuy = (!alreadyHolding || isPyramiding) && openCount < 5 && meetsScoreThreshold && basicConditionsMet;
 
       if (decision.action === 'BUY' && decision.confidence >= 40 && canBuy) {
-        const maxInvestment = availableBalance * positionSizePct;
-        const qty = Math.min(decision.quantity || Math.floor(maxInvestment / price), Math.floor(maxInvestment / price));
-        if (qty > 0 && qty * price <= availableBalance) {
+        const maxInvestmentKRW = availableBalance * positionSizePct;
+        const qty = Math.min(decision.quantity || Math.floor(maxInvestmentKRW / priceKRW), Math.floor(maxInvestmentKRW / priceKRW));
+        const costKRW = qty * priceKRW;
+        if (qty > 0 && costKRW <= availableBalance) {
           const stopLoss = decision.stopLoss || +(price * 0.95).toFixed(4);
           const takeProfit = decision.takeProfit || +(price * 1.08).toFixed(4);
           const logPrefix = isPyramiding ? 'PYRAMID' : 'SCOUT';
           const { data: newTrade } = await supabase.from('ai_trades').insert({
             symbol, side: 'buy', quantity: qty, price,
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
-            ai_reason: `[Main] [${logPrefix}|Score:${quantScore || 'N/A'}|${(positionSizePct*100).toFixed(0)}%] [${timeStr}] $${symbol} 매수 집행 (점수: ${quantScore}점 / 근거: ${decision.reason})`,
+            ai_reason: `[Main] [${logPrefix}|Score:${quantScore || 'N/A'}|${(positionSizePct*100).toFixed(0)}%] [${timeStr}] ${symbol} ${fmtKRWRaw(costKRW)} 매수 집행 (점수: ${quantScore}점 / 근거: ${decision.reason})`,
             ai_confidence: decision.confidence,
           }).select().single();
 
           await supabase.from('ai_wallet').update({
-            balance: availableBalance - (qty * price), updated_at: new Date().toISOString(),
+            balance: availableBalance - costKRW, updated_at: new Date().toISOString(),
           }).eq('id', wallet.id);
           trade = newTrade;
         }
@@ -176,7 +194,7 @@ Respond with JSON ONLY:
 
       return new Response(JSON.stringify({
         decision, trade, closedTrades,
-        wallet: { ...wallet, balance: trade ? availableBalance - (trade.quantity * trade.price) : wallet.balance },
+        wallet: { ...wallet, balance: trade ? availableBalance - (trade.quantity * priceKRW) : wallet.balance },
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
@@ -196,9 +214,9 @@ Respond with JSON ONLY:
 
       const enrichedPositions = (openPositions || []).map((pos: any) => {
         const currentPrice = realTimePrices[pos.symbol] || pos.price;
-        const unrealizedPnl = (currentPrice - pos.price) * pos.quantity;
+        const unrealizedPnl = toKRW((currentPrice - pos.price) * pos.quantity);
         const unrealizedPnlPct = ((currentPrice - pos.price) / pos.price) * 100;
-        return { ...pos, currentPrice, unrealizedPnl: +unrealizedPnl.toFixed(2), unrealizedPnlPct: +unrealizedPnlPct.toFixed(2) };
+        return { ...pos, currentPrice, unrealizedPnl: +unrealizedPnl.toFixed(0), unrealizedPnlPct: +unrealizedPnlPct.toFixed(2), priceKRW: toKRW(pos.price), currentPriceKRW: toKRW(currentPrice) };
       });
 
       const closedTrades = allTrades || [];
@@ -222,7 +240,7 @@ Respond with JSON ONLY:
       return new Response(JSON.stringify({
         wallet, openPositions: enrichedPositions, closedTrades,
         stats: {
-          winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(2), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(2),
+          winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(0), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(0),
           totalTrades: totalClosed, wins, losses, profitFactor, avgHoldTimeMinutes: +avgHoldTime.toFixed(1), bestTrade,
           cumulativeReturn: wallet ? +((wallet.balance - wallet.initial_balance) / wallet.initial_balance * 100).toFixed(2) : 0,
         }
@@ -231,7 +249,7 @@ Respond with JSON ONLY:
 
     if (action === 'reset-wallet') {
       await supabase.from('ai_trades').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('ai_wallet').update({ balance: 10000, initial_balance: 10000, updated_at: new Date().toISOString() }).not('id', 'is', null);
+      await supabase.from('ai_wallet').update({ balance: 10000000, initial_balance: 10000000, updated_at: new Date().toISOString() }).not('id', 'is', null);
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
@@ -267,11 +285,12 @@ Respond with JSON ONLY:
 
       const { data: openPositions } = await supabase.from('scalping_trades').select('*').eq('status', 'open');
 
+      const priceKRW = toKRW(price);
+
       // === Exit checks for open scalping positions ===
       const closedTrades: any[] = [];
       const now = new Date();
       const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      // 24/7 trading: no market close restriction
 
       for (const pos of (openPositions || [])) {
         if (pos.symbol !== symbol) continue;
@@ -281,59 +300,58 @@ Respond with JSON ONLY:
         let newStatus = 'closed';
         const pnlPct = ((price - pos.price) / pos.price) * 100;
 
-        // -2% hard stop: immediate full exit
+        // -2% hard stop
         if (pnlPct <= -2) {
           shouldClose = true;
-          closeReason = `[${timeStr}] 청산 사유: [손절] 실행 - $${symbol} 강제 손절 (-2% 도달: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[${timeStr}] 청산 사유: [손절] 실행 - ${symbol} 강제 손절 (-2% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
         }
-        // 15-min time-cut: exit near breakeven if no profit
+        // 15-min time-cut
         else if (pos.time_limit_at && now >= new Date(pos.time_limit_at) && pnlPct <= 0.5) {
           shouldClose = true;
-          closeReason = `[${timeStr}] 청산 사유: [타임컷] 실행 - $${symbol} 15분 타임컷 본전 청산 (수익: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[${timeStr}] 청산 사유: [타임컷] 실행 - ${symbol} 15분 타임컷 본전 청산 (수익: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'time_cut';
         }
-        // Trailing stop (ATR-based)
+        // Trailing stop
         else if (pos.stop_loss && price <= pos.stop_loss) {
           shouldClose = true;
-          closeReason = `[${timeStr}] 청산 사유: [추격익절] 실행 - $${symbol} ATR 추격 손절 터치 ($${pos.stop_loss})`;
+          closeReason = `[${timeStr}] 청산 사유: [추격익절] 실행 - ${symbol} ATR 추격 손절 터치 (${fmtKRW(pos.stop_loss)})`;
           newStatus = 'stopped';
         }
-        // Take profit (fixed target)
+        // Take profit
         else if (pos.take_profit && price >= pos.take_profit) {
           shouldClose = true;
-          closeReason = `[${timeStr}] 청산 사유: [익절] 실행 - $${symbol} 목표가 도달 ($${pos.take_profit})`;
+          closeReason = `[${timeStr}] 청산 사유: [익절] 실행 - ${symbol} 목표가 도달 (${fmtKRW(pos.take_profit)})`;
           newStatus = 'profit_taken';
         }
 
-        // Partial exit: 2-3% profit → sell 50% (upgraded from 30%)
+        // Partial exit: 2-3% profit → sell 50%
         if (!shouldClose && pnlPct >= 2) {
           const partialExits = pos.partial_exits || [];
           const hasFirstPartial = partialExits.some((e: any) => e.type === 'first_partial');
           if (!hasFirstPartial) {
             const sellQty = Math.floor(pos.quantity * 0.5);
             if (sellQty > 0) {
-              const partialPnl = (price - pos.price) * sellQty;
-              partialExits.push({ type: 'first_partial', qty: sellQty, price, pnl: +partialPnl.toFixed(2), at: now.toISOString() });
+              const partialPnlKRW = toKRW((price - pos.price) * sellQty);
+              const sellValueKRW = toKRW(sellQty * price);
+              partialExits.push({ type: 'first_partial', qty: sellQty, price, pnl: +partialPnlKRW.toFixed(0), at: now.toISOString() });
 
-              // Update trailing stop for remaining: high - 2*ATR
               const atr = indicators?.atr?.atr || price * 0.02;
               const newTrailingStop = +(price - 2.0 * atr).toFixed(4);
 
               await supabase.from('scalping_trades').update({
                 quantity: pos.quantity - sellQty,
                 partial_exits: partialExits,
-                stop_loss: Math.max(newTrailingStop, pos.stop_loss || 0), // only move up
+                stop_loss: Math.max(newTrailingStop, pos.stop_loss || 0),
               }).eq('id', pos.id);
               await supabase.from('scalping_wallet').update({
-                balance: wallet.balance + (sellQty * price),
+                balance: wallet.balance + sellValueKRW,
                 updated_at: now.toISOString(),
               }).eq('id', wallet.id);
-              wallet.balance += sellQty * price;
-              closedTrades.push({ symbol: pos.symbol, type: 'partial', pnl: +partialPnl.toFixed(2), reason: `[${timeStr}] $${symbol} 1차 익절 50% (수익률: ${pnlPct.toFixed(1)}%)` });
+              wallet.balance += sellValueKRW;
+              closedTrades.push({ symbol: pos.symbol, type: 'partial', pnl: +partialPnlKRW.toFixed(0), reason: `[${timeStr}] ${symbol} 1차 익절 50% (수익률: ${pnlPct.toFixed(1)}%)` });
             }
           } else if (pnlPct >= 3) {
-            // Update trailing stop dynamically: current high - 2*ATR
             const atr = indicators?.atr?.atr || price * 0.02;
             const newTrailingStop = +(price - 2.0 * atr).toFixed(4);
             if (newTrailingStop > (pos.stop_loss || 0)) {
@@ -345,21 +363,22 @@ Respond with JSON ONLY:
         }
 
         if (shouldClose) {
-          const pnl = (price - pos.price) * pos.quantity;
+          const pnlKRW = toKRW((price - pos.price) * pos.quantity);
+          const investmentKRW = toKRW(pos.price * pos.quantity);
           await supabase.from('scalping_trades').update({
-            status: newStatus, close_price: price, pnl: +pnl.toFixed(2),
+            status: newStatus, close_price: price, pnl: +pnlKRW.toFixed(0),
             closed_at: now.toISOString(), ai_reason: closeReason,
           }).eq('id', pos.id);
           await supabase.from('scalping_wallet').update({
-            balance: wallet.balance + (pos.price * pos.quantity) + pnl,
+            balance: wallet.balance + investmentKRW + pnlKRW,
             updated_at: now.toISOString(),
           }).eq('id', wallet.id);
-          wallet.balance += (pos.price * pos.quantity) + pnl;
-          closedTrades.push({ ...pos, pnl: +pnl.toFixed(2), closeReason });
+          wallet.balance += investmentKRW + pnlKRW;
+          closedTrades.push({ ...pos, pnl: +pnlKRW.toFixed(0), closeReason });
         }
       }
 
-      // === INSTANT ENTRY: No score filter - buy immediately if in TOP 10 ===
+      // === INSTANT ENTRY ===
       if (price >= 10) {
         return new Response(JSON.stringify({
           decision: { action: 'SKIP', reason: '주가 $10 이상: 스캘핑 대상 외' },
@@ -367,26 +386,22 @@ Respond with JSON ONLY:
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      // 24/7 trading: no market close entry restriction
-
       const alreadyHolding = (openPositions || []).some(p => p.symbol === symbol && p.status === 'open');
       const openCount = (openPositions || []).filter(p => p.status === 'open').length;
 
-      // INSTANT EXECUTION: No score threshold, no indicator checks
-      // Only requirement: not already holding, under 10 open positions, under $10
       const canEnter = !alreadyHolding && openCount < 10;
 
       let trade = null;
       let decision = { action: 'HOLD', confidence: 0, reason: '이미 보유 중이거나 포지션 한도 초과', quantity: 0 };
 
       if (canEnter) {
-        // Position size: 10% of scalping wallet
-        const maxInvestment = wallet.balance * 0.10;
-        const qty = Math.floor(maxInvestment / price);
+        // Position size: 10% of scalping wallet (KRW)
+        const maxInvestmentKRW = wallet.balance * 0.10;
+        const qty = Math.floor(maxInvestmentKRW / priceKRW);
+        const costKRW = qty * priceKRW;
 
-        if (qty > 0 && qty * price <= wallet.balance) {
-          const atr = indicators?.atr?.atr || price * 0.02;
-          const stopLoss = +(price * 0.98).toFixed(4); // -2% hard stop
+        if (qty > 0 && costKRW <= wallet.balance) {
+          const stopLoss = +(price * 0.98).toFixed(4);
           const takeProfit = +(price * 1.05).toFixed(4);
           const timeLimitAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
 
@@ -395,16 +410,16 @@ Respond with JSON ONLY:
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
             entry_score: quantScore || 0,
             time_limit_at: timeLimitAt,
-            ai_reason: `[Scalp] [INSTANT] [${timeStr}] TOP 10 신규 포착: $${symbol} 즉시 매수 집행 (가격: $${price}, 수량: ${qty}주)`,
+            ai_reason: `[Scalp] [INSTANT] [${timeStr}] TOP 10 신규 포착: ${symbol} 즉시 매수 집행 (${fmtKRWRaw(costKRW)}, 수량: ${qty}주)`,
             ai_confidence: 100,
           }).select().single();
 
           await supabase.from('scalping_wallet').update({
-            balance: wallet.balance - (qty * price), updated_at: now.toISOString(),
+            balance: wallet.balance - costKRW, updated_at: now.toISOString(),
           }).eq('id', wallet.id);
 
           trade = newTrade;
-          decision = { action: 'BUY', confidence: 100, reason: `[Scalp] TOP 10 신규 포착: $${symbol} 즉시 매수 집행`, quantity: qty };
+          decision = { action: 'BUY', confidence: 100, reason: `[Scalp] TOP 10 신규 포착: ${symbol} 즉시 매수 집행`, quantity: qty };
         }
       }
 
@@ -429,10 +444,10 @@ Respond with JSON ONLY:
 
       const enrichedPositions = (openPositions || []).map((pos: any) => {
         const currentPrice = realTimePrices[pos.symbol] || pos.price;
-        const unrealizedPnl = (currentPrice - pos.price) * pos.quantity;
+        const unrealizedPnl = toKRW((currentPrice - pos.price) * pos.quantity);
         const unrealizedPnlPct = ((currentPrice - pos.price) / pos.price) * 100;
         const timeElapsed = pos.opened_at ? Math.round((Date.now() - new Date(pos.opened_at).getTime()) / 60000) : 0;
-        return { ...pos, currentPrice, unrealizedPnl: +unrealizedPnl.toFixed(2), unrealizedPnlPct: +unrealizedPnlPct.toFixed(2), timeElapsedMin: timeElapsed };
+        return { ...pos, currentPrice, unrealizedPnl: +unrealizedPnl.toFixed(0), unrealizedPnlPct: +unrealizedPnlPct.toFixed(2), timeElapsedMin: timeElapsed, priceKRW: toKRW(pos.price), currentPriceKRW: toKRW(currentPrice) };
       });
 
       const closedTrades = allTrades || [];
@@ -455,7 +470,7 @@ Respond with JSON ONLY:
       return new Response(JSON.stringify({
         wallet, openPositions: enrichedPositions, closedTrades,
         stats: {
-          winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(2), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(2),
+          winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(0), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(0),
           totalTrades: totalClosed, wins, losses, profitFactor, avgHoldTimeMinutes: +avgHoldTime.toFixed(1),
           cumulativeReturn: wallet ? +((wallet.balance - wallet.initial_balance) / wallet.initial_balance * 100).toFixed(4) : 0,
         }
@@ -472,13 +487,13 @@ Respond with JSON ONLY:
     if (action === 'quant-auto-trade') {
       const { symbol, price, quantScore, indicators } = body;
       
-      // USE MAIN WALLET (ai_wallet) instead of quant_wallet
       const { data: wallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
       if (!wallet) throw new Error('No wallet found');
 
       const { data: openPositions } = await supabase.from('ai_trades').select('*').eq('status', 'open');
       const now = new Date();
       const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      const priceKRW = toKRW(price);
 
       // === EXIT CHECKS (on ai_trades) ===
       const closedTrades: any[] = [];
@@ -495,59 +510,55 @@ Respond with JSON ONLY:
         // -2.5% hard stop
         if (pnlPct <= -2.5) {
           shouldClose = true;
-          closeReason = `[Quant] [${timeStr}] [$${symbol}] 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[Quant] [${timeStr}] [${symbol}] 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
         }
-        // Score < 40: basis evaporated
+        // Score < 40
         else if (quantScore !== undefined && quantScore < 40) {
           shouldClose = true;
-          closeReason = `[Quant] [${timeStr}] [$${symbol}] 매수 근거 소멸 (점수 ${quantScore}점 < 40)`;
+          closeReason = `[Quant] [${timeStr}] [${symbol}] 매수 근거 소멸 (점수 ${quantScore}점 < 40)`;
           newStatus = 'score_exit';
         }
-        // Take profit: 50% partial at target
+        // Take profit
         else if (pos.take_profit && price >= pos.take_profit) {
-          // Check if this is a Quant trade by looking at ai_reason tag
           if (!pos.ai_reason?.startsWith('[Quant]')) continue;
-          
-          const shouldPartial = true; // simplified - full close for non-partial
           shouldClose = true;
-          closeReason = `[Quant] [${timeStr}] [$${symbol}] 목표가 도달 익절`;
+          closeReason = `[Quant] [${timeStr}] [${symbol}] 목표가 도달 익절`;
           newStatus = 'profit_taken';
         }
-        // Trailing stop check (for Quant trades with trailing logic embedded in stop_loss)
+        // Trailing stop
         else if (pos.stop_loss && price <= pos.stop_loss && pos.ai_reason?.startsWith('[Quant]')) {
           shouldClose = true;
-          closeReason = `[Quant] [${timeStr}] [$${symbol}] ATR×2 추격 익절 터치 ($${pos.stop_loss})`;
+          closeReason = `[Quant] [${timeStr}] [${symbol}] ATR×2 추격 익절 터치 (${fmtKRW(pos.stop_loss)})`;
           newStatus = 'trailing_stop';
         }
 
         if (shouldClose) {
-          const pnl = (price - pos.price) * pos.quantity;
+          const pnlKRW = toKRW((price - pos.price) * pos.quantity);
+          const investmentKRW = toKRW(pos.price * pos.quantity);
           await supabase.from('ai_trades').update({
-            status: newStatus, close_price: price, pnl: +pnl.toFixed(2),
+            status: newStatus, close_price: price, pnl: +pnlKRW.toFixed(0),
             closed_at: now.toISOString(), ai_reason: closeReason,
           }).eq('id', pos.id);
           await supabase.from('ai_wallet').update({
-            balance: wallet.balance + (pos.price * pos.quantity) + pnl, updated_at: now.toISOString(),
+            balance: wallet.balance + investmentKRW + pnlKRW, updated_at: now.toISOString(),
           }).eq('id', wallet.id);
-          wallet.balance += (pos.price * pos.quantity) + pnl;
+          wallet.balance += investmentKRW + pnlKRW;
           logs.push(closeReason);
-          closedTrades.push({ ...pos, pnl: +pnl.toFixed(2), closeReason });
+          closedTrades.push({ ...pos, pnl: +pnlKRW.toFixed(0), closeReason });
         }
       }
 
-      // === ENTRY LOGIC: Quant-Focus (writes to ai_trades with [Quant] tag) ===
+      // === ENTRY LOGIC ===
       const alreadyHolding = (openPositions || []).some(p => p.symbol === symbol && p.status === 'open');
       const openCount = (openPositions || []).filter(p => p.status === 'open').length;
 
-      // Confirmation conditions
       const sentimentPositive = (indicators?.sentiment?.score || 0) > 0;
       const rvolAbove = (indicators?.rvol?.rvol || 0) >= 1.5;
       const aboveVwap = (indicators?.candle?.score || 0) >= 4;
       const meetsScore = (quantScore || 0) >= 50;
       const allConditionsMet = sentimentPositive && rvolAbove && aboveVwap && meetsScore;
 
-      // Pyramiding check
       let isPyramiding = false;
       if (alreadyHolding && (quantScore || 0) >= 80) {
         isPyramiding = true;
@@ -560,18 +571,17 @@ Respond with JSON ONLY:
 
       if (canEnter) {
         const positionPct = isPyramiding ? 0.10 : 0.15;
-        const maxInvestment = wallet.balance * positionPct;
-        const qty = Math.floor(maxInvestment / price);
+        const maxInvestmentKRW = wallet.balance * positionPct;
+        const qty = Math.floor(maxInvestmentKRW / priceKRW);
+        const costKRW = qty * priceKRW;
 
-        if (qty > 0 && qty * price <= wallet.balance) {
-          const atr = indicators?.atr?.atr || price * 0.02;
-          const stopLoss = +(price * 0.975).toFixed(4); // -2.5%
-          const takeProfit = +(price * 1.06).toFixed(4); // +6%
+        if (qty > 0 && costKRW <= wallet.balance) {
+          const stopLoss = +(price * 0.975).toFixed(4);
+          const takeProfit = +(price * 1.06).toFixed(4);
           const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
 
-          const logMsg = `[Quant] 10대지표 퀀트엔진: [$${symbol}] ${quantScore}점 포착 및 자율 매수 완료 [${tier}|${(positionPct*100).toFixed(0)}%|${qty}주@$${price}]`;
+          const logMsg = `[Quant] 10대지표 퀀트엔진: [${symbol}] ${quantScore}점 포착 및 자율 매수 완료 [${tier}|${(positionPct*100).toFixed(0)}%|${qty}주@${fmtKRW(price)}|총${fmtKRWRaw(costKRW)}]`;
 
-          // INSERT INTO ai_trades (unified with Main)
           const { data: newTrade } = await supabase.from('ai_trades').insert({
             symbol, side: 'buy', quantity: qty, price,
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
@@ -580,7 +590,7 @@ Respond with JSON ONLY:
           }).select().single();
 
           await supabase.from('ai_wallet').update({
-            balance: wallet.balance - (qty * price), updated_at: now.toISOString(),
+            balance: wallet.balance - costKRW, updated_at: now.toISOString(),
           }).eq('id', wallet.id);
 
           trade = newTrade;
