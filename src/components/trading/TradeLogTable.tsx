@@ -54,8 +54,8 @@ export function TradeLogTable({ closedTrades }: TradeLogTableProps) {
                         </td>
                         <td className="py-2 px-2 text-muted-foreground font-mono">{time}</td>
                         <td className="py-2 px-2 font-bold">{trade.symbol}</td>
-                        <td className="py-2 px-2 text-right font-mono">₩{trade.price?.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
-                        <td className="py-2 px-2 text-right font-mono">₩{trade.close_price?.toLocaleString(undefined, { maximumFractionDigits: 4 }) || '-'}</td>
+                         <td className="py-2 px-2 text-right font-mono">₩{Math.round((trade.price || 0) * 1350).toLocaleString('ko-KR')}</td>
+                         <td className="py-2 px-2 text-right font-mono">{trade.close_price ? `₩${Math.round(trade.close_price * 1350).toLocaleString('ko-KR')}` : '-'}</td>
                         <td className="py-2 px-2 text-right font-mono">{trade.quantity}</td>
                         <td className={`py-2 px-2 text-right font-mono font-bold ${isProfit ? 'stock-up' : 'stock-down'}`}>
                           {isProfit ? '+' : ''}₩{trade.pnl?.toLocaleString(undefined, { maximumFractionDigits: 2 })}

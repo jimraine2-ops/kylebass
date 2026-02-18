@@ -82,7 +82,7 @@ export default function RecommendationPage() {
           }
           if (result.closedTrades?.length > 0) {
             for (const ct of result.closedTrades) {
-              const pnlStr = ct.pnl >= 0 ? `+$${ct.pnl.toFixed(2)}` : `-$${Math.abs(ct.pnl).toFixed(2)}`;
+              const pnlStr = ct.pnl >= 0 ? `+₩${Math.abs(ct.pnl).toLocaleString('ko-KR')}` : `-₩${Math.abs(ct.pnl).toLocaleString('ko-KR')}`;
               toast.info(`[Quant] 청산: ${ct.symbol} ${pnlStr}`);
             }
           }
