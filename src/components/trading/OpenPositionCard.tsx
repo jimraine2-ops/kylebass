@@ -32,7 +32,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected }: OpenPo
             {tag.label}
           </Badge>
           <span className="font-bold text-sm">{pos.symbol}</span>
-          <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{pos.price?.toLocaleString()}</span>
+          <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * 1350).toLocaleString('ko-KR')}</span>
           <Badge variant="outline" className="text-[10px]">
             신뢰도: {pos.ai_confidence}%
           </Badge>
@@ -40,7 +40,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected }: OpenPo
         <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="text-xs text-muted-foreground">현재가</p>
-            <p className="text-sm font-mono font-bold">₩{pos.currentPrice?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || '-'}</p>
+            <p className="text-sm font-mono font-bold">₩{Math.round((pos.currentPrice || 0) * 1350).toLocaleString('ko-KR') || '-'}</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">미실현 PnL</p>
@@ -54,11 +54,11 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected }: OpenPo
       <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1">
           <Shield className="w-3 h-3 text-destructive" />
-          SL: ₩{pos.stop_loss?.toLocaleString()}
+          SL: ₩{Math.round((pos.stop_loss || 0) * 1350).toLocaleString('ko-KR')}
         </span>
         <span className="flex items-center gap-1">
           {isProfit ? <TrendingUp className="w-3 h-3 text-stock-up" /> : <TrendingDown className="w-3 h-3 text-stock-down" />}
-          TP: ₩{pos.take_profit?.toLocaleString()}
+          TP: ₩{Math.round((pos.take_profit || 0) * 1350).toLocaleString('ko-KR')}
         </span>
         {onSelect && (
           <span className="text-primary text-[9px]">

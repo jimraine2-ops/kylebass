@@ -78,9 +78,12 @@ export default function StockDetail() {
           <p className="text-muted-foreground text-sm">{quote?.shortName || symbol}</p>
         </div>
         <div className="text-right">
-          <p className="text-3xl font-bold font-mono">${quote?.regularMarketPrice?.toFixed(2) || '—'}</p>
+          <p className="text-3xl font-bold font-mono">
+            {quote?.regularMarketPrice ? `₩${((quote.regularMarketPrice) * 1350).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}` : '—'}
+          </p>
+          <p className="text-xs text-muted-foreground font-mono">${quote?.regularMarketPrice?.toFixed(2)}</p>
           <p className={`text-sm font-mono ${isUp ? 'stock-up' : 'stock-down'}`}>
-            {isUp ? '+' : ''}{quote?.regularMarketChange?.toFixed(2)} ({isUp ? '+' : ''}{quote?.regularMarketChangePercent?.toFixed(2)}%)
+            {isUp ? '+' : ''}{quote?.regularMarketChangePercent?.toFixed(2)}%
           </p>
         </div>
       </div>

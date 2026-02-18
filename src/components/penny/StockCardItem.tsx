@@ -94,7 +94,7 @@ export default function StockCardItem({ stock, rank, isHot, isTrading, isHolding
 
         {/* Price */}
         <p className="text-lg font-bold font-mono">
-          ${stock.regularMarketPrice?.toFixed(4)}
+          ₩{((stock.regularMarketPrice || 0) * 1350).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
         </p>
 
         {/* Change */}

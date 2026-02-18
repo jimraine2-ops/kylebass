@@ -51,7 +51,8 @@ export default function PennyStocksPage() {
     try {
       const result = await scalpingAnalyze(stock.symbol, stock.regularMarketPrice);
       if (result.trade) {
-        const msg = `+20% 돌파 확인 - $${stock.symbol} 초단타 자동 매매 개시 (${result.trade.quantity}주 @ $${result.trade.price})`;
+        const priceKRW = Math.round((result.trade.price || 0) * 1350).toLocaleString('ko-KR');
+        const msg = `+20% 돌파 확인 - ${stock.symbol} 초단타 자동 매매 개시 (${result.trade.quantity}주 @ ₩${priceKRW})`;
         toast.success(msg);
         addBriefing(msg, 'buy');
       } else if (result.closedTrades?.length > 0) {

@@ -66,8 +66,8 @@ export default function Dashboard() {
                 </div>
                 <div className="flex items-center gap-4 text-right">
                   <div>
-                    <p className="text-[10px] text-muted-foreground">잔고</p>
-                    <p className="text-sm font-bold font-mono">${portfolio.wallet.balance?.toFixed(2)}</p>
+                     <p className="text-[10px] text-muted-foreground">잔고</p>
+                    <p className="text-sm font-bold font-mono">₩{portfolio.wallet.balance?.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground">승률</p>
@@ -236,12 +236,12 @@ export default function Dashboard() {
                       </Badge>
                     </div>
                     <p className="text-lg font-bold font-mono mt-2">
-                      ${stock.regularMarketPrice?.toFixed(2)}
+                      ₩{((stock.regularMarketPrice || 0) * 1350).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
                     </p>
                     <div className={`flex items-center gap-1 ${isUp ? 'stock-up' : 'stock-down'}`}>
                       {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       <span className="text-xs font-mono">
-                        {isUp ? '+' : ''}{stock.regularMarketChange?.toFixed(2)} ({isUp ? '+' : ''}{stock.regularMarketChangePercent?.toFixed(2)}%)
+                        {isUp ? '+' : ''}{stock.regularMarketChangePercent?.toFixed(2)}%
                       </span>
                     </div>
                   </Link>

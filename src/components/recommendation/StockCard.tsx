@@ -41,7 +41,7 @@ export function StockCard({ stock, idx, isSelected, onSelect, onTrade, isTrading
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-bold">{stock.symbol}</span>
-                <span className="text-lg font-bold font-mono">${stock.price?.toFixed(2)}</span>
+                <span className="text-lg font-bold font-mono">₩{((stock.price || 0) * 1350).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</span>
                 <span className={`text-sm font-mono ${isUp ? 'stock-up' : 'stock-down'}`}>
                   {isUp ? '+' : ''}{stock.changePct?.toFixed(2)}%
                 </span>
