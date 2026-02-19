@@ -88,7 +88,7 @@ serve(async (req) => {
             averageDailyVolume10Day: 0,
             volumeSurge: 0,
             isVolumeSurge: false,
-            isHot: changePct >= 20,
+            isHot: changePct >= 10,
             previousClose: quote.pc,
             dayHigh: quote.h,
             dayLow: quote.l,

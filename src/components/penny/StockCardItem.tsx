@@ -74,9 +74,9 @@ export default function StockCardItem({ stock, rank, isHot, isTrading, isHolding
           </div>
           <div className="flex items-center gap-0.5">
             {isHot && (
-              <Badge variant="destructive" className="text-[8px] px-1 py-0 animate-pulse">
+            <Badge variant="destructive" className="text-[8px] px-1 py-0 animate-pulse">
                 <Flame className="w-2.5 h-2.5 mr-0.5" />
-                +20%
+                +10%
               </Badge>
             )}
             {isTrading && (
