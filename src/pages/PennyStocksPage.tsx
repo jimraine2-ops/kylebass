@@ -35,7 +35,7 @@ export default function PennyStocksPage() {
   const holdingSymbols = new Set(openPositions.map((p: any) => String(p.symbol)));
 
   // +20% filter: only these are auto-trade targets
-  const hotStocks = stocks.filter((s: any) => (s.regularMarketChangePercent || 0) >= 20);
+  const hotStocks = stocks.filter((s: any) => (s.regularMarketChangePercent || 0) >= 10);
   const hotSymbols = new Set(hotStocks.map((s: any) => s.symbol));
 
   const addBriefing = useCallback((text: string, type: BriefingEntry['type']) => {
@@ -91,7 +91,7 @@ export default function PennyStocksPage() {
     const toTrade = prevSymbols.size === 0 ? hotStocks : newEntries;
 
     if (newEntries.length > 0 && prevSymbols.size > 0) {
-      addBriefing(`🔥 +20% 돌파 종목 감지: ${newEntries.map((s: any) => `$${s.symbol}(+${s.regularMarketChangePercent?.toFixed(1)}%)`).join(', ')}`, 'info');
+      addBriefing(`🔥 +10% 돌파 종목 감지: ${newEntries.map((s: any) => `$${s.symbol}(+${s.regularMarketChangePercent?.toFixed(1)}%)`).join(', ')}`, 'info');
     }
 
     for (const stock of toTrade) {
@@ -122,7 +122,7 @@ export default function PennyStocksPage() {
       <div className="rounded-lg p-2 border border-destructive/40 bg-destructive/5 flex items-center justify-center gap-2">
         <Flame className="w-4 h-4 text-destructive" />
         <span className="text-xs font-bold text-destructive">소형주 실시간 거래 현황</span>
-        <span className="text-[10px] text-muted-foreground">| ₩13,500 미만 TOP 50 실시간 모니터링 | +20% 이상만 자동 매매</span>
+        <span className="text-[10px] text-muted-foreground">| ₩13,500 미만 TOP 50 실시간 모니터링 | +10% 이상만 자동 매매</span>
       </div>
 
       {/* AI Agent Status Bar */}
@@ -144,7 +144,7 @@ export default function PennyStocksPage() {
           </Badge>
           <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">
             <Flame className="w-3 h-3 mr-1" />
-            +20% 타겟: {hotStocks.length}개
+            +10% 타겟: {hotStocks.length}개
           </Badge>
         </div>
         <div className="flex items-center gap-2">
@@ -174,7 +174,7 @@ export default function PennyStocksPage() {
       <Card className="border-primary/30">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
           <p className="font-medium text-foreground">🤖 Full-Auto +20% Surge Trading System</p>
-          <p>• 100+ 종목 스캔 → <span className="text-primary font-medium">TOP 50 실시간 표시</span> → <span className="text-destructive font-medium">+20% 이상만 자동 매수</span></p>
+          <p>• 100+ 종목 스캔 → <span className="text-primary font-medium">TOP 50 실시간 표시</span> → <span className="text-destructive font-medium">+10% 이상만 자동 매수</span></p>
           <p>• 청산: 2~3%→50% 익절 | ATR×1.5 추격 손절 | -2% 즉시 손절 | 15분 타임컷 | 장마감 강제 청산</p>
           <p>• 최대 동시 보유: 10종목 | 종목당 지갑의 10% 배분</p>
         </CardContent>
