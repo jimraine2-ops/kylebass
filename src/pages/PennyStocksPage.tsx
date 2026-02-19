@@ -122,7 +122,7 @@ export default function PennyStocksPage() {
       <div className="rounded-lg p-2 border border-destructive/40 bg-destructive/5 flex items-center justify-center gap-2">
         <Flame className="w-4 h-4 text-destructive" />
         <span className="text-xs font-bold text-destructive">소형주 실시간 거래 현황</span>
-        <span className="text-[10px] text-muted-foreground">| $10 미만 TOP 50 실시간 모니터링 | +20% 이상만 자동 매매</span>
+        <span className="text-[10px] text-muted-foreground">| ₩13,500 미만 TOP 50 실시간 모니터링 | +20% 이상만 자동 매매</span>
       </div>
 
       {/* AI Agent Status Bar */}
@@ -188,7 +188,7 @@ export default function PennyStocksPage() {
       ) : stocks.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground">
-            $10 미만 종목을 스캔 중입니다. 잠시 후 다시 확인해주세요.
+            ₩13,500 미만 종목을 스캔 중입니다. 잠시 후 다시 확인해주세요.
           </CardContent>
         </Card>
       ) : (

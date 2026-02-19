@@ -66,7 +66,7 @@ export function ScalpingDashboard() {
       {/* Entry Rules Card */}
       <Card className="border-warning/30">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">⚡ 즉시 실행 알고리즘: Under $10 Instant Scalping Engine</p>
+          <p className="font-medium text-foreground">⚡ 즉시 실행 알고리즘: ₩13,500 미만 즉시 초단타 엔진</p>
           <p>🎯 대상: TOP 10 리스트 진입 즉시 자동 매수 (점수 필터 없음)</p>
           <p>✅ 진입: TOP 10 포착 → 0.1초 이내 시장가 매수 집행</p>
           <p>💰 자산 배분: 종목당 10% (₩1,000,000 기준 ₩100,000)</p>
