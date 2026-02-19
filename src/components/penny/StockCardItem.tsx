@@ -100,9 +100,14 @@ export default function StockCardItem({ stock, rank, isHot, isTrading, isHolding
         {/* Change */}
         <div className={`flex items-center gap-1 ${isUp ? 'stock-up' : 'stock-down'}`}>
           {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-          <span className="text-xs font-mono">
-            {isUp ? '+' : ''}{changePct.toFixed(2)}%
-          </span>
+          <div className="flex flex-col">
+            <span className="text-xs font-mono leading-tight">
+              {isUp ? '+' : ''}{changePct.toFixed(2)}%
+            </span>
+            <span className="text-[9px] font-mono text-muted-foreground leading-tight">
+              {isUp ? '+' : ''}₩{Math.round((stock.regularMarketChange || 0) * 1350).toLocaleString('ko-KR')}
+            </span>
+          </div>
         </div>
 
         {/* Score */}
