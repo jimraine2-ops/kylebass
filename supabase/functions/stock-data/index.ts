@@ -13,16 +13,26 @@ function getToken(): string {
   return key;
 }
 
-async function finnhubFetch(path: string) {
+async function finnhubFetch(path: string, retries = 3): Promise<any> {
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Finnhub error ${res.status}: ${text}`);
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const res = await fetch(url);
+    if (res.status === 429) {
+      const delay = 1000 * Math.pow(2, attempt) + Math.random() * 500;
+      console.warn(`Finnhub 429 rate limit, retry ${attempt + 1} in ${Math.round(delay)}ms`);
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Finnhub error ${res.status}: ${text}`);
+    }
+    return res.json();
   }
-  return res.json();
+  throw new Error('Finnhub rate limit exceeded after retries');
 }
 
 // Try candle endpoint, return null on failure (free tier may not support it)
