@@ -14,6 +14,66 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          id: string
+          message: string
+          strategy: string
+          symbol: string | null
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          message: string
+          strategy?: string
+          symbol?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          message?: string
+          strategy?: string
+          symbol?: string | null
+        }
+        Relationships: []
+      }
+      agent_status: {
+        Row: {
+          created_at: string
+          errors_count: number
+          id: string
+          is_running: boolean
+          last_cycle_at: string | null
+          last_heartbeat: string
+          total_cycles: number
+        }
+        Insert: {
+          created_at?: string
+          errors_count?: number
+          id?: string
+          is_running?: boolean
+          last_cycle_at?: string | null
+          last_heartbeat?: string
+          total_cycles?: number
+        }
+        Update: {
+          created_at?: string
+          errors_count?: number
+          id?: string
+          is_running?: boolean
+          last_cycle_at?: string | null
+          last_heartbeat?: string
+          total_cycles?: number
+        }
+        Relationships: []
+      }
       ai_trades: {
         Row: {
           ai_confidence: number | null
