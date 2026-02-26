@@ -318,7 +318,7 @@ Respond with JSON ONLY:
 
     if (action === 'reset-wallet') {
       await supabase.from('ai_trades').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('ai_wallet').update({ balance: 10000000, initial_balance: 10000000, updated_at: new Date().toISOString() }).not('id', 'is', null);
+      await supabase.from('ai_wallet').update({ balance: 1000000, initial_balance: 1000000, updated_at: new Date().toISOString() }).not('id', 'is', null);
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 

@@ -50,7 +50,7 @@ export function MainTradingDashboard() {
     try {
       await resetAIWallet();
       await refetch();
-      toast.success('가상 지갑이 ₩10,000,000으로 초기화되었습니다.');
+      toast.success('가상 지갑이 ₩1,000,000으로 초기화되었습니다.');
     } catch {
       toast.error('초기화 실패');
     } finally {
