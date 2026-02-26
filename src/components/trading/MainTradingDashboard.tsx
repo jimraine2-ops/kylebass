@@ -156,6 +156,7 @@ export function MainTradingDashboard() {
             <p className={`text-xl font-bold font-mono ${(stats.cumulativeReturn || 0) >= 0 ? 'text-stock-up' : 'text-stock-down'}`}>
               {stats.cumulativeReturn >= 0 ? '+' : ''}{stats.cumulativeReturn || 0}%
             </p>
+            <p className="text-[10px] text-muted-foreground">실현 PnL 기준 (평가 손익 제외)</p>
           </CardContent>
         </Card>
         <Card>
