@@ -350,25 +350,26 @@ serve(async (req) => {
         const maxKRW = mainBalance * positionPct;
         const priceKRW = toKRW(r.price);
         const qty = Math.floor(maxKRW / priceKRW);
-        const costKRW = qty * priceKRW;
+        const costKRW = Math.round(qty * priceKRW);
 
         if (qty > 0 && costKRW <= mainBalance) {
           const stopLoss = +(r.price * 0.975).toFixed(4);
           const takeProfit = +(r.price * 1.06).toFixed(4);
           const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
-          const logMsg = `[Cloud-Quant] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 자율 매수 [${tier}|${qty}주@${fmtKRW(r.price)}|${fmtKRWRaw(costKRW)}]`;
+          const balanceBefore = Math.round(mainBalance);
+          const newBuyBalance = Math.round(mainBalance - costKRW);
+          const logMsg = `[Cloud-Quant] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 자율 매수 [${tier}|${qty}주@${fmtKRW(r.price)}|${fmtKRWRaw(costKRW)}] | [잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
           await supabase.from('ai_trades').insert({
             symbol: r.sym, side: 'buy', quantity: qty, price: r.price,
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
             ai_reason: logMsg, ai_confidence: r.scoring.totalScore,
           });
-          const newBuyBalance = Math.round(mainBalance - costKRW);
           await supabase.from('ai_wallet').update({
             balance: newBuyBalance, updated_at: now.toISOString(),
           }).eq('id', mainWallet.id);
           mainBalance = newBuyBalance;
-          await addLog('quant', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, qty, costKRW: +costKRW.toFixed(0) });
+          await addLog('quant', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, qty, costKRW });
         }
       }
       if (i + 3 < QUANT_SYMBOLS.length) await new Promise(r => setTimeout(r, 200));
