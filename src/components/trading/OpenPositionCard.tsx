@@ -17,10 +17,10 @@ function getStrategyTag(aiReason: string | null): { label: string; color: string
   return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
 }
 
-export function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice }: OpenPositionCardProps) {
+export function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice, fxRate = 1350 }: OpenPositionCardProps) {
   const displayPrice = livePrice ?? pos.currentPrice ?? pos.price;
-  const investmentKRW = Math.round(pos.price * pos.quantity * 1350);
-  const currentValueKRW = Math.round(displayPrice * pos.quantity * 1350);
+  const investmentKRW = Math.round(pos.price * pos.quantity * fxRate);
+  const currentValueKRW = Math.round(displayPrice * pos.quantity * fxRate);
   const unrealizedPnl = currentValueKRW - investmentKRW;
   const unrealizedPnlPct = investmentKRW > 0 ? ((currentValueKRW / investmentKRW) - 1) * 100 : 0;
   const isProfit = unrealizedPnl >= 0;
