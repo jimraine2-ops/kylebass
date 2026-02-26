@@ -22,7 +22,7 @@ function getTwelveDataToken(): string {
 
 // Simple in-memory cache (per isolate)
 const quoteCache = new Map<string, { data: any; ts: number }>();
-const CACHE_TTL = 15000; // 15s
+const CACHE_TTL = 60000; // 60s - aggressive caching to stay within free tier limits
 
 function getCached(key: string): any | null {
   const entry = quoteCache.get(key);
@@ -34,7 +34,7 @@ function setCache(key: string, data: any) {
   quoteCache.set(key, { data, ts: Date.now() });
 }
 
-async function finnhubFetch(path: string, retries = 3): Promise<any> {
+async function finnhubFetch(path: string, retries = 5): Promise<any> {
   const cached = getCached(path);
   if (cached) return cached;
 
@@ -43,22 +43,43 @@ async function finnhubFetch(path: string, retries = 3): Promise<any> {
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
 
   for (let attempt = 0; attempt < retries; attempt++) {
-    const res = await fetch(url);
-    if (res.status === 429) {
-      const delay = 1500 * Math.pow(2, attempt) + Math.random() * 1000;
-      console.warn(`Finnhub 429 rate limit, retry ${attempt + 1} in ${Math.round(delay)}ms`);
-      await new Promise(r => setTimeout(r, delay));
-      continue;
+    try {
+      const res = await fetch(url);
+      if (res.status === 429) {
+        const delay = 2000 * Math.pow(2, attempt) + Math.random() * 2000;
+        console.warn(`Finnhub 429 rate limit, retry ${attempt + 1}/${retries} in ${Math.round(delay)}ms`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Finnhub error ${res.status}: ${text}`);
+      }
+      const data = await res.json();
+      setCache(path, data);
+      return data;
+    } catch (e) {
+      if (attempt === retries - 1) throw e;
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Finnhub error ${res.status}: ${text}`);
-    }
-    const data = await res.json();
-    setCache(path, data);
-    return data;
   }
   throw new Error('Finnhub rate limit exceeded after retries');
+}
+
+// Global request queue to serialize ALL finnhub calls across actions
+let lastFinnhubCall = 0;
+const MIN_CALL_INTERVAL = 500; // 500ms between any Finnhub API call
+
+async function throttledFinnhubFetch(path: string): Promise<any> {
+  const cached = getCached(path);
+  if (cached) return cached;
+  
+  const now = Date.now();
+  const wait = Math.max(0, MIN_CALL_INTERVAL - (now - lastFinnhubCall));
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastFinnhubCall = Date.now();
+  
+  return finnhubFetch(path);
 }
 
 // Twelve Data cross-verification fetch
@@ -107,7 +128,7 @@ function detectDelay(finnhubTimestamp: number): { delayed: boolean; delaySec: nu
 // Try candle endpoint
 async function tryFinnhubCandle(symbol: string, from: number, to: number, resolution = 'D') {
   try {
-    const data = await finnhubFetch(`/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=${resolution}&from=${from}&to=${to}`);
+    const data = await throttledFinnhubFetch(`/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=${resolution}&from=${from}&to=${to}`);
     if (data.s === 'no_data' || !data.t) return null;
     return data;
   } catch {
@@ -164,11 +185,9 @@ serve(async (req) => {
 
       for (let i = 0; i < tickerList.length; i++) {
         const s = tickerList[i];
-        // Add 350ms delay between requests (skip first)
-        if (i > 0) await new Promise(r => setTimeout(r, 350));
-
+        // Throttled delay handled by throttledFinnhubFetch
         try {
-          const q = await finnhubFetch(`/quote?symbol=${encodeURIComponent(s)}`);
+          const q = await throttledFinnhubFetch(`/quote?symbol=${encodeURIComponent(s)}`);
           const { midPrice, hasBidAsk } = calcMidPrice(q);
           const delayInfo = detectDelay(q.t);
 
@@ -237,7 +256,7 @@ serve(async (req) => {
       }
 
       try {
-        const quote = await finnhubFetch(`/quote?symbol=${encodeURIComponent(symbol)}`);
+        const quote = await throttledFinnhubFetch(`/quote?symbol=${encodeURIComponent(symbol)}`);
         const result = buildSyntheticChart(quote, symbol);
         return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       } catch {
@@ -249,7 +268,7 @@ serve(async (req) => {
 
     if (action === 'search') {
       const query = symbol;
-      const data = await finnhubFetch(`/search?q=${encodeURIComponent(query)}`);
+      const data = await throttledFinnhubFetch(`/search?q=${encodeURIComponent(query)}`);
       const results = (data.result || []).map((r: any) => ({ symbol: r.symbol, shortname: r.description, exchange: r.displaySymbol, type: r.type }));
       return new Response(JSON.stringify({ results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -257,22 +276,22 @@ serve(async (req) => {
     if (action === 'company-news') {
       const to = new Date().toISOString().split('T')[0];
       const fromDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
-      const news = await finnhubFetch(`/company-news?symbol=${encodeURIComponent(symbol)}&from=${fromDate}&to=${to}`);
+      const news = await throttledFinnhubFetch(`/company-news?symbol=${encodeURIComponent(symbol)}&from=${fromDate}&to=${to}`);
       return new Response(JSON.stringify({ news: (news || []).slice(0, 20) }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     if (action === 'basic-financials') {
-      const data = await finnhubFetch(`/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`);
+      const data = await throttledFinnhubFetch(`/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`);
       return new Response(JSON.stringify(data), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     if (action === 'sec-filings') {
-      const data = await finnhubFetch(`/stock/filings?symbol=${encodeURIComponent(symbol)}`);
+      const data = await throttledFinnhubFetch(`/stock/filings?symbol=${encodeURIComponent(symbol)}`);
       return new Response(JSON.stringify({ filings: (data || []).slice(0, 20) }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     if (action === 'peers') {
-      const data = await finnhubFetch(`/stock/peers?symbol=${encodeURIComponent(symbol)}`);
+      const data = await throttledFinnhubFetch(`/stock/peers?symbol=${encodeURIComponent(symbol)}`);
       return new Response(JSON.stringify({ peers: data || [] }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
