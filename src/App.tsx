@@ -8,6 +8,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import StockDetail from "@/pages/StockDetail";
 import NewsPage from "@/pages/NewsPage";
+import SectorsPage from "@/pages/SectorsPage";
+import AlertsPage from "@/pages/AlertsPage";
 import PennyStocksPage from "@/pages/PennyStocksPage";
 import AITradingPage from "@/pages/AITradingPage";
 import RecommendationPage from "@/pages/RecommendationPage";
