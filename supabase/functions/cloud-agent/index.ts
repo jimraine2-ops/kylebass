@@ -465,6 +465,12 @@ serve(async (req) => {
             newStatus = 'profit_taken';
           }
           // NO time-cut — removed entirely
+          // === INTELLIGENT EARLY EXIT: 블랙리스트 종목이면 본절 탈출 ===
+          else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0) {
+            shouldClose = true;
+            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 지능형 조기 대응 — 블랙리스트 종목 본절 탈출 (${pnlPct.toFixed(2)}%)`;
+            newStatus = 'early_exit';
+          }
 
           // Partial exit at 2%
           if (!shouldClose && pnlPct >= 2) {
