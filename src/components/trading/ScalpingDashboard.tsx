@@ -9,6 +9,7 @@ import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap } from "
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { toast } from "sonner";
 import { useState } from "react";
+import { formatStockName } from "@/lib/koreanStockMap";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export function ScalpingDashboard() {
@@ -157,7 +158,7 @@ export function ScalpingDashboard() {
                 <div key={pos.id} className="p-3 rounded-lg bg-muted/50 border border-border space-y-1">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="font-bold text-sm">{pos.symbol}</span>
+                      <span className="font-bold text-sm">{formatStockName(pos.symbol)}</span>
                       <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * 1350).toLocaleString('ko-KR')}</span>
                       <Badge variant="outline" className="text-[9px]">
                         <Clock className="w-2.5 h-2.5 mr-0.5" />
@@ -249,7 +250,7 @@ export function ScalpingDashboard() {
                       return (
                         <tr key={trade.id} className="border-b border-border/50 hover:bg-muted/30">
                           <td className="py-2 px-2 text-muted-foreground font-mono">{time}</td>
-                          <td className="py-2 px-2 font-bold">{trade.symbol}</td>
+                          <td className="py-2 px-2 font-bold">{formatStockName(trade.symbol)}</td>
                            <td className="py-2 px-2 text-right font-mono">₩{Math.round((trade.price || 0) * 1350).toLocaleString('ko-KR')}</td>
                            <td className="py-2 px-2 text-right font-mono">{trade.close_price ? `₩${Math.round(trade.close_price * 1350).toLocaleString('ko-KR')}` : '-'}</td>
                           <td className="py-2 px-2 text-right font-mono">{trade.quantity}</td>

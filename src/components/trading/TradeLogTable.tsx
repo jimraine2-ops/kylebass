@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { formatStockName } from "@/lib/koreanStockMap";
 
 interface TradeLogTableProps {
   closedTrades: any[];
@@ -53,7 +54,7 @@ export function TradeLogTable({ closedTrades }: TradeLogTableProps) {
                           </Badge>
                         </td>
                         <td className="py-2 px-2 text-muted-foreground font-mono">{time}</td>
-                        <td className="py-2 px-2 font-bold">{trade.symbol}</td>
+                        <td className="py-2 px-2 font-bold">{formatStockName(trade.symbol)}</td>
                          <td className="py-2 px-2 text-right font-mono">₩{Math.round((trade.price || 0) * 1350).toLocaleString('ko-KR')}</td>
                          <td className="py-2 px-2 text-right font-mono">{trade.close_price ? `₩${Math.round(trade.close_price * 1350).toLocaleString('ko-KR')}` : '-'}</td>
                         <td className="py-2 px-2 text-right font-mono">{trade.quantity}</td>

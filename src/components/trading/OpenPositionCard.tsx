@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, Shield } from "lucide-react";
+import { formatStockName } from "@/lib/koreanStockMap";
 
 interface OpenPositionCardProps {
   position: any;
@@ -31,7 +32,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected }: OpenPo
           <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${tag.color}`}>
             {tag.label}
           </Badge>
-          <span className="font-bold text-sm">{pos.symbol}</span>
+          <span className="font-bold text-sm">{formatStockName(pos.symbol)}</span>
           <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * 1350).toLocaleString('ko-KR')}</span>
           <Badge variant="outline" className="text-[10px]">
             신뢰도: {pos.ai_confidence}%

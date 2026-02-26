@@ -9,6 +9,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 import { TrendingUp, TrendingDown, Brain, Target, Shield, AlertTriangle } from "lucide-react";
 import { useState, useMemo } from "react";
 import CompanyNewsSection from "@/components/stock/CompanyNewsSection";
+import { formatStockName, getKoreanName } from "@/lib/koreanStockMap";
 
 export default function StockDetail() {
   const { symbol = 'AAPL' } = useParams();
@@ -68,7 +69,8 @@ export default function StockDetail() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-3">
-            {symbol}
+            {getKoreanName(symbol) || symbol}
+            <span className="text-lg text-muted-foreground font-mono">({symbol})</span>
             {quote && (
               <Badge variant={isUp ? "default" : "destructive"} className="text-xs">
                 {isUp ? '▲' : '▼'} {Math.abs(quote.regularMarketChangePercent || 0).toFixed(2)}%

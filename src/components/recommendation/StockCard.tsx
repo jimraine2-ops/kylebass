@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Bot } from "lucide-react";
 import { INDICATOR_LABELS } from "./RadarChartCard";
+import { formatStockName } from "@/lib/koreanStockMap";
 
 function ScoreBar({ score, max = 100 }: { score: number; max?: number }) {
   const pct = Math.min((score / max) * 100, 100);
@@ -40,7 +41,7 @@ export function StockCard({ stock, idx, isSelected, onSelect, onTrade, isTrading
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold">{stock.symbol}</span>
+                <span className="font-bold">{formatStockName(stock.symbol)}</span>
                 <span className="text-lg font-bold font-mono">₩{((stock.price || 0) * 1350).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</span>
                 <span className={`text-sm font-mono ${isUp ? 'stock-up' : 'stock-down'}`}>
                   {isUp ? '+' : ''}{stock.changePct?.toFixed(2)}%
