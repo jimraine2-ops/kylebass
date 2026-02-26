@@ -13,6 +13,7 @@ import AlertsPage from "@/pages/AlertsPage";
 import PennyStocksPage from "@/pages/PennyStocksPage";
 import AITradingPage from "@/pages/AITradingPage";
 import RecommendationPage from "@/pages/RecommendationPage";
+import LearningReportPage from "@/pages/LearningReportPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
