@@ -463,46 +463,73 @@ serve(async (req) => {
         await new Promise(r => setTimeout(r, 200));
       }
 
-      // Scan penny stocks for new entries — lowered threshold to 15pts
-      const PENNY_SYMBOLS = ['CGC', 'SNDL', 'SENS', 'CLOV', 'BBIG', 'MULN', 'TELL', 'GSAT', 'DNA', 'OPEN'];
-      const scalpOpenCount = (scalpOpenPos || []).filter(p => p.status === 'open').length;
+      // Dynamic full-market penny stock scanning — 100 tickers across 4 rotation groups
+      const PENNY_GROUPS = [
+        ['NIO', 'LCID', 'GOEV', 'FFIE', 'MULN', 'WKHS', 'NKLA', 'CHPT', 'FCEL', 'PLUG',
+         'SNDL', 'TLRY', 'ACB', 'CGC', 'MNMD', 'SENS', 'GNUS', 'BNGO', 'CLVS', 'DNA', 'ME', 'SDC', 'SOFI', 'HOOD', 'PSFE'],
+        ['WISH', 'SKLZ', 'OPEN', 'LMND', 'BYND', 'IONQ', 'QS', 'SIRI', 'NOK', 'BB',
+         'TELL', 'CLOV', 'ASTS', 'RKLB', 'LUNR', 'RGTI', 'QUBT', 'BTG', 'FSM', 'GPL', 'GATO', 'USAS', 'MARA', 'RIOT', 'BITF'],
+        ['HUT', 'CLSK', 'AFRM', 'BKKT', 'CENN', 'EVGO', 'GSAT', 'HIMS', 'IBRX', 'JOBY',
+         'KULR', 'LIDR', 'MVIS', 'NNDM', 'ORGN', 'PAYO', 'QBTS', 'RDW', 'STEM', 'TPIC', 'UEC', 'VLD', 'WULF', 'XOS', 'YEXT'],
+        ['ZETA', 'AEVA', 'AMPX', 'ARVL', 'BEEM', 'BLNK', 'CANO', 'DM', 'EOSE', 'FLNC',
+         'GLS', 'HYLN', 'KORE', 'LAZR', 'MAPS', 'NUVB', 'OUST', 'SHLS', 'TRMR', 'UPST', 'VNET', 'WRAP', 'XPEV', 'ARQQ', 'ENVX'],
+      ];
+      // Rotate through groups each cycle to cover all 100 tickers across 4 cycles
+      const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
+      const pennyGroupIdx = cycleCount % PENNY_GROUPS.length;
+      const pennyTickers = PENNY_GROUPS[pennyGroupIdx];
+      let scalpOpenCount = (scalpOpenPos || []).filter(p => p.status === 'open').length;
 
-      for (const sym of PENNY_SYMBOLS) {
+      await addLog('scalping', 'scan', null, `[Cloud-Scalp] [${timeStr}] 소형주 그룹 ${pennyGroupIdx + 1}/4 스캔 시작 (${pennyTickers.length}개 종목)`, {});
+
+      // Scan in batches of 5 for speed
+      for (let bi = 0; bi < pennyTickers.length; bi += 5) {
         if (scalpOpenCount >= 10) break;
-        const alreadyHolding = (scalpOpenPos || []).some(p => p.symbol === sym && p.status === 'open');
-        if (alreadyHolding) continue;
+        const batch = pennyTickers.slice(bi, bi + 5);
+        const batchResults = await Promise.all(batch.map(async (sym) => {
+          try {
+            const alreadyHolding = (scalpOpenPos || []).some(p => p.symbol === sym && p.status === 'open');
+            if (alreadyHolding) return null;
+            const quoteData = await finnhubFetch(`/quote?symbol=${sym}`);
+            if (!quoteData?.c || quoteData.c >= 10) return null;
+            const changePct = quoteData.dp || 0;
+            if (changePct < 3) return null; // +3% threshold
+            return { sym, price: quoteData.c, changePct };
+          } catch { return null; }
+        }));
 
-        const quoteData = await finnhubFetch(`/quote?symbol=${sym}`);
-        if (!quoteData?.c || quoteData.c >= 10) continue;
+        // Sort by changePct desc to prioritize hottest stocks
+        const validResults = batchResults.filter(Boolean).sort((a: any, b: any) => b.changePct - a.changePct);
 
-        const changePct = quoteData.dp || 0;
-        if (changePct < 3) continue; // Lowered from +10% to +3% for more trades
+        for (const r of validResults) {
+          if (!r || scalpOpenCount >= 10) break;
+          const { sym, price, changePct } = r;
+          const priceKRW = toKRW(price);
+          const maxKRW = scalpBalance * 0.10;
+          const qty = Math.floor(maxKRW / priceKRW);
+          const costKRW = Math.round(qty * priceKRW);
 
-        const price = quoteData.c;
-        const priceKRW = toKRW(price);
-        const maxKRW = scalpBalance * 0.10;
-        const qty = Math.floor(maxKRW / priceKRW);
-        const costKRW = Math.round(qty * priceKRW);
+          if (qty > 0 && costKRW <= scalpBalance) {
+            const stopLoss = +(price * 0.975).toFixed(4); // -2.5%
+            const takeProfit = +(price * 1.05).toFixed(4); // +5%
+            const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5%`;
 
-        if (qty > 0 && costKRW <= scalpBalance) {
-          const stopLoss = +(price * 0.975).toFixed(4); // -2.5%
-          const takeProfit = +(price * 1.05).toFixed(4); // +5%
-          const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5%`;
-
-          await supabase.from('scalping_trades').insert({
-            symbol: sym, side: 'buy', quantity: qty, price,
-            stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
-            entry_score: Math.round(changePct), time_limit_at: null, // NO time-cut
-            ai_reason: logMsg, ai_confidence: 100,
-          });
-          const newScalpBuyBal = Math.round(scalpBalance - costKRW);
-          await supabase.from('scalping_wallet').update({
-            balance: newScalpBuyBal, updated_at: now.toISOString(),
-          }).eq('id', scalpWallet.id);
-          scalpBalance = newScalpBuyBal;
-          await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0) });
+            await supabase.from('scalping_trades').insert({
+              symbol: sym, side: 'buy', quantity: qty, price,
+              stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
+              entry_score: Math.round(changePct), time_limit_at: null,
+              ai_reason: logMsg, ai_confidence: 100,
+            });
+            const newScalpBuyBal = Math.round(scalpBalance - costKRW);
+            await supabase.from('scalping_wallet').update({
+              balance: newScalpBuyBal, updated_at: now.toISOString(),
+            }).eq('id', scalpWallet.id);
+            scalpBalance = newScalpBuyBal;
+            scalpOpenCount++;
+            await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0) });
+          }
         }
-        await new Promise(r => setTimeout(r, 200));
+        if (bi + 5 < pennyTickers.length) await new Promise(r => setTimeout(r, 200));
       }
     }
 

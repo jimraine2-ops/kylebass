@@ -207,7 +207,7 @@ export function MainTradingDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
               <Wallet className="w-4 h-4 text-primary" />
-              <span className="text-xs text-muted-foreground">Buying Power</span>
+              <span className="text-xs text-muted-foreground">매수 여력</span>
             </div>
             <p className="text-xl font-bold font-mono">
               ₩{Math.round(confirmedBalance * 0.1).toLocaleString('ko-KR')}
