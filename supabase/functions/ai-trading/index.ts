@@ -513,6 +513,25 @@ Respond with JSON ONLY:
       const { data: openPositions } = await supabase.from('scalping_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
       const { data: allTrades } = await supabase.from('scalping_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(100);
 
+      // === RECONCILIATION: Verify scalping cash balance integrity ===
+      const openCostKRW = (openPositions || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
+      // Account for partial exits that returned cash
+      const partialExitCash = (openPositions || []).reduce((sum: number, p: any) => {
+        const exits = p.partial_exits || [];
+        return sum + exits.reduce((s: number, e: any) => s + Math.round(toKRW(e.qty * e.price)), 0);
+      }, 0);
+      const closedInvestmentReturned = (allTrades || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
+      const expectedBalance = Math.round((wallet?.initial_balance || 1000000) - openCostKRW + partialExitCash + closedInvestmentReturned);
+      
+      let reconciled = false;
+      if (wallet && Math.abs(wallet.balance - expectedBalance) > 100) {
+        await supabase.from('scalping_wallet').update({
+          balance: expectedBalance, updated_at: new Date().toISOString(),
+        }).eq('id', wallet.id);
+        wallet.balance = expectedBalance;
+        reconciled = true;
+      }
+
       const openSymbols = [...new Set((openPositions || []).map((p: any) => p.symbol))];
       const realTimePrices: Record<string, number> = {};
       for (const sym of openSymbols) {
