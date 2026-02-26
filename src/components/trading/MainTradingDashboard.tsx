@@ -16,7 +16,12 @@ import { useQuantSignals } from "@/hooks/useStockData";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { formatStockName } from "@/lib/koreanStockMap";
 
-export function MainTradingDashboard() {
+interface MainTradingDashboardProps {
+  wsGetPrice?: (symbol: string) => number | null;
+  wsConnected?: boolean;
+}
+
+export function MainTradingDashboard({ wsGetPrice, wsConnected }: MainTradingDashboardProps) {
   const { data, isLoading, refetch } = useAIPortfolio();
   const { data: quantData } = useQuantSignals();
   const [resetting, setResetting] = useState(false);
@@ -74,10 +79,11 @@ export function MainTradingDashboard() {
     { name: '패', value: losses, fill: 'hsl(var(--stock-down))' },
   ];
 
-  // Equity = confirmed balance + market value of open positions
+  // Use WebSocket prices when available, fallback to API prices
   const openPositionsValue = openPositions.reduce((sum: number, pos: any) => {
-    const currentPrice = pos.currentPrice || pos.price;
-    return sum + Math.round(currentPrice * pos.quantity * 1350); // KRW
+    const wsPrice = wsGetPrice?.(pos.symbol);
+    const currentPrice = wsPrice ?? pos.currentPrice ?? pos.price;
+    return sum + Math.round(currentPrice * pos.quantity * 1350);
   }, 0);
   const confirmedBalance = Math.round(wallet?.balance || 0);
   const equity = confirmedBalance + openPositionsValue;
@@ -231,6 +237,7 @@ export function MainTradingDashboard() {
               <OpenPositionCard
                 key={pos.id}
                 position={pos}
+                livePrice={wsGetPrice?.(pos.symbol)}
                 onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
                 isSelected={pos.symbol === selectedSymbol}
               />

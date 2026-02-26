@@ -6,6 +6,7 @@ interface OpenPositionCardProps {
   position: any;
   onSelect?: () => void;
   isSelected?: boolean;
+  livePrice?: number | null;
 }
 
 function getStrategyTag(aiReason: string | null): { label: string; color: string } {
@@ -15,8 +16,13 @@ function getStrategyTag(aiReason: string | null): { label: string; color: string
   return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
 }
 
-export function OpenPositionCard({ position: pos, onSelect, isSelected }: OpenPositionCardProps) {
-  const isProfit = (pos.unrealizedPnl || 0) >= 0;
+export function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice }: OpenPositionCardProps) {
+  const displayPrice = livePrice ?? pos.currentPrice ?? pos.price;
+  const investmentKRW = Math.round(pos.price * pos.quantity * 1350);
+  const currentValueKRW = Math.round(displayPrice * pos.quantity * 1350);
+  const unrealizedPnl = currentValueKRW - investmentKRW;
+  const unrealizedPnlPct = investmentKRW > 0 ? ((currentValueKRW / investmentKRW) - 1) * 100 : 0;
+  const isProfit = unrealizedPnl >= 0;
   const pnlColor = isProfit ? 'stock-up' : 'stock-down';
   const tag = getStrategyTag(pos.ai_reason);
 
@@ -40,14 +46,14 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected }: OpenPo
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <p className="text-xs text-muted-foreground">현재가</p>
-            <p className="text-sm font-mono font-bold">₩{Math.round((pos.currentPrice || 0) * 1350).toLocaleString('ko-KR') || '-'}</p>
+            <p className="text-xs text-muted-foreground">현재가{livePrice ? ' 🟢' : ''}</p>
+            <p className="text-sm font-mono font-bold">₩{Math.round(displayPrice * 1350).toLocaleString('ko-KR')}</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">미실현 PnL</p>
             <p className={`text-sm font-mono font-bold ${pnlColor}`}>
-              {isProfit ? '+' : ''}₩{pos.unrealizedPnl?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || '0'}
-              <span className="text-[10px] ml-1">({isProfit ? '+' : ''}{pos.unrealizedPnlPct?.toFixed(2) || '0'}%)</span>
+              {isProfit ? '+' : ''}₩{unrealizedPnl.toLocaleString()}
+              <span className="text-[10px] ml-1">({isProfit ? '+' : ''}{unrealizedPnlPct.toFixed(2)}%)</span>
             </p>
           </div>
         </div>

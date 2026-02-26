@@ -12,7 +12,12 @@ import { useState } from "react";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
-export function ScalpingDashboard() {
+interface ScalpingDashboardProps {
+  wsGetPrice?: (symbol: string) => number | null;
+  wsConnected?: boolean;
+}
+
+export function ScalpingDashboard({ wsGetPrice, wsConnected }: ScalpingDashboardProps) {
   const { data, isLoading, refetch } = useScalpingPortfolio();
   const [resetting, setResetting] = useState(false);
 
@@ -161,8 +166,10 @@ export function ScalpingDashboard() {
           </CardHeader>
           <CardContent className="space-y-2">
             {openPositions.map((pos: any) => {
+              const wsLivePrice = wsGetPrice?.(pos.symbol);
+              const displayPrice = wsLivePrice ?? pos.currentPrice ?? pos.price;
               const isProfit = (pos.unrealizedPnl || 0) >= 0;
-              const currentPriceKRW = Math.round((pos.currentPrice || 0) * 1350);
+              const currentPriceKRW = Math.round(displayPrice * 1350);
               const isBelowFloor = currentPriceKRW < 1000;
               return (
                 <div key={pos.id} className={`p-3 rounded-lg bg-muted/50 border space-y-1 ${isBelowFloor ? 'border-destructive/50 bg-destructive/5' : 'border-border'}`}>
@@ -183,8 +190,8 @@ export function ScalpingDashboard() {
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">현재가</p>
-                        <p className="text-sm font-mono font-bold">₩{Math.round((pos.currentPrice || 0) * 1350).toLocaleString('ko-KR') || '-'}</p>
+                        <p className="text-xs text-muted-foreground">현재가{wsLivePrice ? ' 🟢' : ''}</p>
+                        <p className="text-sm font-mono font-bold">₩{currentPriceKRW.toLocaleString('ko-KR')}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-muted-foreground">미실현 PnL</p>
