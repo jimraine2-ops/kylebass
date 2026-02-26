@@ -46,14 +46,14 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <p className="text-xs text-muted-foreground">현재가</p>
-            <p className="text-sm font-mono font-bold">₩{Math.round((pos.currentPrice || 0) * 1350).toLocaleString('ko-KR') || '-'}</p>
+            <p className="text-xs text-muted-foreground">현재가{livePrice ? ' 🟢' : ''}</p>
+            <p className="text-sm font-mono font-bold">₩{Math.round(displayPrice * 1350).toLocaleString('ko-KR')}</p>
           </div>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">미실현 PnL</p>
             <p className={`text-sm font-mono font-bold ${pnlColor}`}>
-              {isProfit ? '+' : ''}₩{pos.unrealizedPnl?.toLocaleString(undefined, { maximumFractionDigits: 2 }) || '0'}
-              <span className="text-[10px] ml-1">({isProfit ? '+' : ''}{pos.unrealizedPnlPct?.toFixed(2) || '0'}%)</span>
+              {isProfit ? '+' : ''}₩{unrealizedPnl.toLocaleString()}
+              <span className="text-[10px] ml-1">({isProfit ? '+' : ''}{unrealizedPnlPct.toFixed(2)}%)</span>
             </p>
           </div>
         </div>
