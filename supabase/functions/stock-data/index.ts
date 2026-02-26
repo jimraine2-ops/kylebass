@@ -276,7 +276,7 @@ serve(async (req) => {
     if (action === 'company-news') {
       const to = new Date().toISOString().split('T')[0];
       const fromDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
-      const news = await finnhubFetch(`/company-news?symbol=${encodeURIComponent(symbol)}&from=${fromDate}&to=${to}`);
+      const news = await throttledFinnhubFetch(`/company-news?symbol=${encodeURIComponent(symbol)}&from=${fromDate}&to=${to}`);
       return new Response(JSON.stringify({ news: (news || []).slice(0, 20) }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
