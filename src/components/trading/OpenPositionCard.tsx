@@ -7,6 +7,7 @@ interface OpenPositionCardProps {
   onSelect?: () => void;
   isSelected?: boolean;
   livePrice?: number | null;
+  fxRate?: number;
 }
 
 function getStrategyTag(aiReason: string | null): { label: string; color: string } {
