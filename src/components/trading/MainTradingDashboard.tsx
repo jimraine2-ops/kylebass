@@ -124,13 +124,14 @@ export function MainTradingDashboard() {
             <div className="flex items-center gap-2 mb-1">
               <Landmark className="w-4 h-4 text-primary" />
               <span className="text-xs text-muted-foreground">확정 잔고 (현금)</span>
+              <Badge variant="outline" className="text-[9px] border-stock-up/30 text-stock-up ml-auto">확정 수익 반영 중</Badge>
             </div>
             <EditableBalance
               balance={confirmedBalance}
               currencyPrefix="₩"
               onSave={async (val) => { await updateWalletBalance('main', val); await refetch(); }}
             />
-            <p className="text-[10px] text-muted-foreground mt-1">매매 체결 시에만 변동</p>
+            <p className="text-[10px] text-muted-foreground mt-1">매매 체결 시에만 변동 · 미실현 손익 미반영</p>
           </CardContent>
         </Card>
         <Card className="border-warning/30">

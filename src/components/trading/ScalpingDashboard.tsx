@@ -87,13 +87,15 @@ export function ScalpingDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
               <Wallet className="w-4 h-4 text-warning" />
-              <span className="text-xs text-muted-foreground">잔고</span>
+              <span className="text-xs text-muted-foreground">확정 잔고</span>
+              <Badge variant="outline" className="text-[9px] border-stock-up/30 text-stock-up ml-auto">확정 수익 반영 중</Badge>
             </div>
             <EditableBalance
               balance={wallet?.balance || 1000000}
               currencyPrefix="₩"
               onSave={async (val) => { await updateWalletBalance('scalping', val); await refetch(); }}
             />
+            <p className="text-[10px] text-muted-foreground mt-1">매도 확정 시에만 변동</p>
           </CardContent>
         </Card>
         <Card>
