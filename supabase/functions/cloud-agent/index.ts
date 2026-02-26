@@ -374,6 +374,44 @@ serve(async (req) => {
 
     // ========== PHASE 2: SCALPING STRATEGY (Penny Stocks) ==========
     if (scalpWallet) {
+      // === SELF-LEARNING: Build blacklist from trade history ===
+      const { data: recentScalpLosses } = await supabase
+        .from('scalping_trades')
+        .select('symbol, pnl, status')
+        .lt('pnl', 0)
+        .order('closed_at', { ascending: false })
+        .limit(200);
+
+      const lossCount: Record<string, number> = {};
+      for (const t of (recentScalpLosses || [])) {
+        lossCount[t.symbol] = (lossCount[t.symbol] || 0) + 1;
+      }
+      // Blacklist: symbols with 3+ losses
+      const blacklistSymbols = new Set(
+        Object.entries(lossCount).filter(([_, c]) => c >= 3).map(([s]) => s)
+      );
+      if (blacklistSymbols.size > 0) {
+        await addLog('scalping', 'learn', null, `[AI-Learn] 진입 금지 블랙리스트: ${[...blacklistSymbols].join(', ')} (3회+ 손절)`, {});
+      }
+
+      // === SELF-LEARNING: Dynamic threshold from win rate ===
+      const { data: recentScalp } = await supabase
+        .from('scalping_trades')
+        .select('pnl')
+        .not('status', 'eq', 'open')
+        .order('closed_at', { ascending: false })
+        .limit(50);
+      const recentWins = (recentScalp || []).filter(t => (t.pnl || 0) > 0).length;
+      const recentTotal = (recentScalp || []).length;
+      const recentWinRate = recentTotal > 0 ? (recentWins / recentTotal) * 100 : 50;
+      // Adjust entry threshold: tighter if losing, looser if winning
+      let dynamicEntryThreshold = 3; // default +3%
+      if (recentWinRate < 40) dynamicEntryThreshold = 5;
+      else if (recentWinRate < 50) dynamicEntryThreshold = 4;
+      else if (recentWinRate > 65) dynamicEntryThreshold = 2;
+
+      await addLog('scalping', 'learn', null, `[AI-Learn] 최근 승률 ${recentWinRate.toFixed(1)}% → 동적 진입 기준: +${dynamicEntryThreshold}%`, {});
+
       // Exit checks for scalping positions
       const scalpSymbolsToCheck = [...new Set((scalpOpenPos || []).map((p: any) => p.symbol))];
       for (const sym of scalpSymbolsToCheck) {
@@ -427,6 +465,12 @@ serve(async (req) => {
             newStatus = 'profit_taken';
           }
           // NO time-cut — removed entirely
+          // === INTELLIGENT EARLY EXIT: 블랙리스트 종목이면 본절 탈출 ===
+          else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0) {
+            shouldClose = true;
+            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 지능형 조기 대응 — 블랙리스트 종목 본절 탈출 (${pnlPct.toFixed(2)}%)`;
+            newStatus = 'early_exit';
+          }
 
           // Partial exit at 2%
           if (!shouldClose && pnlPct >= 2) {
@@ -497,14 +541,18 @@ serve(async (req) => {
           try {
             const alreadyHolding = (scalpOpenPos || []).some(p => p.symbol === sym && p.status === 'open');
             if (alreadyHolding) return null;
+            // === BLACKLIST CHECK ===
+            if (blacklistSymbols.has(sym)) {
+              return { sym, price: 0, changePct: 0, filtered: true, reason: 'blacklist' };
+            }
             const quoteData = await finnhubFetch(`/quote?symbol=${sym}`);
             if (!quoteData?.c || quoteData.c >= 10) return null;
             // ₩1,000 미만 초저가주 차단
             if (quoteData.c < MIN_PRICE_USD) {
-              return { sym, price: quoteData.c, changePct: 0, filtered: true };
+              return { sym, price: quoteData.c, changePct: 0, filtered: true, reason: 'low_price' };
             }
             const changePct = quoteData.dp || 0;
-            if (changePct < 3) return null; // +3% threshold
+            if (changePct < dynamicEntryThreshold) return null; // Dynamic threshold
             return { sym, price: quoteData.c, changePct, filtered: false };
           } catch { return null; }
         }));
@@ -512,7 +560,10 @@ serve(async (req) => {
         // Log filtered penny stocks
         const filteredStocks = batchResults.filter((r: any) => r?.filtered);
         for (const f of filteredStocks) {
-          await addLog('scalping', 'filter', f.sym, `[Cloud-Scalp] ${f.sym}: ${fmtKRW(f.price)} (₩1,000 미만 → 거래 차단)`, { price: f.price, priceKRW: Math.round(toKRW(f.price)) });
+          const reason = f.reason === 'blacklist'
+            ? `[AI-Learn] ${f.sym}: 블랙리스트 종목 → 진입 차단`
+            : `[Cloud-Scalp] ${f.sym}: ${fmtKRW(f.price)} (₩1,000 미만 → 거래 차단)`;
+          await addLog('scalping', 'filter', f.sym, reason, { price: f.price, reason: f.reason });
         }
 
         // Sort by changePct desc to prioritize hottest stocks

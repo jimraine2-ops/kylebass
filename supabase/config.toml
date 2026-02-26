@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.ai-analysis]
 verify_jwt = false
+
+[functions.ai-learning-report]
+verify_jwt = false
