@@ -6,8 +6,9 @@ import { useAIPortfolio } from "@/hooks/useStockData";
 import { resetAIWallet, updateWalletBalance } from "@/lib/api";
 import { Wallet, Trophy, BarChart3, RotateCcw, Target, Scale, Activity } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { supabase } from "@/integrations/supabase/client";
 import { OpenPositionCard } from "@/components/trading/OpenPositionCard";
 import { TradeLogTable } from "@/components/trading/TradeLogTable";
 import { RadarChartCard } from "@/components/recommendation/RadarChartCard";
@@ -20,6 +21,17 @@ export function MainTradingDashboard() {
   const { data: quantData } = useQuantSignals();
   const [resetting, setResetting] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+
+  // Realtime subscription for instant trade updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('ai-trades-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_trades' }, () => {
+        refetch();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [refetch]);
 
   const wallet = data?.wallet;
   const openPositions = data?.openPositions || [];
