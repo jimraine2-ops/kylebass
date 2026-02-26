@@ -77,9 +77,9 @@ export function MainTradingDashboard() {
   // Equity = confirmed balance + market value of open positions
   const openPositionsValue = openPositions.reduce((sum: number, pos: any) => {
     const currentPrice = pos.currentPrice || pos.price;
-    return sum + (currentPrice * pos.quantity * 1350); // KRW
+    return sum + Math.round(currentPrice * pos.quantity * 1350); // KRW
   }, 0);
-  const confirmedBalance = wallet?.balance || 0;
+  const confirmedBalance = Math.round(wallet?.balance || 0);
   const equity = confirmedBalance + openPositionsValue;
 
   if (isLoading) {
