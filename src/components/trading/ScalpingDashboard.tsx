@@ -12,7 +12,12 @@ import { useState } from "react";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
-export function ScalpingDashboard() {
+interface ScalpingDashboardProps {
+  wsGetPrice?: (symbol: string) => number | null;
+  wsConnected?: boolean;
+}
+
+export function ScalpingDashboard({ wsGetPrice, wsConnected }: ScalpingDashboardProps) {
   const { data, isLoading, refetch } = useScalpingPortfolio();
   const [resetting, setResetting] = useState(false);
 

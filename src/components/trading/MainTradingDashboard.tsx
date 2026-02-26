@@ -16,7 +16,12 @@ import { useQuantSignals } from "@/hooks/useStockData";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { formatStockName } from "@/lib/koreanStockMap";
 
-export function MainTradingDashboard() {
+interface MainTradingDashboardProps {
+  wsGetPrice?: (symbol: string) => number | null;
+  wsConnected?: boolean;
+}
+
+export function MainTradingDashboard({ wsGetPrice, wsConnected }: MainTradingDashboardProps) {
   const { data, isLoading, refetch } = useAIPortfolio();
   const { data: quantData } = useQuantSignals();
   const [resetting, setResetting] = useState(false);
