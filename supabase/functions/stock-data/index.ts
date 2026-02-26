@@ -128,7 +128,7 @@ function detectDelay(finnhubTimestamp: number): { delayed: boolean; delaySec: nu
 // Try candle endpoint
 async function tryFinnhubCandle(symbol: string, from: number, to: number, resolution = 'D') {
   try {
-    const data = await finnhubFetch(`/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=${resolution}&from=${from}&to=${to}`);
+    const data = await throttledFinnhubFetch(`/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=${resolution}&from=${from}&to=${to}`);
     if (data.s === 'no_data' || !data.t) return null;
     return data;
   } catch {
