@@ -499,9 +499,13 @@ serve(async (req) => {
             if (alreadyHolding) return null;
             const quoteData = await finnhubFetch(`/quote?symbol=${sym}`);
             if (!quoteData?.c || quoteData.c >= 10) return null;
+            // ₩1,000 미만 초저가주 차단
+            if (quoteData.c < MIN_PRICE_USD) {
+              return { sym, price: quoteData.c, changePct: 0, filtered: true };
+            }
             const changePct = quoteData.dp || 0;
             if (changePct < 3) return null; // +3% threshold
-            return { sym, price: quoteData.c, changePct };
+            return { sym, price: quoteData.c, changePct, filtered: false };
           } catch { return null; }
         }));
 
