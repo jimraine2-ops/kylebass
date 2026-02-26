@@ -502,16 +502,17 @@ serve(async (req) => {
           if (shouldClose) {
             const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
             const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
+            const balanceBefore = Math.round(scalpBalance);
             await supabase.from('scalping_trades').update({
               status: newStatus, close_price: price, pnl: pnlKRW,
-              closed_at: now.toISOString(), ai_reason: closeReason,
+              closed_at: now.toISOString(), ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(Math.round(scalpBalance + investmentKRW + pnlKRW))}]`,
             }).eq('id', pos.id);
             const newScalpBal = Math.round(scalpBalance + investmentKRW + pnlKRW);
             await supabase.from('scalping_wallet').update({
               balance: newScalpBal, updated_at: now.toISOString(),
             }).eq('id', scalpWallet.id);
             scalpBalance = newScalpBal;
-            await addLog('scalping', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → 잔고: ${fmtKRWRaw(newScalpBal)}`, { pnl: pnlKRW });
+            await addLog('scalping', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBal)}]`, { pnl: pnlKRW, balanceBefore, balanceAfter: newScalpBal });
           }
         }
         await new Promise(r => setTimeout(r, 200));
