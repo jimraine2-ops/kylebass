@@ -183,7 +183,7 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: Sc
                           ₩1,000 미만 경고
                         </Badge>
                       )}
-                      <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * 1350).toLocaleString('ko-KR')}</span>
+                      <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * fxRate).toLocaleString('ko-KR')}</span>
                       <Badge variant="outline" className="text-[9px]">
                         <Clock className="w-2.5 h-2.5 mr-0.5" />
                         {pos.timeElapsedMin}분 경과
