@@ -191,27 +191,44 @@ serve(async (req) => {
           const { midPrice, hasBidAsk } = calcMidPrice(q);
           const delayInfo = detectDelay(q.t);
 
-          // Cross-verify with Twelve Data (fire-and-forget, don't block)
+          // Cross-verify with Twelve Data
           let crossVerified = false;
           let twelvePrice = 0;
           let priceDivergence = 0;
+          let bestPrice = q.c;
+          let priceWarning: string | null = null;
           try {
             const td = await twelveDataQuote(s);
             if (td && td.price > 0) {
               twelvePrice = td.price;
               priceDivergence = +((Math.abs(q.c - td.price) / q.c) * 100).toFixed(3);
               crossVerified = priceDivergence < 1;
+
+              // If divergence > 1%, prefer the more recent or higher-confidence price
+              if (priceDivergence >= 1) {
+                priceWarning = `데이터 불일치 경고: Finnhub=$${q.c} vs TwelveData=$${td.price} (${priceDivergence}% 차이)`;
+                console.warn(`[${s}] ${priceWarning}`);
+                // Prefer more recent timestamp; if equal, prefer Twelve Data (typically more accurate for last sale)
+                if (td.timestamp && q.t && td.timestamp > q.t) {
+                  bestPrice = td.price;
+                } else if (priceDivergence > 3) {
+                  // Large divergence: take the average to minimize error
+                  bestPrice = +((q.c + td.price) / 2).toFixed(4);
+                }
+              }
             }
           } catch { /* ignore twelve data errors */ }
 
           quotes.push({
             symbol: s,
             shortName: s,
-            regularMarketPrice: q.c,
+            regularMarketPrice: bestPrice,
+            finnhubPrice: q.c,
+            twelveDataPrice: twelvePrice,
             midPrice,
             hasBidAsk,
-            slippageBuyPrice: applySlippage(q.c, 'buy'),
-            slippageSellPrice: applySlippage(q.c, 'sell'),
+            slippageBuyPrice: applySlippage(bestPrice, 'buy'),
+            slippageSellPrice: applySlippage(bestPrice, 'sell'),
             regularMarketChange: q.d,
             regularMarketChangePercent: q.dp,
             regularMarketVolume: 0,
@@ -226,9 +243,9 @@ serve(async (req) => {
             delayed: delayInfo.delayed,
             delaySec: delayInfo.delaySec,
             crossVerified,
-            twelveDataPrice: twelvePrice,
             priceDivergence,
-            dataSource: 'finnhub',
+            priceWarning,
+            dataSource: crossVerified ? 'finnhub+twelvedata' : 'finnhub',
             dataSourceVerified: crossVerified ? 'finnhub+twelvedata' : 'finnhub',
           });
         } catch {

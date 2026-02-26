@@ -15,9 +15,10 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 interface ScalpingDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
   wsConnected?: boolean;
+  fxRate?: number;
 }
 
-export function ScalpingDashboard({ wsGetPrice, wsConnected }: ScalpingDashboardProps) {
+export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: ScalpingDashboardProps) {
   const { data, isLoading, refetch } = useScalpingPortfolio();
   const [resetting, setResetting] = useState(false);
 
@@ -169,7 +170,7 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected }: ScalpingDashboard
               const wsLivePrice = wsGetPrice?.(pos.symbol);
               const displayPrice = wsLivePrice ?? pos.currentPrice ?? pos.price;
               const isProfit = (pos.unrealizedPnl || 0) >= 0;
-              const currentPriceKRW = Math.round(displayPrice * 1350);
+              const currentPriceKRW = Math.round(displayPrice * fxRate);
               const isBelowFloor = currentPriceKRW < 1000;
               return (
                 <div key={pos.id} className={`p-3 rounded-lg bg-muted/50 border space-y-1 ${isBelowFloor ? 'border-destructive/50 bg-destructive/5' : 'border-border'}`}>
@@ -182,7 +183,7 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected }: ScalpingDashboard
                           ₩1,000 미만 경고
                         </Badge>
                       )}
-                      <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * 1350).toLocaleString('ko-KR')}</span>
+                      <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * fxRate).toLocaleString('ko-KR')}</span>
                       <Badge variant="outline" className="text-[9px]">
                         <Clock className="w-2.5 h-2.5 mr-0.5" />
                         {pos.timeElapsedMin}분 경과
@@ -203,8 +204,8 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected }: ScalpingDashboard
                     </div>
                   </div>
                     <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-                     <span>손절: ₩{Math.round((pos.stop_loss || 0) * 1350).toLocaleString('ko-KR')} (-2.5%)</span>
-                     <span>익절: ₩{Math.round((pos.take_profit || 0) * 1350).toLocaleString('ko-KR')} (+5%)</span>
+                     <span>손절: ₩{Math.round((pos.stop_loss || 0) * fxRate).toLocaleString('ko-KR')} (-2.5%)</span>
+                     <span>익절: ₩{Math.round((pos.take_profit || 0) * fxRate).toLocaleString('ko-KR')} (+5%)</span>
                      <span>추격익절: 고점+10%→-5%</span>
                      {pos.entry_score && <Badge variant="secondary" className="text-[9px]">상승률: +{pos.entry_score}%</Badge>}
                    </div>
@@ -274,8 +275,8 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected }: ScalpingDashboard
                         <tr key={trade.id} className="border-b border-border/50 hover:bg-muted/30">
                           <td className="py-2 px-2 text-muted-foreground font-mono">{time}</td>
                           <td className="py-2 px-2 font-bold">{formatStockName(trade.symbol)}</td>
-                           <td className="py-2 px-2 text-right font-mono">₩{Math.round((trade.price || 0) * 1350).toLocaleString('ko-KR')}</td>
-                           <td className="py-2 px-2 text-right font-mono">{trade.close_price ? `₩${Math.round(trade.close_price * 1350).toLocaleString('ko-KR')}` : '-'}</td>
+                           <td className="py-2 px-2 text-right font-mono">₩{Math.round((trade.price || 0) * fxRate).toLocaleString('ko-KR')}</td>
+                           <td className="py-2 px-2 text-right font-mono">{trade.close_price ? `₩${Math.round(trade.close_price * fxRate).toLocaleString('ko-KR')}` : '-'}</td>
                           <td className="py-2 px-2 text-right font-mono">{trade.quantity}</td>
                           <td className={`py-2 px-2 text-right font-mono font-bold ${isProfit ? 'stock-up' : 'stock-down'}`}>
                             {isProfit ? '+' : ''}₩{trade.pnl?.toLocaleString(undefined, { maximumFractionDigits: 2 })}

@@ -19,9 +19,10 @@ import { formatStockName } from "@/lib/koreanStockMap";
 interface MainTradingDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
   wsConnected?: boolean;
+  fxRate?: number;
 }
 
-export function MainTradingDashboard({ wsGetPrice, wsConnected }: MainTradingDashboardProps) {
+export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: MainTradingDashboardProps) {
   const { data, isLoading, refetch } = useAIPortfolio();
   const { data: quantData } = useQuantSignals();
   const [resetting, setResetting] = useState(false);
@@ -83,7 +84,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected }: MainTradingDas
   const openPositionsValue = openPositions.reduce((sum: number, pos: any) => {
     const wsPrice = wsGetPrice?.(pos.symbol);
     const currentPrice = wsPrice ?? pos.currentPrice ?? pos.price;
-    return sum + Math.round(currentPrice * pos.quantity * 1350);
+    return sum + Math.round(currentPrice * pos.quantity * fxRate);
   }, 0);
   const confirmedBalance = Math.round(wallet?.balance || 0);
   const equity = confirmedBalance + openPositionsValue;
@@ -238,6 +239,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected }: MainTradingDas
                 key={pos.id}
                 position={pos}
                 livePrice={wsGetPrice?.(pos.symbol)}
+                fxRate={fxRate}
                 onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
                 isSelected={pos.symbol === selectedSymbol}
               />
