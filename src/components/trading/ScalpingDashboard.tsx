@@ -180,12 +180,12 @@ export function ScalpingDashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-                    <span>SL: ₩{Math.round((pos.stop_loss || 0) * 1350).toLocaleString('ko-KR')} (-2%)</span>
-                    <span>TP: ₩{Math.round((pos.take_profit || 0) * 1350).toLocaleString('ko-KR')}</span>
-                    <span>타임컷: 15분</span>
-                    {pos.entry_score && <Badge variant="secondary" className="text-[9px]">진입점수: {pos.entry_score}</Badge>}
-                  </div>
+                    <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                     <span>손절: ₩{Math.round((pos.stop_loss || 0) * 1350).toLocaleString('ko-KR')} (-2.5%)</span>
+                     <span>익절: ₩{Math.round((pos.take_profit || 0) * 1350).toLocaleString('ko-KR')} (+5%)</span>
+                     <span>추격익절: 고점+10%→-5%</span>
+                     {pos.entry_score && <Badge variant="secondary" className="text-[9px]">상승률: +{pos.entry_score}%</Badge>}
+                   </div>
                 </div>
               );
             })}
