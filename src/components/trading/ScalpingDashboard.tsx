@@ -67,11 +67,12 @@ export function ScalpingDashboard() {
       {/* Entry Rules Card */}
       <Card className="border-warning/30">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">⚡ 즉시 실행 알고리즘: ₩13,500 미만 즉시 초단타 엔진</p>
-          <p>🎯 대상: TOP 10 리스트 진입 즉시 자동 매수 (점수 필터 없음)</p>
-          <p>✅ 진입: TOP 10 포착 → 0.1초 이내 시장가 매수 집행</p>
-          <p>💰 자산 배분: 종목당 10% (₩1,000,000 기준 ₩100,000)</p>
-          <p>🛡️ 청산: 2~3%→50% 익절 | 잔여→ATR×2 추격 손절 | -2% 즉시 손절 | 15분 타임컷 | 장마감 30분 전 강제 청산</p>
+          <p className="font-medium text-foreground">⚡ 공격적 초단타 엔진: ₩13,500 미만 전 종목 실시간 스캔</p>
+          <p>🎯 대상: 100+ 소형주 로테이션 스캔 → +3% 이상 급등 종목 즉시 진입</p>
+          <p>✅ 진입: 당일 상승률 +3% 이상 포착 시 즉시 시장가 매수</p>
+          <p>💰 자산 배분: 종목당 10% | 최대 동시 보유 10종목</p>
+          <p>🛡️ 청산: +2%→50% 1차 익절 | +5% 고정 익절 | -2.5% 즉시 손절 | 고점+10% 후 -5% 추격익절</p>
+          <p className="text-primary font-medium">⏱️ 타임컷 없음 — 오직 지표와 가격에만 반응</p>
         </CardContent>
       </Card>
 
