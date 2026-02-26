@@ -354,29 +354,40 @@ Respond with JSON ONLY:
         let newStatus = 'closed';
         const pnlPct = ((price - pos.price) / pos.price) * 100;
 
-        // -2% hard stop
-        if (pnlPct <= -2) {
+        // Track peak price for trailing stop
+        const peakPrice = Math.max(pos.peak_price || pos.price, price);
+        if (price > (pos.peak_price || pos.price)) {
+          // Update peak price in DB
+          await supabase.from('scalping_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
+        }
+
+        // -2.5% hard stop
+        if (pnlPct <= -2.5) {
           shouldClose = true;
-          closeReason = `[${timeStr}] 청산 사유: [손절] 실행 - ${symbol} 강제 손절 (-2% 도달: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[${timeStr}] 청산 사유: [손절] 실행 - ${symbol} 강제 손절 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
         }
-        // 15-min time-cut
-        else if (pos.time_limit_at && now >= new Date(pos.time_limit_at) && pnlPct <= 0.5) {
-          shouldClose = true;
-          closeReason = `[${timeStr}] 청산 사유: [타임컷] 실행 - ${symbol} 15분 타임컷 본전 청산 (수익: ${pnlPct.toFixed(2)}%)`;
-          newStatus = 'time_cut';
+        // Trailing stop: activated after +10% from entry, triggers at -5% from peak
+        else if (peakPrice >= pos.price * 1.10) {
+          const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
+          if (dropFromPeak >= 5) {
+            const lockedPnlPct = ((price - pos.price) / pos.price * 100).toFixed(2);
+            shouldClose = true;
+            closeReason = `[${timeStr}] 청산 사유: [추격익절] 실행 - ${symbol} 고점(${fmtKRW(peakPrice)}) 대비 -${dropFromPeak.toFixed(1)}% 하락 → 수익 확정 (수익률: ${lockedPnlPct}%)`;
+            newStatus = 'trailing_profit';
+          }
         }
-        // Trailing stop
-        else if (pos.stop_loss && price <= pos.stop_loss) {
-          shouldClose = true;
-          closeReason = `[${timeStr}] 청산 사유: [추격익절] 실행 - ${symbol} ATR 추격 손절 터치 (${fmtKRW(pos.stop_loss)})`;
-          newStatus = 'stopped';
-        }
-        // Take profit
+        // Fixed take profit at 5%
         else if (pos.take_profit && price >= pos.take_profit) {
           shouldClose = true;
           closeReason = `[${timeStr}] 청산 사유: [익절] 실행 - ${symbol} 목표가 도달 (${fmtKRW(pos.take_profit)})`;
           newStatus = 'profit_taken';
+        }
+        // ATR trailing stop
+        else if (pos.stop_loss && price <= pos.stop_loss) {
+          shouldClose = true;
+          closeReason = `[${timeStr}] 청산 사유: [추격손절] 실행 - ${symbol} 추격 손절 터치 (${fmtKRW(pos.stop_loss)})`;
+          newStatus = 'stopped';
         }
 
         // Partial exit: 2-3% profit → sell 50%
@@ -386,9 +397,9 @@ Respond with JSON ONLY:
           if (!hasFirstPartial) {
             const sellQty = Math.floor(pos.quantity * 0.5);
             if (sellQty > 0) {
-              const partialPnlKRW = toKRW((price - pos.price) * sellQty);
-              const sellValueKRW = toKRW(sellQty * price);
-              partialExits.push({ type: 'first_partial', qty: sellQty, price, pnl: +partialPnlKRW.toFixed(0), at: now.toISOString() });
+              const partialPnlKRW = Math.round(toKRW((price - pos.price) * sellQty));
+              const sellValueKRW = Math.round(toKRW(sellQty * price));
+              partialExits.push({ type: 'first_partial', qty: sellQty, price, pnl: partialPnlKRW, at: now.toISOString() });
 
               const atr = indicators?.atr?.atr || price * 0.02;
               const newTrailingStop = +(price - 2.0 * atr).toFixed(4);
@@ -398,37 +409,35 @@ Respond with JSON ONLY:
                 partial_exits: partialExits,
                 stop_loss: Math.max(newTrailingStop, pos.stop_loss || 0),
               }).eq('id', pos.id);
+              const newPartialBal = Math.round(wallet.balance + sellValueKRW);
               await supabase.from('scalping_wallet').update({
-                balance: wallet.balance + sellValueKRW,
-                updated_at: now.toISOString(),
+                balance: newPartialBal, updated_at: now.toISOString(),
               }).eq('id', wallet.id);
-              wallet.balance += sellValueKRW;
-              closedTrades.push({ symbol: pos.symbol, type: 'partial', pnl: +partialPnlKRW.toFixed(0), reason: `[${timeStr}] ${symbol} 1차 익절 50% (수익률: ${pnlPct.toFixed(1)}%)` });
+              wallet.balance = newPartialBal;
+              closedTrades.push({ symbol: pos.symbol, type: 'partial', pnl: partialPnlKRW, reason: `[${timeStr}] ${symbol} 1차 익절 50% (수익률: ${pnlPct.toFixed(1)}%)` });
             }
           } else if (pnlPct >= 3) {
             const atr = indicators?.atr?.atr || price * 0.02;
             const newTrailingStop = +(price - 2.0 * atr).toFixed(4);
             if (newTrailingStop > (pos.stop_loss || 0)) {
-              await supabase.from('scalping_trades').update({
-                stop_loss: newTrailingStop,
-              }).eq('id', pos.id);
+              await supabase.from('scalping_trades').update({ stop_loss: newTrailingStop }).eq('id', pos.id);
             }
           }
         }
 
         if (shouldClose) {
-          const pnlKRW = toKRW((price - pos.price) * pos.quantity);
-          const investmentKRW = toKRW(pos.price * pos.quantity);
+          const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
+          const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
           await supabase.from('scalping_trades').update({
-            status: newStatus, close_price: price, pnl: +pnlKRW.toFixed(0),
+            status: newStatus, close_price: price, pnl: pnlKRW,
             closed_at: now.toISOString(), ai_reason: closeReason,
           }).eq('id', pos.id);
+          const newBal = Math.round(wallet.balance + investmentKRW + pnlKRW);
           await supabase.from('scalping_wallet').update({
-            balance: wallet.balance + investmentKRW + pnlKRW,
-            updated_at: now.toISOString(),
+            balance: newBal, updated_at: now.toISOString(),
           }).eq('id', wallet.id);
-          wallet.balance += investmentKRW + pnlKRW;
-          closedTrades.push({ ...pos, pnl: +pnlKRW.toFixed(0), closeReason });
+          wallet.balance = newBal;
+          closedTrades.push({ ...pos, pnl: pnlKRW, closeReason });
         }
       }
 
