@@ -253,6 +253,24 @@ Respond with JSON ONLY:
       const { data: openPositions } = await supabase.from('ai_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
       const { data: allTrades } = await supabase.from('ai_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(50);
 
+      // === RECONCILIATION: Verify cash balance integrity ===
+      // Correct balance = initial_balance - sum(open position costs) + sum(closed trade sale proceeds)
+      const openCostKRW = (openPositions || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
+      const realizedPnlTotal = (allTrades || []).reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
+      // All closed trades return their original investment + PnL
+      const closedInvestmentReturned = (allTrades || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
+      const expectedBalance = Math.round((wallet?.initial_balance || 10000000) - openCostKRW + closedInvestmentReturned);
+      
+      let reconciled = false;
+      if (wallet && Math.abs(wallet.balance - expectedBalance) > 100) {
+        // Auto-correct balance drift
+        await supabase.from('ai_wallet').update({
+          balance: expectedBalance, updated_at: new Date().toISOString(),
+        }).eq('id', wallet.id);
+        wallet.balance = expectedBalance;
+        reconciled = true;
+      }
+
       const openSymbols = [...new Set((openPositions || []).map((p: any) => p.symbol))];
       const realTimePrices: Record<string, number> = {};
       for (const sym of openSymbols) {
@@ -287,14 +305,13 @@ Respond with JSON ONLY:
         : 0;
       const bestTrade = closedTrades.reduce((best, t) => (!best || (t.pnl || 0) > (best.pnl || 0)) ? t : best, null as any);
 
-      const realizedPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
-
       return new Response(JSON.stringify({
         wallet, openPositions: enrichedPositions, closedTrades,
+        reconciled,
         stats: {
           winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(0), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(0),
           totalTrades: totalClosed, wins, losses, profitFactor, avgHoldTimeMinutes: +avgHoldTime.toFixed(1), bestTrade,
-          cumulativeReturn: wallet ? +((realizedPnl) / wallet.initial_balance * 100).toFixed(2) : 0,
+          cumulativeReturn: wallet ? +((totalPnl) / wallet.initial_balance * 100).toFixed(2) : 0,
         }
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -496,6 +513,25 @@ Respond with JSON ONLY:
       const { data: openPositions } = await supabase.from('scalping_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
       const { data: allTrades } = await supabase.from('scalping_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(100);
 
+      // === RECONCILIATION: Verify scalping cash balance integrity ===
+      const openCostKRW = (openPositions || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
+      // Account for partial exits that returned cash
+      const partialExitCash = (openPositions || []).reduce((sum: number, p: any) => {
+        const exits = p.partial_exits || [];
+        return sum + exits.reduce((s: number, e: any) => s + Math.round(toKRW(e.qty * e.price)), 0);
+      }, 0);
+      const closedInvestmentReturned = (allTrades || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
+      const expectedBalance = Math.round((wallet?.initial_balance || 1000000) - openCostKRW + partialExitCash + closedInvestmentReturned);
+      
+      let reconciled = false;
+      if (wallet && Math.abs(wallet.balance - expectedBalance) > 100) {
+        await supabase.from('scalping_wallet').update({
+          balance: expectedBalance, updated_at: new Date().toISOString(),
+        }).eq('id', wallet.id);
+        wallet.balance = expectedBalance;
+        reconciled = true;
+      }
+
       const openSymbols = [...new Set((openPositions || []).map((p: any) => p.symbol))];
       const realTimePrices: Record<string, number> = {};
       for (const sym of openSymbols) {
@@ -531,7 +567,7 @@ Respond with JSON ONLY:
         : 0;
 
       return new Response(JSON.stringify({
-        wallet, openPositions: enrichedPositions, closedTrades,
+        wallet, openPositions: enrichedPositions, closedTrades, reconciled,
         stats: {
           winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(0), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(0),
           totalTrades: totalClosed, wins, losses, profitFactor, avgHoldTimeMinutes: +avgHoldTime.toFixed(1),
@@ -597,18 +633,22 @@ Respond with JSON ONLY:
         }
 
         if (shouldClose) {
-          const pnlKRW = toKRW((price - pos.price) * pos.quantity);
-          const investmentKRW = toKRW(pos.price * pos.quantity);
+          const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
+          const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
+          const balanceBefore = Math.round(wallet.balance);
+          const saleProceeds = investmentKRW + pnlKRW; // Total cash returned from selling
+          const balanceAfter = Math.round(wallet.balance + saleProceeds);
           await supabase.from('ai_trades').update({
-            status: newStatus, close_price: price, pnl: +pnlKRW.toFixed(0),
-            closed_at: now.toISOString(), ai_reason: closeReason,
+            status: newStatus, close_price: price, pnl: pnlKRW,
+            closed_at: now.toISOString(),
+            ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
           }).eq('id', pos.id);
           await supabase.from('ai_wallet').update({
-            balance: wallet.balance + investmentKRW + pnlKRW, updated_at: now.toISOString(),
+            balance: balanceAfter, updated_at: now.toISOString(),
           }).eq('id', wallet.id);
-          wallet.balance += investmentKRW + pnlKRW;
-          logs.push(closeReason);
-          closedTrades.push({ ...pos, pnl: +pnlKRW.toFixed(0), closeReason });
+          wallet.balance = balanceAfter;
+          logs.push(`${closeReason} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`);
+          closedTrades.push({ ...pos, pnl: pnlKRW, closeReason });
         }
       }
 
@@ -634,16 +674,18 @@ Respond with JSON ONLY:
 
       if (canEnter) {
         const positionPct = isPyramiding ? 0.10 : 0.15;
-        const maxInvestmentKRW = wallet.balance * positionPct;
+        const maxInvestmentKRW = Math.round(wallet.balance) * positionPct;
         const qty = Math.floor(maxInvestmentKRW / priceKRW);
-        const costKRW = qty * priceKRW;
+        const costKRW = Math.round(qty * priceKRW);
 
-        if (qty > 0 && costKRW <= wallet.balance) {
+        if (qty > 0 && costKRW <= Math.round(wallet.balance)) {
           const stopLoss = +(price * 0.975).toFixed(4);
           const takeProfit = +(price * 1.06).toFixed(4);
           const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
+          const balanceBefore = Math.round(wallet.balance);
+          const balanceAfter = Math.round(wallet.balance - costKRW);
 
-          const logMsg = `[Quant] 10대지표 퀀트엔진: [${symbol}] ${quantScore}점 포착 및 자율 매수 완료 [${tier}|${(positionPct*100).toFixed(0)}%|${qty}주@${fmtKRW(price)}|총${fmtKRWRaw(costKRW)}]`;
+          const logMsg = `[Quant] 10대지표 퀀트엔진: [${symbol}] ${quantScore}점 포착 및 자율 매수 완료 [${tier}|${(positionPct*100).toFixed(0)}%|${qty}주@${fmtKRW(price)}|총${fmtKRWRaw(costKRW)}] | [잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`;
 
           const { data: newTrade } = await supabase.from('ai_trades').insert({
             symbol, side: 'buy', quantity: qty, price,
@@ -653,7 +695,7 @@ Respond with JSON ONLY:
           }).select().single();
 
           await supabase.from('ai_wallet').update({
-            balance: wallet.balance - costKRW, updated_at: now.toISOString(),
+            balance: balanceAfter, updated_at: now.toISOString(),
           }).eq('id', wallet.id);
 
           trade = newTrade;
