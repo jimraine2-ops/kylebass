@@ -381,6 +381,11 @@ serve(async (req) => {
         if (!quoteData?.c) continue;
         const price = quoteData.c;
 
+        // ₩1,000 미만 초저가주 경고 — 보유 중인 종목이 저가로 추락한 경우
+        if (price < MIN_PRICE_USD) {
+          await addLog('scalping', 'warning', sym, `[Cloud-Scalp] [${timeStr}] ⚠️ ${sym} 초저가 경고: ${fmtKRW(price)} (₩1,000 미만) — 즉시 정리 필요`, { price, priceKRW: Math.round(toKRW(price)) });
+        }
+
         for (const pos of (scalpOpenPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
           const pnlPct = ((price - pos.price) / pos.price) * 100;
           let shouldClose = false;
