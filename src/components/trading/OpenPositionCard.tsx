@@ -16,8 +16,13 @@ function getStrategyTag(aiReason: string | null): { label: string; color: string
   return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
 }
 
-export function OpenPositionCard({ position: pos, onSelect, isSelected }: OpenPositionCardProps) {
-  const isProfit = (pos.unrealizedPnl || 0) >= 0;
+export function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice }: OpenPositionCardProps) {
+  const displayPrice = livePrice ?? pos.currentPrice ?? pos.price;
+  const investmentKRW = Math.round(pos.price * pos.quantity * 1350);
+  const currentValueKRW = Math.round(displayPrice * pos.quantity * 1350);
+  const unrealizedPnl = currentValueKRW - investmentKRW;
+  const unrealizedPnlPct = investmentKRW > 0 ? ((currentValueKRW / investmentKRW) - 1) * 100 : 0;
+  const isProfit = unrealizedPnl >= 0;
   const pnlColor = isProfit ? 'stock-up' : 'stock-down';
   const tag = getStrategyTag(pos.ai_reason);
 
