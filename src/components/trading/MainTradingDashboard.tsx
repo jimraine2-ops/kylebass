@@ -79,10 +79,11 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected }: MainTradingDas
     { name: '패', value: losses, fill: 'hsl(var(--stock-down))' },
   ];
 
-  // Equity = confirmed balance + market value of open positions
+  // Use WebSocket prices when available, fallback to API prices
   const openPositionsValue = openPositions.reduce((sum: number, pos: any) => {
-    const currentPrice = pos.currentPrice || pos.price;
-    return sum + Math.round(currentPrice * pos.quantity * 1350); // KRW
+    const wsPrice = wsGetPrice?.(pos.symbol);
+    const currentPrice = wsPrice ?? pos.currentPrice ?? pos.price;
+    return sum + Math.round(currentPrice * pos.quantity * 1350);
   }, 0);
   const confirmedBalance = Math.round(wallet?.balance || 0);
   const equity = confirmedBalance + openPositionsValue;
