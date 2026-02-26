@@ -359,10 +359,11 @@ serve(async (req) => {
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
             ai_reason: logMsg, ai_confidence: r.scoring.totalScore,
           });
+          const newBuyBalance = Math.round(mainBalance - costKRW);
           await supabase.from('ai_wallet').update({
-            balance: mainBalance - costKRW, updated_at: now.toISOString(),
+            balance: newBuyBalance, updated_at: now.toISOString(),
           }).eq('id', mainWallet.id);
-          mainBalance -= costKRW;
+          mainBalance = newBuyBalance;
           await addLog('quant', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, qty, costKRW: +costKRW.toFixed(0) });
         }
       }
