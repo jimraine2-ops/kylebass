@@ -239,6 +239,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
                 key={pos.id}
                 position={pos}
                 livePrice={wsGetPrice?.(pos.symbol)}
+                fxRate={fxRate}
                 onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
                 isSelected={pos.symbol === selectedSymbol}
               />
