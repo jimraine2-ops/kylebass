@@ -55,7 +55,7 @@ export function ScalpingDashboard() {
         <div className="flex items-center gap-3">
           <Badge className="bg-warning/20 text-warning border-warning/30 text-xs animate-pulse">
             <Zap className="w-3 h-3 mr-1" />
-            Scalping Mode: ACTIVE
+            소형주 초단타 모드: 가동 중
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
