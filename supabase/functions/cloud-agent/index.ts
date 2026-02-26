@@ -478,10 +478,11 @@ serve(async (req) => {
             entry_score: Math.round(changePct), time_limit_at: timeLimitAt,
             ai_reason: logMsg, ai_confidence: 100,
           });
+          const newScalpBuyBal = Math.round(scalpBalance - costKRW);
           await supabase.from('scalping_wallet').update({
-            balance: scalpBalance - costKRW, updated_at: now.toISOString(),
+            balance: newScalpBuyBal, updated_at: now.toISOString(),
           }).eq('id', scalpWallet.id);
-          scalpBalance -= costKRW;
+          scalpBalance = newScalpBuyBal;
           await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0) });
         }
         await new Promise(r => setTimeout(r, 200));
