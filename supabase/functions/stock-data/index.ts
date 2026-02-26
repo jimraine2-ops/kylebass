@@ -281,7 +281,7 @@ serve(async (req) => {
     }
 
     if (action === 'basic-financials') {
-      const data = await finnhubFetch(`/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`);
+      const data = await throttledFinnhubFetch(`/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`);
       return new Response(JSON.stringify(data), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
