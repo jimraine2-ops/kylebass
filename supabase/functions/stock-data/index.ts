@@ -256,7 +256,7 @@ serve(async (req) => {
       }
 
       try {
-        const quote = await finnhubFetch(`/quote?symbol=${encodeURIComponent(symbol)}`);
+        const quote = await throttledFinnhubFetch(`/quote?symbol=${encodeURIComponent(symbol)}`);
         const result = buildSyntheticChart(quote, symbol);
         return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       } catch {
