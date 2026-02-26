@@ -560,7 +560,10 @@ serve(async (req) => {
         // Log filtered penny stocks
         const filteredStocks = batchResults.filter((r: any) => r?.filtered);
         for (const f of filteredStocks) {
-          await addLog('scalping', 'filter', f.sym, `[Cloud-Scalp] ${f.sym}: ${fmtKRW(f.price)} (₩1,000 미만 → 거래 차단)`, { price: f.price, priceKRW: Math.round(toKRW(f.price)) });
+          const reason = f.reason === 'blacklist'
+            ? `[AI-Learn] ${f.sym}: 블랙리스트 종목 → 진입 차단`
+            : `[Cloud-Scalp] ${f.sym}: ${fmtKRW(f.price)} (₩1,000 미만 → 거래 차단)`;
+          await addLog('scalping', 'filter', f.sym, reason, { price: f.price, reason: f.reason });
         }
 
         // Sort by changePct desc to prioritize hottest stocks
