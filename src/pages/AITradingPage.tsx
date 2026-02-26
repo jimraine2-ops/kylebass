@@ -1,33 +1,13 @@
-import { useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Bot, Zap } from "lucide-react";
 import { MainTradingDashboard } from "@/components/trading/MainTradingDashboard";
 import { ScalpingDashboard } from "@/components/trading/ScalpingDashboard";
 import { StrategyComparison } from "@/components/trading/StrategyComparison";
 import { SessionIndicator } from "@/components/trading/SessionIndicator";
+import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
+import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
 
 export default function AITradingPage() {
-  // Wake Lock: keep screen awake for 24/7 trading
-  useEffect(() => {
-    let wakeLock: WakeLockSentinel | null = null;
-    const requestWakeLock = async () => {
-      try {
-        if ('wakeLock' in navigator) {
-          wakeLock = await navigator.wakeLock.request('screen');
-        }
-      } catch { /* browser may not support */ }
-    };
-    requestWakeLock();
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') requestWakeLock();
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility);
-      wakeLock?.release();
-    };
-  }, []);
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -38,8 +18,14 @@ export default function AITradingPage() {
         <SessionIndicator />
       </div>
 
+      {/* Server Status Banner */}
+      <ServerStatusBanner />
+
       {/* Strategy Comparison */}
       <StrategyComparison />
+
+      {/* Agent Log Viewer */}
+      <AgentLogViewer />
 
       <Tabs defaultValue="main">
         <TabsList className="w-full grid grid-cols-2">
