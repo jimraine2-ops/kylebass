@@ -185,11 +185,9 @@ serve(async (req) => {
 
       for (let i = 0; i < tickerList.length; i++) {
         const s = tickerList[i];
-        // Add 350ms delay between requests (skip first)
-        if (i > 0) await new Promise(r => setTimeout(r, 350));
-
+        // Throttled delay handled by throttledFinnhubFetch
         try {
-          const q = await finnhubFetch(`/quote?symbol=${encodeURIComponent(s)}`);
+          const q = await throttledFinnhubFetch(`/quote?symbol=${encodeURIComponent(s)}`);
           const { midPrice, hasBidAsk } = calcMidPrice(q);
           const delayInfo = detectDelay(q.t);
 
