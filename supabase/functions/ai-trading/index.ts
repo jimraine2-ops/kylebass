@@ -253,6 +253,24 @@ Respond with JSON ONLY:
       const { data: openPositions } = await supabase.from('ai_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
       const { data: allTrades } = await supabase.from('ai_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(50);
 
+      // === RECONCILIATION: Verify cash balance integrity ===
+      // Correct balance = initial_balance - sum(open position costs) + sum(closed trade sale proceeds)
+      const openCostKRW = (openPositions || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
+      const realizedPnlTotal = (allTrades || []).reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
+      // All closed trades return their original investment + PnL
+      const closedInvestmentReturned = (allTrades || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
+      const expectedBalance = Math.round((wallet?.initial_balance || 10000000) - openCostKRW + closedInvestmentReturned);
+      
+      let reconciled = false;
+      if (wallet && Math.abs(wallet.balance - expectedBalance) > 100) {
+        // Auto-correct balance drift
+        await supabase.from('ai_wallet').update({
+          balance: expectedBalance, updated_at: new Date().toISOString(),
+        }).eq('id', wallet.id);
+        wallet.balance = expectedBalance;
+        reconciled = true;
+      }
+
       const openSymbols = [...new Set((openPositions || []).map((p: any) => p.symbol))];
       const realTimePrices: Record<string, number> = {};
       for (const sym of openSymbols) {
@@ -287,14 +305,13 @@ Respond with JSON ONLY:
         : 0;
       const bestTrade = closedTrades.reduce((best, t) => (!best || (t.pnl || 0) > (best.pnl || 0)) ? t : best, null as any);
 
-      const realizedPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
-
       return new Response(JSON.stringify({
         wallet, openPositions: enrichedPositions, closedTrades,
+        reconciled,
         stats: {
           winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(0), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(0),
           totalTrades: totalClosed, wins, losses, profitFactor, avgHoldTimeMinutes: +avgHoldTime.toFixed(1), bestTrade,
-          cumulativeReturn: wallet ? +((realizedPnl) / wallet.initial_balance * 100).toFixed(2) : 0,
+          cumulativeReturn: wallet ? +((totalPnl) / wallet.initial_balance * 100).toFixed(2) : 0,
         }
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
