@@ -20,7 +20,24 @@ function getTwelveDataToken(): string {
   return Deno.env.get('TWELVE_DATA_API_KEY') || '';
 }
 
+// Simple in-memory cache (per isolate)
+const quoteCache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL = 15000; // 15s
+
+function getCached(key: string): any | null {
+  const entry = quoteCache.get(key);
+  if (entry && Date.now() - entry.ts < CACHE_TTL) return entry.data;
+  return null;
+}
+
+function setCache(key: string, data: any) {
+  quoteCache.set(key, { data, ts: Date.now() });
+}
+
 async function finnhubFetch(path: string, retries = 3): Promise<any> {
+  const cached = getCached(path);
+  if (cached) return cached;
+
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
@@ -28,7 +45,7 @@ async function finnhubFetch(path: string, retries = 3): Promise<any> {
   for (let attempt = 0; attempt < retries; attempt++) {
     const res = await fetch(url);
     if (res.status === 429) {
-      const delay = 1000 * Math.pow(2, attempt) + Math.random() * 500;
+      const delay = 1500 * Math.pow(2, attempt) + Math.random() * 1000;
       console.warn(`Finnhub 429 rate limit, retry ${attempt + 1} in ${Math.round(delay)}ms`);
       await new Promise(r => setTimeout(r, delay));
       continue;
@@ -37,7 +54,9 @@ async function finnhubFetch(path: string, retries = 3): Promise<any> {
       const text = await res.text();
       throw new Error(`Finnhub error ${res.status}: ${text}`);
     }
-    return res.json();
+    const data = await res.json();
+    setCache(path, data);
+    return data;
   }
   throw new Error('Finnhub rate limit exceeded after retries');
 }
