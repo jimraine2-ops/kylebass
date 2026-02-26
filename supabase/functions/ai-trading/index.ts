@@ -122,15 +122,16 @@ serve(async (req) => {
 
         if (shouldClose && pos.symbol === symbol) {
           const sellPrice = applySlippage(price, 'sell');
-          const pnl = toKRW((sellPrice - pos.price) * pos.quantity);
-          const investmentKRW = toKRW(pos.price * pos.quantity);
+          const pnlRaw = toKRW((sellPrice - pos.price) * pos.quantity);
+          const pnl = Math.round(pnlRaw);
+          const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
           const pnlPct = ((sellPrice - pos.price) / pos.price * 100).toFixed(2);
-          const balanceBefore = wallet.balance;
-          const balanceAfter = wallet.balance + investmentKRW + pnl;
+          const balanceBefore = Math.round(wallet.balance);
+          const balanceAfter = Math.round(wallet.balance + investmentKRW + pnl);
           await supabase.from('ai_trades').update({
             status: newStatus, close_price: sellPrice, pnl,
             closed_at: new Date().toISOString(),
-            ai_reason: `${closeReason} | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(sellPrice)}] | 수익률: ${pnlPct}% | 수익금: ${fmtKRWRaw(pnl)} | [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
+            ai_reason: `${closeReason} | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(sellPrice)}] | 수익률: ${pnlPct}% | [수익 실현 완료] ${fmtKRWRaw(pnl)} 입금 → 잔고 업데이트 | [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
           }).eq('id', pos.id);
 
           await supabase.from('ai_wallet').update({
@@ -139,7 +140,7 @@ serve(async (req) => {
           }).eq('id', wallet.id);
 
           wallet.balance = balanceAfter;
-          closedTrades.push({ ...pos, pnl: +pnl.toFixed(0), closeReason, balanceBefore: +balanceBefore.toFixed(0), balanceAfter: +balanceAfter.toFixed(0) });
+          closedTrades.push({ ...pos, pnl, closeReason, balanceBefore, balanceAfter });
         }
       }
 
