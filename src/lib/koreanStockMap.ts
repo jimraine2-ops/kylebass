@@ -358,6 +358,125 @@ export const KOREAN_STOCK_MAP: KoreanStockEntry[] = [
 
   // ===== 럭셔리 / 기타 =====
   { symbol: "LVMUY", koreanName: "루이비통", englishName: "LVMH", category: "럭셔리", aliases: ["루이비통모에헤네시"] },
+
+  // ===== 소형주 / 페니스톡 (Penny Stocks) =====
+  // -- 전기차 / 모빌리티 --
+  { symbol: "GOEV", koreanName: "카누", englishName: "Canoo", category: "전기차" },
+  { symbol: "FFIE", koreanName: "파라데이퓨처", englishName: "Faraday Future", category: "전기차" },
+  { symbol: "MULN", koreanName: "멀렌오토모티브", englishName: "Mullen Automotive", category: "전기차" },
+  { symbol: "WKHS", koreanName: "워크호스", englishName: "Workhorse Group", category: "전기차" },
+  { symbol: "NKLA", koreanName: "니콜라", englishName: "Nikola", category: "전기차" },
+  { symbol: "ARVL", koreanName: "어라이벌", englishName: "Arrival", category: "전기차" },
+  { symbol: "CENN", koreanName: "센엔버젼", englishName: "Cenntro Electric", category: "전기차" },
+  { symbol: "XOS", koreanName: "조스트럭스", englishName: "Xos Trucks", category: "전기차" },
+  { symbol: "HYLN", koreanName: "하일리온", englishName: "Hyliion", category: "전기차" },
+
+  // -- EV 충전 --
+  { symbol: "CHPT", koreanName: "차지포인트", englishName: "ChargePoint", category: "EV충전" },
+  { symbol: "EVGO", koreanName: "이브고", englishName: "EVgo", category: "EV충전" },
+  { symbol: "BLNK", koreanName: "블링크차징", englishName: "Blink Charging", category: "EV충전" },
+  { symbol: "BEEM", koreanName: "빔글로벌", englishName: "Beam Global", category: "EV충전" },
+
+  // -- 수소 / 연료전지 --
+  { symbol: "FCEL", koreanName: "퓨얼셀에너지", englishName: "FuelCell Energy", category: "수소" },
+  { symbol: "PLUG", koreanName: "플러그파워", englishName: "Plug Power", category: "수소" },
+
+  // -- 대마 (Cannabis) --
+  { symbol: "SNDL", koreanName: "선다이얼", englishName: "SNDL (Sundial)", category: "대마" },
+  { symbol: "TLRY", koreanName: "틸레이", englishName: "Tilray", category: "대마" },
+  { symbol: "ACB", koreanName: "오로라캐나비스", englishName: "Aurora Cannabis", category: "대마" },
+  { symbol: "CGC", koreanName: "캐노피그로스", englishName: "Canopy Growth", category: "대마" },
+  { symbol: "MNMD", koreanName: "마인드메드", englishName: "MindMed", category: "바이오" },
+
+  // -- 바이오 / 헬스케어 소형 --
+  { symbol: "SENS", koreanName: "센서니스트", englishName: "Senseonics", category: "의료기기" },
+  { symbol: "GNUS", koreanName: "지니어스브랜즈", englishName: "Genius Brands", category: "엔터" },
+  { symbol: "BNGO", koreanName: "바이오나노", englishName: "Bionano Genomics", category: "바이오" },
+  { symbol: "CLVS", koreanName: "클로비스", englishName: "Clovis Oncology", category: "바이오" },
+  { symbol: "DNA", koreanName: "기킨고", englishName: "Ginkgo Bioworks", category: "바이오" },
+  { symbol: "ME", koreanName: "23앤드미", englishName: "23andMe", category: "바이오", aliases: ["투쓰리앤드미"] },
+  { symbol: "SDC", koreanName: "스마일다이렉트", englishName: "SmileDirectClub", category: "헬스케어" },
+  { symbol: "CLOV", koreanName: "클로버헬스", englishName: "Clover Health", category: "헬스케어" },
+  { symbol: "HIMS", koreanName: "힘스앤허스", englishName: "Hims & Hers Health", category: "헬스케어" },
+  { symbol: "IBRX", koreanName: "이뮤노브리지", englishName: "ImmunityBio", category: "바이오" },
+  { symbol: "CANO", koreanName: "카노헬스", englishName: "Cano Health", category: "헬스케어" },
+  { symbol: "NUVB", koreanName: "누바시스", englishName: "Nuvation Bio", category: "바이오" },
+
+  // -- 핀테크 / 커머스 소형 --
+  { symbol: "PSFE", koreanName: "페이세이프", englishName: "Paysafe", category: "핀테크" },
+  { symbol: "WISH", koreanName: "위시", englishName: "ContextLogic (Wish)", category: "커머스" },
+  { symbol: "SKLZ", koreanName: "스킬즈", englishName: "Skillz", category: "게임" },
+  { symbol: "OPEN", koreanName: "오픈도어", englishName: "Opendoor Technologies", category: "부동산테크" },
+  { symbol: "LMND", koreanName: "레모네이드", englishName: "Lemonade", category: "인슈어테크" },
+  { symbol: "BYND", koreanName: "비욘드미트", englishName: "Beyond Meat", category: "대체식품" },
+  { symbol: "BKKT", koreanName: "백트", englishName: "Bakkt Holdings", category: "크립토" },
+  { symbol: "PAYO", koreanName: "페이어니어", englishName: "Payoneer Global", category: "핀테크" },
+
+  // -- 우주 / 항공 --
+  { symbol: "ASTS", koreanName: "에이에스티스페이스", englishName: "AST SpaceMobile", category: "우주" },
+  { symbol: "RKLB", koreanName: "로켓랩", englishName: "Rocket Lab", category: "우주" },
+  { symbol: "LUNR", koreanName: "인튜이티브머신즈", englishName: "Intuitive Machines", category: "우주" },
+  { symbol: "JOBY", koreanName: "조비에비에이션", englishName: "Joby Aviation", category: "항공" },
+  { symbol: "RDW", koreanName: "레드와이어", englishName: "Redwire", category: "우주" },
+
+  // -- 양자컴퓨터 --
+  { symbol: "QUBT", koreanName: "큐비트테크", englishName: "Quantum Computing", category: "양자컴퓨터" },
+  { symbol: "QBTS", koreanName: "디웨이브양자", englishName: "D-Wave Quantum", category: "양자컴퓨터" },
+  { symbol: "ARQQ", koreanName: "아르키트퀀텀", englishName: "Arqit Quantum", category: "양자컴퓨터" },
+
+  // -- 크립토 마이닝 --
+  { symbol: "BITF", koreanName: "비트팜스", englishName: "Bitfarms", category: "크립토" },
+  { symbol: "HUT", koreanName: "허트에이트", englishName: "Hut 8 Mining", category: "크립토" },
+  { symbol: "WULF", koreanName: "테라울프", englishName: "TeraWulf", category: "크립토" },
+
+  // -- 광물 / 금 --
+  { symbol: "BTG", koreanName: "B2골드", englishName: "B2Gold", category: "금광" },
+  { symbol: "FSM", koreanName: "포르투나실버", englishName: "Fortuna Silver Mines", category: "은광" },
+  { symbol: "GPL", koreanName: "그레이트팬써실버", englishName: "Great Panther Silver", category: "은광" },
+  { symbol: "GATO", koreanName: "갈로실버", englishName: "Gatos Silver", category: "은광" },
+  { symbol: "USAS", koreanName: "아메리카스골드", englishName: "Americas Gold and Silver", category: "금광" },
+  { symbol: "UEC", koreanName: "유라니움에너지", englishName: "Uranium Energy", category: "우라늄" },
+
+  // -- 통신 / 레거시 --
+  { symbol: "QS", koreanName: "퀀텀스케이프", englishName: "QuantumScape", category: "배터리" },
+  { symbol: "SIRI", koreanName: "시리우스XM", englishName: "Sirius XM", category: "엔터" },
+  { symbol: "NOK", koreanName: "노키아", englishName: "Nokia", category: "통신" },
+  { symbol: "BB", koreanName: "블랙베리", englishName: "BlackBerry", category: "보안" },
+  { symbol: "TELL", koreanName: "텔루리안", englishName: "Tellurian", category: "에너지" },
+  { symbol: "GSAT", koreanName: "글로벌스타", englishName: "Globalstar", category: "통신" },
+
+  // -- 자율주행 / 라이다 --
+  { symbol: "LAZR", koreanName: "루미나테크", englishName: "Luminar Technologies", category: "라이다" },
+  { symbol: "MVIS", koreanName: "마이크로비전", englishName: "MicroVision", category: "라이다" },
+  { symbol: "LIDR", koreanName: "에이아이라이다", englishName: "AEye (Lidar)", category: "라이다" },
+  { symbol: "OUST", koreanName: "아우스터", englishName: "Ouster", category: "라이다" },
+  { symbol: "AEVA", koreanName: "에바테크", englishName: "Aeva Technologies", category: "라이다" },
+
+  // -- 3D프린팅 / 제조 --
+  { symbol: "DM", koreanName: "데스크톱메탈", englishName: "Desktop Metal", category: "3D프린팅" },
+  { symbol: "NNDM", koreanName: "나노디멘션", englishName: "Nano Dimension", category: "3D프린팅" },
+  { symbol: "VLD", koreanName: "벨로3D", englishName: "Velo3D", category: "3D프린팅" },
+
+  // -- 에너지 / 클린테크 --
+  { symbol: "STEM", koreanName: "스템", englishName: "Stem Inc", category: "에너지저장" },
+  { symbol: "EOSE", koreanName: "이오스에너지", englishName: "Eos Energy", category: "에너지저장" },
+  { symbol: "FLNC", koreanName: "플루언스에너지", englishName: "Fluence Energy", category: "에너지저장" },
+  { symbol: "SHLS", koreanName: "쇼울스테크", englishName: "Shoals Technologies", category: "태양광" },
+  { symbol: "TPIC", koreanName: "TPI컴포지트", englishName: "TPI Composites", category: "풍력" },
+  { symbol: "ORGN", koreanName: "오리진머티리얼즈", englishName: "Origin Materials", category: "클린테크" },
+  { symbol: "AMPX", koreanName: "앰프리우스", englishName: "Amprius Technologies", category: "배터리" },
+  { symbol: "ENVX", koreanName: "에노비스", englishName: "Enovix", category: "배터리" },
+
+  // -- 소프트웨어 / SaaS 소형 --
+  { symbol: "KULR", koreanName: "쿨러테크", englishName: "KULR Technology", category: "기술" },
+  { symbol: "YEXT", koreanName: "옉스트", englishName: "Yext", category: "SaaS" },
+  { symbol: "ZETA", koreanName: "제타글로벌", englishName: "Zeta Global", category: "SaaS" },
+  { symbol: "MAPS", koreanName: "와이맵스", englishName: "WM Technology", category: "대마테크" },
+  { symbol: "TRMR", koreanName: "트레머비디오", englishName: "Tremor International", category: "광고" },
+  { symbol: "WRAP", koreanName: "랩테크놀로지스", englishName: "Wrap Technologies", category: "보안" },
+  { symbol: "KORE", koreanName: "코어와이어리스", englishName: "KORE Wireless", category: "IoT" },
+  { symbol: "GLS", koreanName: "젤리시스", englishName: "Gelesis", category: "헬스케어" },
+  { symbol: "VNET", koreanName: "브이넷그룹", englishName: "VNET Group", category: "클라우드" },
 ];
 
 // ===== 동의어 검색용 인덱스 빌드 =====
