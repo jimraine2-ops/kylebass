@@ -244,7 +244,7 @@ export function MainTradingDashboard() {
         </Card>
       </div>
 
-      <TradeLogTable closedTrades={closedTrades} />
+      <TradeLogTable closedTrades={closedTrades} openPositions={openPositions} />
     </div>
   );
 }
