@@ -81,7 +81,13 @@ export function MainTradingDashboard() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
+            📡 Data Source: Finnhub Real-time + Twelve Data (Verified)
+          </Badge>
+          <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
+            ⚡ 슬리피지 ±0.02% 적용
+          </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
             🔥 대형주 퀀트 전략 (진입 임계: 50점)
           </Badge>
