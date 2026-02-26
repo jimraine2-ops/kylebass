@@ -226,6 +226,17 @@ serve(async (req) => {
   };
 
   try {
+    // Verify this is a legitimate cron/internal call
+    const authHeader = req.headers.get('Authorization');
+    const body = await req.json().catch(() => ({}));
+    const isCron = body?.source === 'cron';
+    const hasServiceKey = authHeader?.includes(supabaseKey);
+    if (!isCron && !hasServiceKey) {
+      return new Response(JSON.stringify({ error: 'Unauthorized: cloud-agent is internal only' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Update heartbeat
     await supabase.from('agent_status').update({
       last_heartbeat: new Date().toISOString(),
