@@ -66,7 +66,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         </span>
         <span className="flex items-center gap-1">
           {isProfit ? <TrendingUp className="w-3 h-3 text-stock-up" /> : <TrendingDown className="w-3 h-3 text-stock-down" />}
-          TP: ₩{Math.round((pos.take_profit || 0) * 1350).toLocaleString('ko-KR')}
+          TP: ₩{Math.round((pos.take_profit || 0) * fxRate).toLocaleString('ko-KR')}
         </span>
         {onSelect && (
           <span className="text-primary text-[9px]">

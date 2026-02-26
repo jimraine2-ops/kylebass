@@ -84,7 +84,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
   const openPositionsValue = openPositions.reduce((sum: number, pos: any) => {
     const wsPrice = wsGetPrice?.(pos.symbol);
     const currentPrice = wsPrice ?? pos.currentPrice ?? pos.price;
-    return sum + Math.round(currentPrice * pos.quantity * 1350);
+    return sum + Math.round(currentPrice * pos.quantity * fxRate);
   }, 0);
   const confirmedBalance = Math.round(wallet?.balance || 0);
   const equity = confirmedBalance + openPositionsValue;

@@ -275,8 +275,8 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: Sc
                         <tr key={trade.id} className="border-b border-border/50 hover:bg-muted/30">
                           <td className="py-2 px-2 text-muted-foreground font-mono">{time}</td>
                           <td className="py-2 px-2 font-bold">{formatStockName(trade.symbol)}</td>
-                           <td className="py-2 px-2 text-right font-mono">₩{Math.round((trade.price || 0) * 1350).toLocaleString('ko-KR')}</td>
-                           <td className="py-2 px-2 text-right font-mono">{trade.close_price ? `₩${Math.round(trade.close_price * 1350).toLocaleString('ko-KR')}` : '-'}</td>
+                           <td className="py-2 px-2 text-right font-mono">₩{Math.round((trade.price || 0) * fxRate).toLocaleString('ko-KR')}</td>
+                           <td className="py-2 px-2 text-right font-mono">{trade.close_price ? `₩${Math.round(trade.close_price * fxRate).toLocaleString('ko-KR')}` : '-'}</td>
                           <td className="py-2 px-2 text-right font-mono">{trade.quantity}</td>
                           <td className={`py-2 px-2 text-right font-mono font-bold ${isProfit ? 'stock-up' : 'stock-down'}`}>
                             {isProfit ? '+' : ''}₩{trade.pnl?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
