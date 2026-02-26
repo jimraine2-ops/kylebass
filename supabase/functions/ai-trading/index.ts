@@ -461,28 +461,28 @@ Respond with JSON ONLY:
         // Position size: 10% of scalping wallet (KRW)
         const maxInvestmentKRW = wallet.balance * 0.10;
         const qty = Math.floor(maxInvestmentKRW / priceKRW);
-        const costKRW = qty * priceKRW;
+        const costKRW = Math.round(qty * priceKRW);
 
         if (qty > 0 && costKRW <= wallet.balance) {
-          const stopLoss = +(price * 0.98).toFixed(4);
-          const takeProfit = +(price * 1.05).toFixed(4);
-          const timeLimitAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
+          const stopLoss = +(price * 0.975).toFixed(4); // -2.5% stop
+          const takeProfit = +(price * 1.05).toFixed(4); // +5% take profit
 
           const { data: newTrade } = await supabase.from('scalping_trades').insert({
             symbol, side: 'buy', quantity: qty, price,
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
             entry_score: quantScore || 0,
-            time_limit_at: timeLimitAt,
-            ai_reason: `[Scalp] [INSTANT] [${timeStr}] TOP 10 신규 포착: ${symbol} 즉시 매수 집행 (${fmtKRWRaw(costKRW)}, 수량: ${qty}주)`,
+            time_limit_at: null, // NO time-cut
+            ai_reason: `[Scalp] [INSTANT] [${timeStr}] 점수 ${quantScore || 0}점 포착: ${symbol} 즉시 매수 (${fmtKRWRaw(costKRW)}, ${qty}주) | 손절: -2.5% / 익절: +5% / 추격익절: 고점-5%`,
             ai_confidence: 100,
           }).select().single();
 
+          const newBuyBal = Math.round(wallet.balance - costKRW);
           await supabase.from('scalping_wallet').update({
-            balance: wallet.balance - costKRW, updated_at: now.toISOString(),
+            balance: newBuyBal, updated_at: now.toISOString(),
           }).eq('id', wallet.id);
 
           trade = newTrade;
-          decision = { action: 'BUY', confidence: 100, reason: `[Scalp] TOP 10 신규 포착: ${symbol} 즉시 매수 집행`, quantity: qty };
+          decision = { action: 'BUY', confidence: 100, reason: `[Scalp] 점수 ${quantScore || 0}점 포착: ${symbol} 즉시 매수`, quantity: qty };
         }
       }
 
