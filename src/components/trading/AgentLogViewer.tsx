@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAgentLogs } from "@/hooks/useAgentStatus";
 import { Radio } from "lucide-react";
+import { formatStockName } from "@/lib/koreanStockMap";
 
 export function AgentLogViewer() {
   const { data: logs = [], isLoading } = useAgentLogs(50);
@@ -57,7 +58,7 @@ export function AgentLogViewer() {
                       {log.action}
                     </Badge>
                     {log.symbol && (
-                      <span className="font-bold font-mono shrink-0 text-primary">{log.symbol}</span>
+                      <span className="font-bold font-mono shrink-0 text-primary">{formatStockName(log.symbol)}</span>
                     )}
                     <span className={`${getActionColor(log.action)} truncate`}>
                       {log.message}

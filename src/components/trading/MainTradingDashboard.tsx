@@ -13,6 +13,7 @@ import { TradeLogTable } from "@/components/trading/TradeLogTable";
 import { RadarChartCard } from "@/components/recommendation/RadarChartCard";
 import { useQuantSignals } from "@/hooks/useStockData";
 import { EditableBalance } from "@/components/trading/EditableBalance";
+import { formatStockName } from "@/lib/koreanStockMap";
 
 export function MainTradingDashboard() {
   const { data, isLoading, refetch } = useAIPortfolio();
@@ -186,7 +187,7 @@ export function MainTradingDashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
-              {selectedSymbol} 퀀트 레이더 차트 (점수: {selectedQuantStock.totalScore}/100)
+              {formatStockName(selectedSymbol)} 퀀트 레이더 차트 (점수: {selectedQuantStock.totalScore}/100)
             </CardTitle>
           </CardHeader>
           <CardContent>

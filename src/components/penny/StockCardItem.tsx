@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Zap, Bot, Crown, BarChart3, Flame, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
+import { formatStockName, getKoreanName } from "@/lib/koreanStockMap";
 
 function RankBadge({ rank }: { rank: number }) {
   const colors = rank <= 3
@@ -69,8 +70,9 @@ export default function StockCardItem({ stock, rank, isHot, isTrading, isHolding
           <div className="flex items-center gap-1.5">
             <RankBadge rank={rank} />
             <Link to={`/stock/${stock.symbol}`} className="font-bold text-xs hover:text-primary transition-colors">
-              {stock.symbol}
+              {getKoreanName(stock.symbol) || stock.symbol}
             </Link>
+            <span className="text-[10px] text-muted-foreground font-mono">{stock.symbol}</span>
           </div>
           <div className="flex items-center gap-0.5">
             {isHot && (
