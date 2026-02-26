@@ -251,6 +251,8 @@ Respond with JSON ONLY:
     if (action === 'get-portfolio') {
       const { data: wallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
       const { data: openPositions } = await supabase.from('ai_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
+      // Fetch ALL closed trades for accurate reconciliation (no limit)
+      const { data: allTradesForReconciliation } = await supabase.from('ai_trades').select('id, price, quantity, pnl, status').neq('status', 'open');
       const { data: allTrades } = await supabase.from('ai_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(50);
 
       // === RECONCILIATION: Verify cash balance integrity ===
