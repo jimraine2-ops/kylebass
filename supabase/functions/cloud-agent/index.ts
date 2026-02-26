@@ -502,16 +502,17 @@ serve(async (req) => {
           if (shouldClose) {
             const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
             const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
+            const balanceBefore = Math.round(scalpBalance);
             await supabase.from('scalping_trades').update({
               status: newStatus, close_price: price, pnl: pnlKRW,
-              closed_at: now.toISOString(), ai_reason: closeReason,
+              closed_at: now.toISOString(), ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(Math.round(scalpBalance + investmentKRW + pnlKRW))}]`,
             }).eq('id', pos.id);
             const newScalpBal = Math.round(scalpBalance + investmentKRW + pnlKRW);
             await supabase.from('scalping_wallet').update({
               balance: newScalpBal, updated_at: now.toISOString(),
             }).eq('id', scalpWallet.id);
             scalpBalance = newScalpBal;
-            await addLog('scalping', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → 잔고: ${fmtKRWRaw(newScalpBal)}`, { pnl: pnlKRW });
+            await addLog('scalping', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBal)}]`, { pnl: pnlKRW, balanceBefore, balanceAfter: newScalpBal });
           }
         }
         await new Promise(r => setTimeout(r, 200));
@@ -588,7 +589,8 @@ serve(async (req) => {
             }
             const stopLoss = +(price * 0.975).toFixed(4); // -2.5%
             const takeProfit = +(price * 1.05).toFixed(4); // +5%
-            const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5%`;
+            const balanceBefore = Math.round(scalpBalance);
+            const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5% | [잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(Math.round(scalpBalance - costKRW))}]`;
 
             await supabase.from('scalping_trades').insert({
               symbol: sym, side: 'buy', quantity: qty, price,
@@ -602,7 +604,7 @@ serve(async (req) => {
             }).eq('id', scalpWallet.id);
             scalpBalance = newScalpBuyBal;
             scalpOpenCount++;
-            await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0) });
+            await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0), balanceBefore, balanceAfter: newScalpBuyBal });
           }
         }
         if (bi + 5 < pennyTickers.length) await new Promise(r => setTimeout(r, 200));

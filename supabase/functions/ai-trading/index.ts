@@ -244,22 +244,23 @@ Respond with JSON ONLY:
 
       return new Response(JSON.stringify({
         decision, trade, closedTrades,
-        wallet: { ...wallet, balance: trade ? availableBalance - (trade.quantity * priceKRW) : wallet.balance },
+        wallet: { ...wallet },
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     if (action === 'get-portfolio') {
       const { data: wallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
       const { data: openPositions } = await supabase.from('ai_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
+      // Fetch ALL closed trades for accurate reconciliation (no limit)
+      const { data: allTradesForReconciliation } = await supabase.from('ai_trades').select('id, price, quantity, pnl, status').neq('status', 'open');
       const { data: allTrades } = await supabase.from('ai_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(50);
 
       // === RECONCILIATION: Verify cash balance integrity ===
       // Correct balance = initial_balance - sum(open position costs) + sum(closed trade sale proceeds)
       const openCostKRW = (openPositions || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
-      const realizedPnlTotal = (allTrades || []).reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
-      // All closed trades return their original investment + PnL
-      const closedInvestmentReturned = (allTrades || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
-      const expectedBalance = Math.round((wallet?.initial_balance || 10000000) - openCostKRW + closedInvestmentReturned);
+      // Use ALL closed trades (no limit) for accurate reconciliation
+      const closedInvestmentReturned = (allTradesForReconciliation || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
+      const expectedBalance = Math.round((wallet?.initial_balance || 1000000) - openCostKRW + closedInvestmentReturned);
       
       let reconciled = false;
       if (wallet && Math.abs(wallet.balance - expectedBalance) > 100) {
@@ -511,6 +512,8 @@ Respond with JSON ONLY:
     if (action === 'get-scalping-portfolio') {
       const { data: wallet } = await supabase.from('scalping_wallet').select('*').limit(1).single();
       const { data: openPositions } = await supabase.from('scalping_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
+      // Fetch ALL closed trades for reconciliation (no limit), then limited set for display
+      const { data: allTradesForReconciliation } = await supabase.from('scalping_trades').select('id, price, quantity, pnl, status, partial_exits').neq('status', 'open');
       const { data: allTrades } = await supabase.from('scalping_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(100);
 
       // === RECONCILIATION: Verify scalping cash balance integrity ===
@@ -520,7 +523,8 @@ Respond with JSON ONLY:
         const exits = p.partial_exits || [];
         return sum + exits.reduce((s: number, e: any) => s + Math.round(toKRW(e.qty * e.price)), 0);
       }, 0);
-      const closedInvestmentReturned = (allTrades || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
+      // Use ALL closed trades (no limit) for accurate reconciliation
+      const closedInvestmentReturned = (allTradesForReconciliation || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
       const expectedBalance = Math.round((wallet?.initial_balance || 1000000) - openCostKRW + partialExitCash + closedInvestmentReturned);
       
       let reconciled = false;
