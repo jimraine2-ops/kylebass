@@ -417,10 +417,12 @@ serve(async (req) => {
                   quantity: pos.quantity - sellQty, partial_exits: partialExits,
                   stop_loss: Math.max(+(price - 2.0 * (price * 0.02)).toFixed(4), pos.stop_loss || 0),
                 }).eq('id', pos.id);
+                const partialReturn = Math.round(sellValue);
+                const newPartialBal = Math.round(scalpBalance + partialReturn);
                 await supabase.from('scalping_wallet').update({
-                  balance: scalpBalance + sellValue, updated_at: now.toISOString(),
+                  balance: newPartialBal, updated_at: now.toISOString(),
                 }).eq('id', scalpWallet.id);
-                scalpBalance += sellValue;
+                scalpBalance = newPartialBal;
                 await addLog('scalping', 'exit', sym, `[Cloud-Scalp] ${sym} 1차 50% 익절 (${pnlPct.toFixed(1)}%)`, { pnl: +partialPnl.toFixed(0) });
               }
             }
