@@ -244,7 +244,7 @@ Respond with JSON ONLY:
 
       return new Response(JSON.stringify({
         decision, trade, closedTrades,
-        wallet: { ...wallet, balance: trade ? availableBalance - (trade.quantity * priceKRW) : wallet.balance },
+        wallet: { ...wallet },
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
