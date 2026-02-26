@@ -48,6 +48,40 @@ serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
+    // Input validation: action must be a known string
+    const ALLOWED_ACTIONS = ['analyze-and-trade', 'get-portfolio', 'reset-wallet', 'update-balance', 'scalping-analyze', 'get-scalping-portfolio', 'reset-scalping-wallet', 'quant-auto-trade'];
+    if (!action || typeof action !== 'string' || !ALLOWED_ACTIONS.includes(action)) {
+      return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Validate symbol if present
+    if (body.symbol !== undefined) {
+      if (typeof body.symbol !== 'string' || body.symbol.length > 10 || !/^[A-Z0-9.]+$/.test(body.symbol)) {
+        return new Response(JSON.stringify({ error: 'Invalid symbol' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
+    // Validate price if present
+    if (body.price !== undefined) {
+      if (typeof body.price !== 'number' || body.price <= 0 || body.price > 1000000 || !isFinite(body.price)) {
+        return new Response(JSON.stringify({ error: 'Invalid price' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
+    // Validate quantScore if present
+    if (body.quantScore !== undefined) {
+      if (typeof body.quantScore !== 'number' || body.quantScore < 0 || body.quantScore > 100 || !isFinite(body.quantScore)) {
+        return new Response(JSON.stringify({ error: 'Invalid quantScore' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
+    // Validate walletType if present
+    if (body.walletType !== undefined) {
+      if (typeof body.walletType !== 'string' || !['main', 'scalping'].includes(body.walletType)) {
+        return new Response(JSON.stringify({ error: 'Invalid walletType' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
     // ==================== MAIN AI TRADING ====================
     if (action === 'analyze-and-trade') {
       const { symbol, price, chartData, quantScore, indicators } = body;
