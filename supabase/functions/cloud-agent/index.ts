@@ -509,8 +509,14 @@ serve(async (req) => {
           } catch { return null; }
         }));
 
+        // Log filtered penny stocks
+        const filteredStocks = batchResults.filter((r: any) => r?.filtered);
+        for (const f of filteredStocks) {
+          await addLog('scalping', 'filter', f.sym, `[Cloud-Scalp] ${f.sym}: ${fmtKRW(f.price)} (₩1,000 미만 → 거래 차단)`, { price: f.price, priceKRW: Math.round(toKRW(f.price)) });
+        }
+
         // Sort by changePct desc to prioritize hottest stocks
-        const validResults = batchResults.filter(Boolean).sort((a: any, b: any) => b.changePct - a.changePct);
+        const validResults = batchResults.filter((r: any) => r && !r.filtered && r.changePct > 0).sort((a: any, b: any) => b.changePct - a.changePct);
 
         for (const r of validResults) {
           if (!r || scalpOpenCount >= 10) break;
