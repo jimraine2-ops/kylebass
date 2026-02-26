@@ -34,7 +34,7 @@ function setCache(key: string, data: any) {
   quoteCache.set(key, { data, ts: Date.now() });
 }
 
-async function finnhubFetch(path: string, retries = 3): Promise<any> {
+async function finnhubFetch(path: string, retries = 5): Promise<any> {
   const cached = getCached(path);
   if (cached) return cached;
 
@@ -43,22 +43,43 @@ async function finnhubFetch(path: string, retries = 3): Promise<any> {
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
 
   for (let attempt = 0; attempt < retries; attempt++) {
-    const res = await fetch(url);
-    if (res.status === 429) {
-      const delay = 1500 * Math.pow(2, attempt) + Math.random() * 1000;
-      console.warn(`Finnhub 429 rate limit, retry ${attempt + 1} in ${Math.round(delay)}ms`);
-      await new Promise(r => setTimeout(r, delay));
-      continue;
+    try {
+      const res = await fetch(url);
+      if (res.status === 429) {
+        const delay = 2000 * Math.pow(2, attempt) + Math.random() * 2000;
+        console.warn(`Finnhub 429 rate limit, retry ${attempt + 1}/${retries} in ${Math.round(delay)}ms`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Finnhub error ${res.status}: ${text}`);
+      }
+      const data = await res.json();
+      setCache(path, data);
+      return data;
+    } catch (e) {
+      if (attempt === retries - 1) throw e;
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Finnhub error ${res.status}: ${text}`);
-    }
-    const data = await res.json();
-    setCache(path, data);
-    return data;
   }
   throw new Error('Finnhub rate limit exceeded after retries');
+}
+
+// Global request queue to serialize ALL finnhub calls across actions
+let lastFinnhubCall = 0;
+const MIN_CALL_INTERVAL = 500; // 500ms between any Finnhub API call
+
+async function throttledFinnhubFetch(path: string): Promise<any> {
+  const cached = getCached(path);
+  if (cached) return cached;
+  
+  const now = Date.now();
+  const wait = Math.max(0, MIN_CALL_INTERVAL - (now - lastFinnhubCall));
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastFinnhubCall = Date.now();
+  
+  return finnhubFetch(path);
 }
 
 // Twelve Data cross-verification fetch
