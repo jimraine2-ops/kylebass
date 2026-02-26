@@ -77,9 +77,9 @@ export function MainTradingDashboard() {
   // Equity = confirmed balance + market value of open positions
   const openPositionsValue = openPositions.reduce((sum: number, pos: any) => {
     const currentPrice = pos.currentPrice || pos.price;
-    return sum + (currentPrice * pos.quantity * 1350); // KRW
+    return sum + Math.round(currentPrice * pos.quantity * 1350); // KRW
   }, 0);
-  const confirmedBalance = wallet?.balance || 0;
+  const confirmedBalance = Math.round(wallet?.balance || 0);
   const equity = confirmedBalance + openPositionsValue;
 
   if (isLoading) {
@@ -156,6 +156,7 @@ export function MainTradingDashboard() {
             <p className={`text-xl font-bold font-mono ${(stats.cumulativeReturn || 0) >= 0 ? 'text-stock-up' : 'text-stock-down'}`}>
               {stats.cumulativeReturn >= 0 ? '+' : ''}{stats.cumulativeReturn || 0}%
             </p>
+            <p className="text-[10px] text-muted-foreground">실현 PnL 기준 (평가 손익 제외)</p>
           </CardContent>
         </Card>
         <Card>

@@ -122,15 +122,16 @@ serve(async (req) => {
 
         if (shouldClose && pos.symbol === symbol) {
           const sellPrice = applySlippage(price, 'sell');
-          const pnl = toKRW((sellPrice - pos.price) * pos.quantity);
-          const investmentKRW = toKRW(pos.price * pos.quantity);
+          const pnlRaw = toKRW((sellPrice - pos.price) * pos.quantity);
+          const pnl = Math.round(pnlRaw);
+          const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
           const pnlPct = ((sellPrice - pos.price) / pos.price * 100).toFixed(2);
-          const balanceBefore = wallet.balance;
-          const balanceAfter = wallet.balance + investmentKRW + pnl;
+          const balanceBefore = Math.round(wallet.balance);
+          const balanceAfter = Math.round(wallet.balance + investmentKRW + pnl);
           await supabase.from('ai_trades').update({
             status: newStatus, close_price: sellPrice, pnl,
             closed_at: new Date().toISOString(),
-            ai_reason: `${closeReason} | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(sellPrice)}] | 수익률: ${pnlPct}% | 수익금: ${fmtKRWRaw(pnl)} | [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
+            ai_reason: `${closeReason} | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(sellPrice)}] | 수익률: ${pnlPct}% | [수익 실현 완료] ${fmtKRWRaw(pnl)} 입금 → 잔고 업데이트 | [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
           }).eq('id', pos.id);
 
           await supabase.from('ai_wallet').update({
@@ -139,7 +140,7 @@ serve(async (req) => {
           }).eq('id', wallet.id);
 
           wallet.balance = balanceAfter;
-          closedTrades.push({ ...pos, pnl: +pnl.toFixed(0), closeReason, balanceBefore: +balanceBefore.toFixed(0), balanceAfter: +balanceAfter.toFixed(0) });
+          closedTrades.push({ ...pos, pnl, closeReason, balanceBefore, balanceAfter });
         }
       }
 
@@ -221,20 +222,21 @@ Respond with JSON ONLY:
         const buyPriceKRW = toKRW(buyPrice);
         const maxInvestmentKRW = availableBalance * positionSizePct;
         const qty = Math.min(decision.quantity || Math.floor(maxInvestmentKRW / buyPriceKRW), Math.floor(maxInvestmentKRW / buyPriceKRW));
-        const costKRW = qty * buyPriceKRW;
+        const costKRW = Math.round(qty * buyPriceKRW);
         if (qty > 0 && costKRW <= availableBalance) {
           const stopLoss = decision.stopLoss || +(buyPrice * 0.95).toFixed(4);
           const takeProfit = decision.takeProfit || +(buyPrice * 1.08).toFixed(4);
           const logPrefix = isPyramiding ? 'PYRAMID' : 'SCOUT';
+          const newBal = Math.round(availableBalance - costKRW);
           const { data: newTrade } = await supabase.from('ai_trades').insert({
             symbol, side: 'buy', quantity: qty, price: buyPrice,
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
-            ai_reason: `[Main] [${logPrefix}|Score:${quantScore || 'N/A'}|${(positionSizePct*100).toFixed(0)}%] [${timeStr}] ${symbol} ${fmtKRWRaw(costKRW)} 매수 집행 | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(buyPrice)}] (점수: ${quantScore}점 / 근거: ${decision.reason})`,
+            ai_reason: `[Main] [${logPrefix}|Score:${quantScore || 'N/A'}|${(positionSizePct*100).toFixed(0)}%] [${timeStr}] ${symbol} ${fmtKRWRaw(costKRW)} 매수 집행 | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(buyPrice)}] (점수: ${quantScore}점 / 근거: ${decision.reason}) | [잔고 차감: ${fmtKRWRaw(Math.round(availableBalance))} → ${fmtKRWRaw(newBal)}]`,
             ai_confidence: decision.confidence,
           }).select().single();
 
           await supabase.from('ai_wallet').update({
-            balance: availableBalance - costKRW, updated_at: new Date().toISOString(),
+            balance: newBal, updated_at: new Date().toISOString(),
           }).eq('id', wallet.id);
           trade = newTrade;
         }
@@ -285,12 +287,14 @@ Respond with JSON ONLY:
         : 0;
       const bestTrade = closedTrades.reduce((best, t) => (!best || (t.pnl || 0) > (best.pnl || 0)) ? t : best, null as any);
 
+      const realizedPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+
       return new Response(JSON.stringify({
         wallet, openPositions: enrichedPositions, closedTrades,
         stats: {
           winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(0), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(0),
           totalTrades: totalClosed, wins, losses, profitFactor, avgHoldTimeMinutes: +avgHoldTime.toFixed(1), bestTrade,
-          cumulativeReturn: wallet ? +((wallet.balance - wallet.initial_balance) / wallet.initial_balance * 100).toFixed(2) : 0,
+          cumulativeReturn: wallet ? +((realizedPnl) / wallet.initial_balance * 100).toFixed(2) : 0,
         }
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -301,7 +305,7 @@ Respond with JSON ONLY:
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // ==================== UPDATE WALLET BALANCE ====================
+    // ==================== UPDATE WALLET BALANCE (Manual Edit) ====================
     if (action === 'update-balance') {
       const { walletType, newBalance } = body;
       if (typeof newBalance !== 'number' || newBalance < 0 || newBalance > 999999999) {
@@ -312,14 +316,16 @@ Respond with JSON ONLY:
       }
 
       const table = walletType === 'scalping' ? 'scalping_wallet' : 'ai_wallet';
+      const roundedBalance = Math.round(newBalance);
+      
+      // Only update balance, NOT initial_balance (to preserve accounting integrity)
       const { error } = await supabase.from(table).update({
-        balance: newBalance,
-        initial_balance: newBalance,
+        balance: roundedBalance,
         updated_at: new Date().toISOString()
       }).not('id', 'is', null);
 
       if (error) throw error;
-      return new Response(JSON.stringify({ success: true, balance: newBalance }), {
+      return new Response(JSON.stringify({ success: true, balance: roundedBalance }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }

@@ -303,11 +303,13 @@ serve(async (req) => {
             status: newStatus, close_price: price, pnl: +pnlKRW.toFixed(0),
             closed_at: now.toISOString(), ai_reason: closeReason,
           }).eq('id', pos.id);
+          const returnKRW = Math.round(investmentKRW + pnlKRW);
+          const newBalance = Math.round(mainBalance + returnKRW);
           await supabase.from('ai_wallet').update({
-            balance: mainBalance + investmentKRW + pnlKRW, updated_at: now.toISOString(),
+            balance: newBalance, updated_at: now.toISOString(),
           }).eq('id', mainWallet.id);
-          mainBalance += investmentKRW + pnlKRW;
-          await addLog('quant', 'exit', sym, closeReason, { pnl: +pnlKRW.toFixed(0), pnlPct: +pnlPct.toFixed(2) });
+          mainBalance = newBalance;
+          await addLog('quant', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(Math.round(pnlKRW))} → 잔고 업데이트: ${fmtKRWRaw(newBalance)}`, { pnl: Math.round(pnlKRW), pnlPct: +pnlPct.toFixed(2) });
         }
       }
       await new Promise(r => setTimeout(r, 200));
@@ -357,10 +359,11 @@ serve(async (req) => {
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
             ai_reason: logMsg, ai_confidence: r.scoring.totalScore,
           });
+          const newBuyBalance = Math.round(mainBalance - costKRW);
           await supabase.from('ai_wallet').update({
-            balance: mainBalance - costKRW, updated_at: now.toISOString(),
+            balance: newBuyBalance, updated_at: now.toISOString(),
           }).eq('id', mainWallet.id);
-          mainBalance -= costKRW;
+          mainBalance = newBuyBalance;
           await addLog('quant', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, qty, costKRW: +costKRW.toFixed(0) });
         }
       }
@@ -414,10 +417,12 @@ serve(async (req) => {
                   quantity: pos.quantity - sellQty, partial_exits: partialExits,
                   stop_loss: Math.max(+(price - 2.0 * (price * 0.02)).toFixed(4), pos.stop_loss || 0),
                 }).eq('id', pos.id);
+                const partialReturn = Math.round(sellValue);
+                const newPartialBal = Math.round(scalpBalance + partialReturn);
                 await supabase.from('scalping_wallet').update({
-                  balance: scalpBalance + sellValue, updated_at: now.toISOString(),
+                  balance: newPartialBal, updated_at: now.toISOString(),
                 }).eq('id', scalpWallet.id);
-                scalpBalance += sellValue;
+                scalpBalance = newPartialBal;
                 await addLog('scalping', 'exit', sym, `[Cloud-Scalp] ${sym} 1차 50% 익절 (${pnlPct.toFixed(1)}%)`, { pnl: +partialPnl.toFixed(0) });
               }
             }
@@ -430,10 +435,12 @@ serve(async (req) => {
               status: newStatus, close_price: price, pnl: +pnlKRW.toFixed(0),
               closed_at: now.toISOString(), ai_reason: closeReason,
             }).eq('id', pos.id);
+            const scalpReturnKRW = Math.round(investmentKRW + pnlKRW);
+            const newScalpBal = Math.round(scalpBalance + scalpReturnKRW);
             await supabase.from('scalping_wallet').update({
-              balance: scalpBalance + investmentKRW + pnlKRW, updated_at: now.toISOString(),
+              balance: newScalpBal, updated_at: now.toISOString(),
             }).eq('id', scalpWallet.id);
-            scalpBalance += investmentKRW + pnlKRW;
+            scalpBalance = newScalpBal;
             await addLog('scalping', 'exit', sym, closeReason, { pnl: +pnlKRW.toFixed(0) });
           }
         }
@@ -473,10 +480,11 @@ serve(async (req) => {
             entry_score: Math.round(changePct), time_limit_at: timeLimitAt,
             ai_reason: logMsg, ai_confidence: 100,
           });
+          const newScalpBuyBal = Math.round(scalpBalance - costKRW);
           await supabase.from('scalping_wallet').update({
-            balance: scalpBalance - costKRW, updated_at: now.toISOString(),
+            balance: newScalpBuyBal, updated_at: now.toISOString(),
           }).eq('id', scalpWallet.id);
-          scalpBalance -= costKRW;
+          scalpBalance = newScalpBuyBal;
           await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0) });
         }
         await new Promise(r => setTimeout(r, 200));
