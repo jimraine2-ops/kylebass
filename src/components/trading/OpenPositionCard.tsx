@@ -40,7 +40,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
             {tag.label}
           </Badge>
           <span className="font-bold text-sm">{formatStockName(pos.symbol)}</span>
-          <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * 1350).toLocaleString('ko-KR')}</span>
+          <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * fxRate).toLocaleString('ko-KR')}</span>
           <Badge variant="outline" className="text-[10px]">
             신뢰도: {pos.ai_confidence}%
           </Badge>
