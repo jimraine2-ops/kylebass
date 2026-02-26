@@ -299,19 +299,21 @@ serve(async (req) => {
         }
 
         if (shouldClose) {
-          const pnlKRW = toKRW((price - pos.price) * pos.quantity);
-          const investmentKRW = toKRW(pos.price * pos.quantity);
+          const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
+          const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
+          const balanceBefore = Math.round(mainBalance);
+          const saleProceeds = investmentKRW + pnlKRW;
+          const newBalance = Math.round(mainBalance + saleProceeds);
           await supabase.from('ai_trades').update({
-            status: newStatus, close_price: price, pnl: +pnlKRW.toFixed(0),
-            closed_at: now.toISOString(), ai_reason: closeReason,
+            status: newStatus, close_price: price, pnl: pnlKRW,
+            closed_at: now.toISOString(),
+            ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`,
           }).eq('id', pos.id);
-          const returnKRW = Math.round(investmentKRW + pnlKRW);
-          const newBalance = Math.round(mainBalance + returnKRW);
           await supabase.from('ai_wallet').update({
             balance: newBalance, updated_at: now.toISOString(),
           }).eq('id', mainWallet.id);
           mainBalance = newBalance;
-          await addLog('quant', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(Math.round(pnlKRW))} → 잔고 업데이트: ${fmtKRWRaw(newBalance)}`, { pnl: Math.round(pnlKRW), pnlPct: +pnlPct.toFixed(2) });
+          await addLog('quant', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`, { pnl: pnlKRW, pnlPct: +pnlPct.toFixed(2) });
         }
       }
       await new Promise(r => setTimeout(r, 200));
