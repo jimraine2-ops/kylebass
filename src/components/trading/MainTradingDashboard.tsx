@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAIPortfolio } from "@/hooks/useStockData";
 import { resetAIWallet, updateWalletBalance } from "@/lib/api";
-import { Wallet, Trophy, BarChart3, RotateCcw, Target, Scale, Activity } from "lucide-react";
+import { Wallet, Trophy, BarChart3, RotateCcw, Target, Scale, Activity, Landmark, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -74,6 +74,14 @@ export function MainTradingDashboard() {
     { name: '패', value: losses, fill: 'hsl(var(--stock-down))' },
   ];
 
+  // Equity = confirmed balance + market value of open positions
+  const openPositionsValue = openPositions.reduce((sum: number, pos: any) => {
+    const currentPrice = pos.currentPrice || pos.price;
+    return sum + (currentPrice * pos.quantity * 1350); // KRW
+  }, 0);
+  const confirmedBalance = wallet?.balance || 0;
+  const equity = confirmedBalance + openPositionsValue;
+
   if (isLoading) {
     return <div className="space-y-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>;
   }
@@ -110,18 +118,33 @@ export function MainTradingDashboard() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        <Card>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card className="border-primary/30">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
-              <Wallet className="w-4 h-4 text-primary" />
-              <span className="text-xs text-muted-foreground">잔고</span>
+              <Landmark className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">확정 잔고 (현금)</span>
             </div>
             <EditableBalance
-              balance={wallet?.balance || 10000}
+              balance={confirmedBalance}
               currencyPrefix="₩"
               onSave={async (val) => { await updateWalletBalance('main', val); await refetch(); }}
             />
+            <p className="text-[10px] text-muted-foreground mt-1">매매 체결 시에만 변동</p>
+          </CardContent>
+        </Card>
+        <Card className="border-warning/30">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp className="w-4 h-4 text-warning" />
+              <span className="text-xs text-muted-foreground">평가 자산 (Equity)</span>
+            </div>
+            <p className="text-xl font-bold font-mono">
+              ₩{Math.round(equity).toLocaleString('ko-KR')}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              확정 잔고 + 보유 평가액 ₩{Math.round(openPositionsValue).toLocaleString('ko-KR')}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -130,7 +153,7 @@ export function MainTradingDashboard() {
               <BarChart3 className="w-4 h-4 text-primary" />
               <span className="text-xs text-muted-foreground">누적 수익률</span>
             </div>
-            <p className={`text-xl font-bold font-mono ${(stats.cumulativeReturn || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
+            <p className={`text-xl font-bold font-mono ${(stats.cumulativeReturn || 0) >= 0 ? 'text-stock-up' : 'text-stock-down'}`}>
               {stats.cumulativeReturn >= 0 ? '+' : ''}{stats.cumulativeReturn || 0}%
             </p>
           </CardContent>
@@ -145,6 +168,9 @@ export function MainTradingDashboard() {
             <p className="text-[10px] text-muted-foreground">{wins}승 {losses}패</p>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
@@ -160,7 +186,7 @@ export function MainTradingDashboard() {
               <Target className="w-4 h-4 text-primary" />
               <span className="text-xs text-muted-foreground">실현 PnL</span>
             </div>
-            <p className={`text-xl font-bold font-mono ${(stats.totalPnl || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
+            <p className={`text-xl font-bold font-mono ${(stats.totalPnl || 0) >= 0 ? 'text-stock-up' : 'text-stock-down'}`}>
               {stats.totalPnl >= 0 ? '+' : ''}₩{(stats.totalPnl || 0).toLocaleString()}
             </p>
           </CardContent>
@@ -171,9 +197,21 @@ export function MainTradingDashboard() {
               <Activity className="w-4 h-4 text-warning" />
               <span className="text-xs text-muted-foreground">미실현 PnL</span>
             </div>
-            <p className={`text-xl font-bold font-mono ${(stats.totalUnrealizedPnl || 0) >= 0 ? 'stock-up' : 'stock-down'}`}>
+            <p className={`text-xl font-bold font-mono ${(stats.totalUnrealizedPnl || 0) >= 0 ? 'text-stock-up' : 'text-stock-down'}`}>
               {(stats.totalUnrealizedPnl || 0) >= 0 ? '+' : ''}₩{(stats.totalUnrealizedPnl || 0).toLocaleString()}
             </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Wallet className="w-4 h-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Buying Power</span>
+            </div>
+            <p className="text-xl font-bold font-mono">
+              ₩{Math.round(confirmedBalance * 0.1).toLocaleString('ko-KR')}
+            </p>
+            <p className="text-[10px] text-muted-foreground">확정 잔고의 10% (종목당)</p>
           </CardContent>
         </Card>
       </div>
