@@ -433,10 +433,12 @@ serve(async (req) => {
               status: newStatus, close_price: price, pnl: +pnlKRW.toFixed(0),
               closed_at: now.toISOString(), ai_reason: closeReason,
             }).eq('id', pos.id);
+            const scalpReturnKRW = Math.round(investmentKRW + pnlKRW);
+            const newScalpBal = Math.round(scalpBalance + scalpReturnKRW);
             await supabase.from('scalping_wallet').update({
-              balance: scalpBalance + investmentKRW + pnlKRW, updated_at: now.toISOString(),
+              balance: newScalpBal, updated_at: now.toISOString(),
             }).eq('id', scalpWallet.id);
-            scalpBalance += investmentKRW + pnlKRW;
+            scalpBalance = newScalpBal;
             await addLog('scalping', 'exit', sym, closeReason, { pnl: +pnlKRW.toFixed(0) });
           }
         }
