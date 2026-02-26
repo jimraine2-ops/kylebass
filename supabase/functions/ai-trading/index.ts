@@ -125,19 +125,21 @@ serve(async (req) => {
           const pnl = toKRW((sellPrice - pos.price) * pos.quantity);
           const investmentKRW = toKRW(pos.price * pos.quantity);
           const pnlPct = ((sellPrice - pos.price) / pos.price * 100).toFixed(2);
+          const balanceBefore = wallet.balance;
+          const balanceAfter = wallet.balance + investmentKRW + pnl;
           await supabase.from('ai_trades').update({
             status: newStatus, close_price: sellPrice, pnl,
             closed_at: new Date().toISOString(),
-            ai_reason: `${closeReason} | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(sellPrice)}] | 수익률: ${pnlPct}% | 수익금: ${fmtKRWRaw(pnl)}`,
+            ai_reason: `${closeReason} | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(sellPrice)}] | 수익률: ${pnlPct}% | 수익금: ${fmtKRWRaw(pnl)} | [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
           }).eq('id', pos.id);
 
           await supabase.from('ai_wallet').update({
-            balance: wallet.balance + investmentKRW + pnl,
+            balance: balanceAfter,
             updated_at: new Date().toISOString(),
           }).eq('id', wallet.id);
 
-          wallet.balance += investmentKRW + pnl;
-          closedTrades.push({ ...pos, pnl: +pnl.toFixed(0), closeReason });
+          wallet.balance = balanceAfter;
+          closedTrades.push({ ...pos, pnl: +pnl.toFixed(0), closeReason, balanceBefore: +balanceBefore.toFixed(0), balanceAfter: +balanceAfter.toFixed(0) });
         }
       }
 
