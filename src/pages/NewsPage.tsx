@@ -1,18 +1,39 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useSentimentAnalysis } from "@/hooks/useStockData";
-import { Newspaper, AlertTriangle, ThumbsUp, ThumbsDown, Minus } from "lucide-react";
+import { useCompanyNews } from "@/hooks/useStockData";
+import { Newspaper, AlertTriangle, ThumbsUp, ThumbsDown, Minus, Globe, Languages, RefreshCw } from "lucide-react";
 import { useState } from "react";
-import { getMockNewsHeadlines } from "@/lib/api";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL'];
+const SYMBOL_KO: Record<string, string> = {
+  AAPL: '애플', MSFT: '마이크로소프트', NVDA: '엔비디아', TSLA: '테슬라', GOOGL: '구글',
+};
+
+function analyzeSentiment(text: string): { label: string; score: number } {
+  const lower = text.toLowerCase();
+  const pos = ['surge', 'rally', 'beat', 'upgrade', 'growth', 'profit', 'record', 'boost', '강세', '급등', '상회', '성장'];
+  const neg = ['miss', 'decline', 'loss', 'downgrade', 'warning', 'cut', 'risk', 'fail', '약세', '급락', '하회', '손실'];
+  let score = 0;
+  pos.forEach(kw => { if (lower.includes(kw)) score += 1; });
+  neg.forEach(kw => { if (lower.includes(kw)) score -= 1; });
+  if (score > 0) return { label: '긍정', score };
+  if (score < 0) return { label: '부정', score };
+  return { label: '중립', score: 0 };
+}
 
 export default function NewsPage() {
   const [selected, setSelected] = useState('AAPL');
-  const { data: sentiment, isLoading } = useSentimentAnalysis(selected);
-  const headlines = getMockNewsHeadlines(selected);
+  const { data: news, isLoading, refetch } = useCompanyNews(selected);
+  const [originalPopup, setOriginalPopup] = useState<{ headline: string; summary: string } | null>(null);
 
+  const hasTranslated = news?.some((item: any) => item.translated);
   const sentimentIcon = (s: string) => {
     if (s === '긍정') return <ThumbsUp className="w-3 h-3 stock-up" />;
     if (s === '부정') return <ThumbsDown className="w-3 h-3 stock-down" />;
@@ -21,10 +42,23 @@ export default function NewsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold flex items-center gap-2">
-        <Newspaper className="w-6 h-6 text-primary" />
-        뉴스 & 감성 분석
-      </h1>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Newspaper className="w-6 h-6 text-primary" />
+          실시간 미장 뉴스
+        </h1>
+        <div className="flex items-center gap-2">
+          {hasTranslated && (
+            <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30 flex items-center gap-1">
+              <Languages className="w-3 h-3" />
+              한국어 번역 중
+            </Badge>
+          )}
+          <button onClick={() => refetch()} className="p-2 rounded-lg hover:bg-muted transition-colors" title="새로고침">
+            <RefreshCw className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
+      </div>
 
       {/* Symbol tabs */}
       <div className="flex gap-2 flex-wrap">
@@ -36,106 +70,93 @@ export default function NewsPage() {
               selected === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'
             }`}
           >
-            {s}
+            {SYMBOL_KO[s] || s} ({s})
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sentiment Gauge */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">감성 점수</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? <Skeleton className="h-40" /> : sentiment ? (
-              <div className="space-y-4">
-                <div className="text-center">
-                  <p className={`text-4xl font-bold font-mono ${
-                    sentiment.sentimentScore > 20 ? 'stock-up' : sentiment.sentimentScore < -20 ? 'stock-down' : 'text-warning'
-                  }`}>
-                    {sentiment.sentimentScore > 0 ? '+' : ''}{sentiment.sentimentScore}
-                  </p>
-                  <Badge className="mt-2" variant={sentiment.overallSentiment === '긍정' ? 'default' : sentiment.overallSentiment === '부정' ? 'destructive' : 'secondary'}>
-                    {sentiment.overallSentiment}
-                  </Badge>
-                </div>
-                {/* Ratio bars */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs w-8 stock-up">긍정</span>
-                    <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-stock-up rounded-full transition-all" style={{ width: `${sentiment.positiveRatio}%` }} />
-                    </div>
-                    <span className="text-xs font-mono w-10 text-right">{sentiment.positiveRatio}%</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs w-8 text-muted-foreground">중립</span>
-                    <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-muted-foreground/40 rounded-full transition-all" style={{ width: `${sentiment.neutralRatio}%` }} />
-                    </div>
-                    <span className="text-xs font-mono w-10 text-right">{sentiment.neutralRatio}%</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs w-8 stock-down">부정</span>
-                    <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-stock-down rounded-full transition-all" style={{ width: `${sentiment.negativeRatio}%` }} />
-                    </div>
-                    <span className="text-xs font-mono w-10 text-right">{sentiment.negativeRatio}%</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">분석 중...</p>
-            )}
-          </CardContent>
-        </Card>
+      {/* News Feed */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            {SYMBOL_KO[selected] || selected} 뉴스 피드
+            <Badge variant="outline" className="text-[10px] ml-auto font-normal">최근 7일</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20" />)}</div>
+          ) : !news || news.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              최근 7일간 해당 종목의 관련 뉴스가 없습니다
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+              {news.map((item: any, i: number) => {
+                const displayHeadline = item.headline_ko || item.headline;
+                const displaySummary = item.summary_ko || item.summary;
+                const sentiment = analyzeSentiment(`${displayHeadline} ${displaySummary}`);
 
-        {/* News Feed */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              {selected} 뉴스 피드
-              {sentiment?.warning && (
-                <Badge variant="destructive" className="text-[10px] flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" /> 악재 경고
-                </Badge>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
-            ) : (
-              <div className="space-y-3">
-                {(sentiment?.headlines || headlines.map((h: string) => ({ text: h, sentiment: '중립', score: 0, summary: h }))).map((item: any, i: number) => (
+                return (
                   <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                    {sentimentIcon(item.sentiment)}
+                    {sentimentIcon(sentiment.label)}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium leading-tight">{item.text}</p>
-                      {item.summary && item.summary !== item.text && (
-                        <p className="text-xs text-muted-foreground mt-1">{item.summary}</p>
+                      <p className="text-sm font-medium leading-tight">{displayHeadline}</p>
+                      {displaySummary && displaySummary !== displayHeadline && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{displaySummary}</p>
                       )}
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span className="text-[10px] text-muted-foreground">
+                          {item.source} · {item.datetime ? new Date(item.datetime * 1000).toLocaleDateString('ko-KR') : ''}
+                        </span>
+                        {item.translated && (
+                          <button
+                            onClick={() => setOriginalPopup({ headline: item.headline, summary: item.summary })}
+                            className="text-[10px] text-primary hover:underline flex items-center gap-0.5"
+                          >
+                            <Globe className="w-2.5 h-2.5" />
+                            원문 보기
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <Badge variant="outline" className={`shrink-0 text-[10px] ${
-                      item.sentiment === '긍정' ? 'border-stock-up stock-up' : 
-                      item.sentiment === '부정' ? 'border-stock-down stock-down' : ''
+                      sentiment.label === '긍정' ? 'border-stock-up stock-up' : 
+                      sentiment.label === '부정' ? 'border-stock-down stock-down' : ''
                     }`}>
-                      {item.sentiment} {item.score > 0 ? '+' : ''}{item.score}
+                      {sentiment.label} {sentiment.score > 0 ? '+' : ''}{sentiment.score}
                     </Badge>
                   </div>
-                ))}
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Original English popup */}
+      <Dialog open={!!originalPopup} onOpenChange={() => setOriginalPopup(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              <Globe className="w-4 h-4" />
+              영문 원문
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">제목 (Original)</p>
+              <p className="text-sm font-medium">{originalPopup?.headline}</p>
+            </div>
+            {originalPopup?.summary && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">요약 (Original)</p>
+                <p className="text-sm text-muted-foreground">{originalPopup?.summary}</p>
               </div>
             )}
-            {sentiment?.warning && (
-              <div className="mt-4 p-3 rounded-lg bg-stock-down/10 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-stock-down shrink-0 mt-0.5" />
-                <p className="text-sm stock-down">{sentiment.warning}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
