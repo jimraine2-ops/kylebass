@@ -204,8 +204,8 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: Sc
                     </div>
                   </div>
                     <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-                     <span>손절: ₩{Math.round((pos.stop_loss || 0) * 1350).toLocaleString('ko-KR')} (-2.5%)</span>
-                     <span>익절: ₩{Math.round((pos.take_profit || 0) * 1350).toLocaleString('ko-KR')} (+5%)</span>
+                     <span>손절: ₩{Math.round((pos.stop_loss || 0) * fxRate).toLocaleString('ko-KR')} (-2.5%)</span>
+                     <span>익절: ₩{Math.round((pos.take_profit || 0) * fxRate).toLocaleString('ko-KR')} (+5%)</span>
                      <span>추격익절: 고점+10%→-5%</span>
                      {pos.entry_score && <Badge variant="secondary" className="text-[9px]">상승률: +{pos.entry_score}%</Badge>}
                    </div>
