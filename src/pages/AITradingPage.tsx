@@ -8,12 +8,15 @@ import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
 import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
+import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useAIPortfolio, useScalpingPortfolio } from "@/hooks/useStockData";
 import { useMemo } from "react";
+import { Badge } from "@/components/ui/badge";
 
 export default function AITradingPage() {
   const { data: mainData } = useAIPortfolio();
   const { data: scalpData } = useScalpingPortfolio();
+  const { rate: fxRate, isLive: fxLive, toKRW } = useExchangeRate();
 
   // Collect all symbols from open positions for WebSocket subscription
   const allSymbols = useMemo(() => {
@@ -32,12 +35,15 @@ export default function AITradingPage() {
           <Bot className="w-5 h-5 text-primary" />
           AI 자율 매매 대시보드
         </h2>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <LiveSyncIndicator
             isConnected={ws.isConnected}
             latencyMs={ws.latencyMs}
             lastUpdateAt={ws.lastUpdateAt}
           />
+          <Badge variant="outline" className={`text-[10px] px-2 py-0.5 gap-1 ${fxLive ? 'border-stock-up/30 text-stock-up' : 'border-warning/30 text-warning'}`}>
+            💱 {fxLive ? '실시간' : '고정'} ₩{fxRate.toLocaleString('ko-KR')}/USD
+          </Badge>
           <SessionIndicator />
         </div>
       </div>
@@ -63,10 +69,10 @@ export default function AITradingPage() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="main">
-          <MainTradingDashboard wsGetPrice={ws.getPrice} wsConnected={ws.isConnected} />
+          <MainTradingDashboard wsGetPrice={ws.getPrice} wsConnected={ws.isConnected} fxRate={fxRate} />
         </TabsContent>
         <TabsContent value="scalping">
-          <ScalpingDashboard wsGetPrice={ws.getPrice} wsConnected={ws.isConnected} />
+          <ScalpingDashboard wsGetPrice={ws.getPrice} wsConnected={ws.isConnected} fxRate={fxRate} />
         </TabsContent>
       </Tabs>
     </div>
