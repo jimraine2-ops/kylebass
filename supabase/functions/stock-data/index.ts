@@ -286,7 +286,7 @@ serve(async (req) => {
     }
 
     if (action === 'sec-filings') {
-      const data = await finnhubFetch(`/stock/filings?symbol=${encodeURIComponent(symbol)}`);
+      const data = await throttledFinnhubFetch(`/stock/filings?symbol=${encodeURIComponent(symbol)}`);
       return new Response(JSON.stringify({ filings: (data || []).slice(0, 20) }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
