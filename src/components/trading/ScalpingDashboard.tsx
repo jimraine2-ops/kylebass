@@ -15,9 +15,10 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 interface ScalpingDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
   wsConnected?: boolean;
+  fxRate?: number;
 }
 
-export function ScalpingDashboard({ wsGetPrice, wsConnected }: ScalpingDashboardProps) {
+export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: ScalpingDashboardProps) {
   const { data, isLoading, refetch } = useScalpingPortfolio();
   const [resetting, setResetting] = useState(false);
 

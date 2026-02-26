@@ -19,9 +19,10 @@ import { formatStockName } from "@/lib/koreanStockMap";
 interface MainTradingDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
   wsConnected?: boolean;
+  fxRate?: number;
 }
 
-export function MainTradingDashboard({ wsGetPrice, wsConnected }: MainTradingDashboardProps) {
+export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: MainTradingDashboardProps) {
   const { data, isLoading, refetch } = useAIPortfolio();
   const { data: quantData } = useQuantSignals();
   const [resetting, setResetting] = useState(false);
