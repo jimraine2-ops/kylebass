@@ -268,7 +268,7 @@ serve(async (req) => {
 
     if (action === 'search') {
       const query = symbol;
-      const data = await finnhubFetch(`/search?q=${encodeURIComponent(query)}`);
+      const data = await throttledFinnhubFetch(`/search?q=${encodeURIComponent(query)}`);
       const results = (data.result || []).map((r: any) => ({ symbol: r.symbol, shortname: r.description, exchange: r.displaySymbol, type: r.type }));
       return new Response(JSON.stringify({ results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
