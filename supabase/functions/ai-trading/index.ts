@@ -512,6 +512,8 @@ Respond with JSON ONLY:
     if (action === 'get-scalping-portfolio') {
       const { data: wallet } = await supabase.from('scalping_wallet').select('*').limit(1).single();
       const { data: openPositions } = await supabase.from('scalping_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
+      // Fetch ALL closed trades for reconciliation (no limit), then limited set for display
+      const { data: allTradesForReconciliation } = await supabase.from('scalping_trades').select('id, price, quantity, pnl, status, partial_exits').neq('status', 'open');
       const { data: allTrades } = await supabase.from('scalping_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(100);
 
       // === RECONCILIATION: Verify scalping cash balance integrity ===
