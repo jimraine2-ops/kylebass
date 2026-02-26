@@ -20,7 +20,24 @@ function getTwelveDataToken(): string {
   return Deno.env.get('TWELVE_DATA_API_KEY') || '';
 }
 
+// Simple in-memory cache (per isolate)
+const quoteCache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL = 15000; // 15s
+
+function getCached(key: string): any | null {
+  const entry = quoteCache.get(key);
+  if (entry && Date.now() - entry.ts < CACHE_TTL) return entry.data;
+  return null;
+}
+
+function setCache(key: string, data: any) {
+  quoteCache.set(key, { data, ts: Date.now() });
+}
+
 async function finnhubFetch(path: string, retries = 3): Promise<any> {
+  const cached = getCached(path);
+  if (cached) return cached;
+
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
@@ -28,7 +45,7 @@ async function finnhubFetch(path: string, retries = 3): Promise<any> {
   for (let attempt = 0; attempt < retries; attempt++) {
     const res = await fetch(url);
     if (res.status === 429) {
-      const delay = 1000 * Math.pow(2, attempt) + Math.random() * 500;
+      const delay = 1500 * Math.pow(2, attempt) + Math.random() * 1000;
       console.warn(`Finnhub 429 rate limit, retry ${attempt + 1} in ${Math.round(delay)}ms`);
       await new Promise(r => setTimeout(r, delay));
       continue;
@@ -37,7 +54,9 @@ async function finnhubFetch(path: string, retries = 3): Promise<any> {
       const text = await res.text();
       throw new Error(`Finnhub error ${res.status}: ${text}`);
     }
-    return res.json();
+    const data = await res.json();
+    setCache(path, data);
+    return data;
   }
   throw new Error('Finnhub rate limit exceeded after retries');
 }
@@ -141,56 +160,62 @@ serve(async (req) => {
 
     if (action === 'quote') {
       const tickerList: string[] = symbols || [symbol];
-      const quotes = await Promise.all(
-        tickerList.map(async (s: string) => {
-          try {
-            const q = await finnhubFetch(`/quote?symbol=${encodeURIComponent(s)}`);
-            const { midPrice, hasBidAsk } = calcMidPrice(q);
-            const delay = detectDelay(q.t);
+      const quotes: any[] = [];
 
-            // Cross-verify with Twelve Data (async, non-blocking)
-            let crossVerified = false;
-            let twelvePrice = 0;
-            let priceDivergence = 0;
+      for (let i = 0; i < tickerList.length; i++) {
+        const s = tickerList[i];
+        // Add 350ms delay between requests (skip first)
+        if (i > 0) await new Promise(r => setTimeout(r, 350));
+
+        try {
+          const q = await finnhubFetch(`/quote?symbol=${encodeURIComponent(s)}`);
+          const { midPrice, hasBidAsk } = calcMidPrice(q);
+          const delayInfo = detectDelay(q.t);
+
+          // Cross-verify with Twelve Data (fire-and-forget, don't block)
+          let crossVerified = false;
+          let twelvePrice = 0;
+          let priceDivergence = 0;
+          try {
             const td = await twelveDataQuote(s);
             if (td && td.price > 0) {
               twelvePrice = td.price;
               priceDivergence = +((Math.abs(q.c - td.price) / q.c) * 100).toFixed(3);
-              crossVerified = priceDivergence < 1; // verified if < 1% divergence
+              crossVerified = priceDivergence < 1;
             }
+          } catch { /* ignore twelve data errors */ }
 
-            return {
-              symbol: s,
-              shortName: s,
-              regularMarketPrice: q.c,
-              midPrice,
-              hasBidAsk,
-              slippageBuyPrice: applySlippage(q.c, 'buy'),
-              slippageSellPrice: applySlippage(q.c, 'sell'),
-              regularMarketChange: q.d,
-              regularMarketChangePercent: q.dp,
-              regularMarketVolume: 0,
-              marketCap: 0,
-              fiftyTwoWeekHigh: q.h,
-              fiftyTwoWeekLow: q.l,
-              previousClose: q.pc,
-              dayHigh: q.h,
-              dayLow: q.l,
-              openPrice: q.o,
-              finnhubTimestamp: q.t,
-              delayed: delay.delayed,
-              delaySec: delay.delaySec,
-              crossVerified,
-              twelveDataPrice: twelvePrice,
-              priceDivergence,
-              dataSource: 'finnhub',
-              dataSourceVerified: crossVerified ? 'finnhub+twelvedata' : 'finnhub',
-            };
-          } catch {
-            return { symbol: s, shortName: s, regularMarketPrice: 0, regularMarketChange: 0, regularMarketChangePercent: 0, regularMarketVolume: 0, marketCap: 0, fiftyTwoWeekHigh: 0, fiftyTwoWeekLow: 0, dataSource: 'error', crossVerified: false };
-          }
-        })
-      );
+          quotes.push({
+            symbol: s,
+            shortName: s,
+            regularMarketPrice: q.c,
+            midPrice,
+            hasBidAsk,
+            slippageBuyPrice: applySlippage(q.c, 'buy'),
+            slippageSellPrice: applySlippage(q.c, 'sell'),
+            regularMarketChange: q.d,
+            regularMarketChangePercent: q.dp,
+            regularMarketVolume: 0,
+            marketCap: 0,
+            fiftyTwoWeekHigh: q.h,
+            fiftyTwoWeekLow: q.l,
+            previousClose: q.pc,
+            dayHigh: q.h,
+            dayLow: q.l,
+            openPrice: q.o,
+            finnhubTimestamp: q.t,
+            delayed: delayInfo.delayed,
+            delaySec: delayInfo.delaySec,
+            crossVerified,
+            twelveDataPrice: twelvePrice,
+            priceDivergence,
+            dataSource: 'finnhub',
+            dataSourceVerified: crossVerified ? 'finnhub+twelvedata' : 'finnhub',
+          });
+        } catch {
+          quotes.push({ symbol: s, shortName: s, regularMarketPrice: 0, regularMarketChange: 0, regularMarketChangePercent: 0, regularMarketVolume: 0, marketCap: 0, fiftyTwoWeekHigh: 0, fiftyTwoWeekLow: 0, dataSource: 'error', crossVerified: false });
+        }
+      }
       return new Response(JSON.stringify({ quotes, dataSource: 'finnhub', crossVerification: getTwelveDataToken() ? 'twelvedata' : 'none' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
