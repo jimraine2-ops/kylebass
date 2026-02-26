@@ -9,6 +9,13 @@ const corsHeaders = {
 const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350; // Fixed exchange rate: 1 USD = 1,350 KRW
+const SLIPPAGE_BUY = 0.0002;  // +0.02%
+const SLIPPAGE_SELL = 0.0002; // -0.02%
+
+function applySlippage(price: number, side: 'buy' | 'sell'): number {
+  if (side === 'buy') return +(price * (1 + SLIPPAGE_BUY)).toFixed(4);
+  return +(price * (1 - SLIPPAGE_SELL)).toFixed(4);
+}
 
 function toKRW(usd: number): number {
   return usd * KRW_RATE;
@@ -114,11 +121,14 @@ serve(async (req) => {
         }
 
         if (shouldClose && pos.symbol === symbol) {
-          const pnl = toKRW((price - pos.price) * pos.quantity);
+          const sellPrice = applySlippage(price, 'sell');
+          const pnl = toKRW((sellPrice - pos.price) * pos.quantity);
           const investmentKRW = toKRW(pos.price * pos.quantity);
+          const pnlPct = ((sellPrice - pos.price) / pos.price * 100).toFixed(2);
           await supabase.from('ai_trades').update({
-            status: newStatus, close_price: price, pnl,
-            closed_at: new Date().toISOString(), ai_reason: closeReason,
+            status: newStatus, close_price: sellPrice, pnl,
+            closed_at: new Date().toISOString(),
+            ai_reason: `${closeReason} | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(sellPrice)}] | 수익률: ${pnlPct}% | 수익금: ${fmtKRWRaw(pnl)}`,
           }).eq('id', pos.id);
 
           await supabase.from('ai_wallet').update({
@@ -205,17 +215,19 @@ Respond with JSON ONLY:
       const canBuy = (!alreadyHolding || isPyramiding) && openCount < 5 && meetsScoreThreshold && basicConditionsMet;
 
       if (decision.action === 'BUY' && decision.confidence >= 40 && canBuy) {
+        const buyPrice = applySlippage(price, 'buy');
+        const buyPriceKRW = toKRW(buyPrice);
         const maxInvestmentKRW = availableBalance * positionSizePct;
-        const qty = Math.min(decision.quantity || Math.floor(maxInvestmentKRW / priceKRW), Math.floor(maxInvestmentKRW / priceKRW));
-        const costKRW = qty * priceKRW;
+        const qty = Math.min(decision.quantity || Math.floor(maxInvestmentKRW / buyPriceKRW), Math.floor(maxInvestmentKRW / buyPriceKRW));
+        const costKRW = qty * buyPriceKRW;
         if (qty > 0 && costKRW <= availableBalance) {
-          const stopLoss = decision.stopLoss || +(price * 0.95).toFixed(4);
-          const takeProfit = decision.takeProfit || +(price * 1.08).toFixed(4);
+          const stopLoss = decision.stopLoss || +(buyPrice * 0.95).toFixed(4);
+          const takeProfit = decision.takeProfit || +(buyPrice * 1.08).toFixed(4);
           const logPrefix = isPyramiding ? 'PYRAMID' : 'SCOUT';
           const { data: newTrade } = await supabase.from('ai_trades').insert({
-            symbol, side: 'buy', quantity: qty, price,
+            symbol, side: 'buy', quantity: qty, price: buyPrice,
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
-            ai_reason: `[Main] [${logPrefix}|Score:${quantScore || 'N/A'}|${(positionSizePct*100).toFixed(0)}%] [${timeStr}] ${symbol} ${fmtKRWRaw(costKRW)} 매수 집행 (점수: ${quantScore}점 / 근거: ${decision.reason})`,
+            ai_reason: `[Main] [${logPrefix}|Score:${quantScore || 'N/A'}|${(positionSizePct*100).toFixed(0)}%] [${timeStr}] ${symbol} ${fmtKRWRaw(costKRW)} 매수 집행 | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(buyPrice)}] (점수: ${quantScore}점 / 근거: ${decision.reason})`,
             ai_confidence: decision.confidence,
           }).select().single();
 
