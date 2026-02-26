@@ -305,7 +305,7 @@ Respond with JSON ONLY:
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // ==================== UPDATE WALLET BALANCE ====================
+    // ==================== UPDATE WALLET BALANCE (Manual Edit) ====================
     if (action === 'update-balance') {
       const { walletType, newBalance } = body;
       if (typeof newBalance !== 'number' || newBalance < 0 || newBalance > 999999999) {
@@ -316,14 +316,16 @@ Respond with JSON ONLY:
       }
 
       const table = walletType === 'scalping' ? 'scalping_wallet' : 'ai_wallet';
+      const roundedBalance = Math.round(newBalance);
+      
+      // Only update balance, NOT initial_balance (to preserve accounting integrity)
       const { error } = await supabase.from(table).update({
-        balance: newBalance,
-        initial_balance: newBalance,
+        balance: roundedBalance,
         updated_at: new Date().toISOString()
       }).not('id', 'is', null);
 
       if (error) throw error;
-      return new Response(JSON.stringify({ success: true, balance: newBalance }), {
+      return new Response(JSON.stringify({ success: true, balance: roundedBalance }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
