@@ -258,10 +258,9 @@ Respond with JSON ONLY:
       // === RECONCILIATION: Verify cash balance integrity ===
       // Correct balance = initial_balance - sum(open position costs) + sum(closed trade sale proceeds)
       const openCostKRW = (openPositions || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
-      const realizedPnlTotal = (allTrades || []).reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
-      // All closed trades return their original investment + PnL
-      const closedInvestmentReturned = (allTrades || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
-      const expectedBalance = Math.round((wallet?.initial_balance || 10000000) - openCostKRW + closedInvestmentReturned);
+      // Use ALL closed trades (no limit) for accurate reconciliation
+      const closedInvestmentReturned = (allTradesForReconciliation || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
+      const expectedBalance = Math.round((wallet?.initial_balance || 1000000) - openCostKRW + closedInvestmentReturned);
       
       let reconciled = false;
       if (wallet && Math.abs(wallet.balance - expectedBalance) > 100) {
