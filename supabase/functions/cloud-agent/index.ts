@@ -588,7 +588,8 @@ serve(async (req) => {
             }
             const stopLoss = +(price * 0.975).toFixed(4); // -2.5%
             const takeProfit = +(price * 1.05).toFixed(4); // +5%
-            const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5%`;
+            const balanceBefore = Math.round(scalpBalance);
+            const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5% | [잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(Math.round(scalpBalance - costKRW))}]`;
 
             await supabase.from('scalping_trades').insert({
               symbol: sym, side: 'buy', quantity: qty, price,
@@ -602,7 +603,7 @@ serve(async (req) => {
             }).eq('id', scalpWallet.id);
             scalpBalance = newScalpBuyBal;
             scalpOpenCount++;
-            await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0) });
+            await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0), balanceBefore, balanceAfter: newScalpBuyBal });
           }
         }
         if (bi + 5 < pennyTickers.length) await new Promise(r => setTimeout(r, 200));
