@@ -9,6 +9,8 @@ const corsHeaders = {
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 const KRW_RATE = 1350;
+const MIN_PRICE_KRW = 1000; // ₩1,000 minimum price filter
+const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE; // ~$0.74
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
