@@ -287,12 +287,14 @@ Respond with JSON ONLY:
         : 0;
       const bestTrade = closedTrades.reduce((best, t) => (!best || (t.pnl || 0) > (best.pnl || 0)) ? t : best, null as any);
 
+      const realizedPnl = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+
       return new Response(JSON.stringify({
         wallet, openPositions: enrichedPositions, closedTrades,
         stats: {
           winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(0), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(0),
           totalTrades: totalClosed, wins, losses, profitFactor, avgHoldTimeMinutes: +avgHoldTime.toFixed(1), bestTrade,
-          cumulativeReturn: wallet ? +((wallet.balance - wallet.initial_balance) / wallet.initial_balance * 100).toFixed(2) : 0,
+          cumulativeReturn: wallet ? +((realizedPnl) / wallet.initial_balance * 100).toFixed(2) : 0,
         }
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
