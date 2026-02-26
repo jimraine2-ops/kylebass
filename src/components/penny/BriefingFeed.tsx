@@ -1,6 +1,12 @@
+export interface BriefingEntry {
+  id: number;
+  text: string;
+  time: string;
+  type: 'buy' | 'sell' | 'info';
+}
+
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { BriefingEntry } from "@/pages/PennyStocksPage";
 
 export default function BriefingFeed({ briefings }: { briefings: BriefingEntry[] }) {
   if (briefings.length === 0) return null;
