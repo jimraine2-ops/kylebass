@@ -21,7 +21,6 @@ const menuItems = [
   { title: "뉴스 & 감성", url: "/news", icon: Newspaper },
   { title: "섹터 & 시장", url: "/sectors", icon: Building2 },
   { title: "알림 설정", url: "/alerts", icon: Bell },
-  { title: "워치리스트", url: "/watchlist", icon: Eye },
   { title: "종목 검색", url: "/search", icon: Search },
 ];
 
