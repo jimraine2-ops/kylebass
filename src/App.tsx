@@ -35,7 +35,7 @@ const App = () => (
               <Route path="/penny-stocks" element={<PennyStocksPage />} />
               <Route path="/ai-trading" element={<AITradingPage />} />
               <Route path="/recommendations" element={<RecommendationPage />} />
-              <Route path="/search" element={<WatchlistPage />} />
+              <Route path="/search" element={<StockDetail />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AppLayout>
