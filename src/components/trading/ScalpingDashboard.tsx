@@ -160,11 +160,19 @@ export function ScalpingDashboard() {
           <CardContent className="space-y-2">
             {openPositions.map((pos: any) => {
               const isProfit = (pos.unrealizedPnl || 0) >= 0;
+              const currentPriceKRW = Math.round((pos.currentPrice || 0) * 1350);
+              const isBelowFloor = currentPriceKRW < 1000;
               return (
-                <div key={pos.id} className="p-3 rounded-lg bg-muted/50 border border-border space-y-1">
+                <div key={pos.id} className={`p-3 rounded-lg bg-muted/50 border space-y-1 ${isBelowFloor ? 'border-destructive/50 bg-destructive/5' : 'border-border'}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="font-bold text-sm">{formatStockName(pos.symbol)}</span>
+                      {isBelowFloor && (
+                        <Badge variant="destructive" className="text-[9px] animate-pulse">
+                          <ShieldAlert className="w-2.5 h-2.5 mr-0.5" />
+                          ₩1,000 미만 경고
+                        </Badge>
+                      )}
                       <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * 1350).toLocaleString('ko-KR')}</span>
                       <Badge variant="outline" className="text-[9px]">
                         <Clock className="w-2.5 h-2.5 mr-0.5" />
