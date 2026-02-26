@@ -535,7 +535,7 @@ Respond with JSON ONLY:
         stats: {
           winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(0), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(0),
           totalTrades: totalClosed, wins, losses, profitFactor, avgHoldTimeMinutes: +avgHoldTime.toFixed(1),
-          cumulativeReturn: wallet ? +((wallet.balance - wallet.initial_balance) / wallet.initial_balance * 100).toFixed(4) : 0,
+          cumulativeReturn: wallet ? +((totalPnl) / wallet.initial_balance * 100).toFixed(2) : 0,
         }
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
