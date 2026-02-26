@@ -291,7 +291,7 @@ serve(async (req) => {
     }
 
     if (action === 'peers') {
-      const data = await finnhubFetch(`/stock/peers?symbol=${encodeURIComponent(symbol)}`);
+      const data = await throttledFinnhubFetch(`/stock/peers?symbol=${encodeURIComponent(symbol)}`);
       return new Response(JSON.stringify({ peers: data || [] }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
