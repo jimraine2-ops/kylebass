@@ -523,7 +523,8 @@ Respond with JSON ONLY:
         const exits = p.partial_exits || [];
         return sum + exits.reduce((s: number, e: any) => s + Math.round(toKRW(e.qty * e.price)), 0);
       }, 0);
-      const closedInvestmentReturned = (allTrades || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
+      // Use ALL closed trades (no limit) for accurate reconciliation
+      const closedInvestmentReturned = (allTradesForReconciliation || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
       const expectedBalance = Math.round((wallet?.initial_balance || 1000000) - openCostKRW + partialExitCash + closedInvestmentReturned);
       
       let reconciled = false;
