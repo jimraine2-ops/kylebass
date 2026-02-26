@@ -246,6 +246,7 @@ export type Database = {
           id: string
           opened_at: string
           partial_exits: Json | null
+          peak_price: number | null
           pnl: number | null
           price: number
           quantity: number
@@ -265,6 +266,7 @@ export type Database = {
           id?: string
           opened_at?: string
           partial_exits?: Json | null
+          peak_price?: number | null
           pnl?: number | null
           price: number
           quantity: number
@@ -284,6 +286,7 @@ export type Database = {
           id?: string
           opened_at?: string
           partial_exits?: Json | null
+          peak_price?: number | null
           pnl?: number | null
           price?: number
           quantity?: number

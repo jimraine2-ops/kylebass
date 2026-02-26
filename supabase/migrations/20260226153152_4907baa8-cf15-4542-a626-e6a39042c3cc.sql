@@ -1,0 +1,1 @@
+ALTER TABLE public.scalping_trades ADD COLUMN IF NOT EXISTS peak_price numeric DEFAULT NULL;
