@@ -57,6 +57,10 @@ export function ScalpingDashboard() {
             <Zap className="w-3 h-3 mr-1" />
             소형주 초단타 모드: 가동 중
           </Badge>
+          <Badge className="bg-destructive/10 text-destructive border-destructive/30 text-xs">
+            <Ban className="w-3 h-3 mr-1" />
+            필터 적용: ₩1,000 이상 종목만 추적 중
+          </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
