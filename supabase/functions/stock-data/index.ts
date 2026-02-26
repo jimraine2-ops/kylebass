@@ -22,7 +22,7 @@ function getTwelveDataToken(): string {
 
 // Simple in-memory cache (per isolate)
 const quoteCache = new Map<string, { data: any; ts: number }>();
-const CACHE_TTL = 15000; // 15s
+const CACHE_TTL = 60000; // 60s - aggressive caching to stay within free tier limits
 
 function getCached(key: string): any | null {
   const entry = quoteCache.get(key);
