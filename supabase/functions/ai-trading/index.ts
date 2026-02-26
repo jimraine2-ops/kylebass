@@ -567,7 +567,7 @@ Respond with JSON ONLY:
         : 0;
 
       return new Response(JSON.stringify({
-        wallet, openPositions: enrichedPositions, closedTrades,
+        wallet, openPositions: enrichedPositions, closedTrades, reconciled,
         stats: {
           winRate: +winRate.toFixed(1), totalPnl: +totalPnl.toFixed(0), totalUnrealizedPnl: +totalUnrealizedPnl.toFixed(0),
           totalTrades: totalClosed, wins, losses, profitFactor, avgHoldTimeMinutes: +avgHoldTime.toFixed(1),
