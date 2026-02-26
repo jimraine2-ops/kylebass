@@ -68,6 +68,7 @@ export function ScalpingDashboard() {
       <Card className="border-warning/30">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
           <p className="font-medium text-foreground">⚡ 공격적 초단타 엔진: ₩13,500 미만 전 종목 실시간 스캔</p>
+          <p>🚫 <span className="text-destructive font-medium">안전 필터: ₩1,000 미만 초저가주(동전주) 거래 원천 차단</span></p>
           <p>🎯 대상: 100+ 소형주 로테이션 스캔 → +3% 이상 급등 종목 즉시 진입</p>
           <p>✅ 진입: 당일 상승률 +3% 이상 포착 시 즉시 시장가 매수</p>
           <p>💰 자산 배분: 종목당 10% | 최대 동시 보유 10종목</p>

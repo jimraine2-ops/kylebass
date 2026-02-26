@@ -527,6 +527,11 @@ serve(async (req) => {
           const costKRW = Math.round(qty * priceKRW);
 
           if (qty > 0 && costKRW <= scalpBalance) {
+            // Final price floor re-verification before execution
+            if (price < MIN_PRICE_USD) {
+              await addLog('scalping', 'filter', sym, `[Cloud-Scalp] [${timeStr}] ${sym} 저가주 필터링으로 인한 진입 취소 (${fmtKRW(price)} < ₩1,000)`, { price });
+              continue;
+            }
             const stopLoss = +(price * 0.975).toFixed(4); // -2.5%
             const takeProfit = +(price * 1.05).toFixed(4); // +5%
             const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5%`;
