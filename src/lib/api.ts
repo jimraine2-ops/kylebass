@@ -29,7 +29,22 @@ export async function fetchCompanyNews(symbol: string) {
     body: { action: 'company-news', symbol },
   });
   if (error) throw error;
-  return data?.news || [];
+  const news = data?.news || [];
+  
+  // Translate news to Korean
+  if (news.length > 0) {
+    try {
+      const { data: translated, error: transErr } = await supabase.functions.invoke('translate-news', {
+        body: { articles: news },
+      });
+      if (!transErr && translated?.translated) {
+        return translated.translated;
+      }
+    } catch (e) {
+      console.warn('Translation fallback to original:', e);
+    }
+  }
+  return news;
 }
 
 export async function fetchTechnicalAnalysis(symbol: string, chartData: any[]) {
