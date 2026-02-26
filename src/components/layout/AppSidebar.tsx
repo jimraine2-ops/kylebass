@@ -17,6 +17,7 @@ const menuItems = [
   { title: "대형주 실시간 거래 현황", url: "/recommendations", icon: Target },
   { title: "소형주 실시간 거래 현황", url: "/penny-stocks", icon: Coins },
   { title: "AI 자율 매매", url: "/ai-trading", icon: Bot },
+  { title: "학습 보고서", url: "/learning-report", icon: Brain },
   { title: "종목 분석", url: "/stock/AAPL", icon: TrendingUp },
   { title: "뉴스 & 감성", url: "/news", icon: Newspaper },
   { title: "섹터 & 시장", url: "/sectors", icon: Building2 },
