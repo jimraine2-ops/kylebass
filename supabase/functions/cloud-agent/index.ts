@@ -541,14 +541,18 @@ serve(async (req) => {
           try {
             const alreadyHolding = (scalpOpenPos || []).some(p => p.symbol === sym && p.status === 'open');
             if (alreadyHolding) return null;
+            // === BLACKLIST CHECK ===
+            if (blacklistSymbols.has(sym)) {
+              return { sym, price: 0, changePct: 0, filtered: true, reason: 'blacklist' };
+            }
             const quoteData = await finnhubFetch(`/quote?symbol=${sym}`);
             if (!quoteData?.c || quoteData.c >= 10) return null;
             // ₩1,000 미만 초저가주 차단
             if (quoteData.c < MIN_PRICE_USD) {
-              return { sym, price: quoteData.c, changePct: 0, filtered: true };
+              return { sym, price: quoteData.c, changePct: 0, filtered: true, reason: 'low_price' };
             }
             const changePct = quoteData.dp || 0;
-            if (changePct < 3) return null; // +3% threshold
+            if (changePct < dynamicEntryThreshold) return null; // Dynamic threshold
             return { sym, price: quoteData.c, changePct, filtered: false };
           } catch { return null; }
         }));
