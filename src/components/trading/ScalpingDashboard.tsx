@@ -190,8 +190,8 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected }: ScalpingDashboard
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p className="text-xs text-muted-foreground">현재가</p>
-                        <p className="text-sm font-mono font-bold">₩{Math.round((pos.currentPrice || 0) * 1350).toLocaleString('ko-KR') || '-'}</p>
+                        <p className="text-xs text-muted-foreground">현재가{wsLivePrice ? ' 🟢' : ''}</p>
+                        <p className="text-sm font-mono font-bold">₩{currentPriceKRW.toLocaleString('ko-KR')}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-muted-foreground">미실현 PnL</p>
