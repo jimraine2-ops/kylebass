@@ -222,20 +222,21 @@ Respond with JSON ONLY:
         const buyPriceKRW = toKRW(buyPrice);
         const maxInvestmentKRW = availableBalance * positionSizePct;
         const qty = Math.min(decision.quantity || Math.floor(maxInvestmentKRW / buyPriceKRW), Math.floor(maxInvestmentKRW / buyPriceKRW));
-        const costKRW = qty * buyPriceKRW;
+        const costKRW = Math.round(qty * buyPriceKRW);
         if (qty > 0 && costKRW <= availableBalance) {
           const stopLoss = decision.stopLoss || +(buyPrice * 0.95).toFixed(4);
           const takeProfit = decision.takeProfit || +(buyPrice * 1.08).toFixed(4);
           const logPrefix = isPyramiding ? 'PYRAMID' : 'SCOUT';
+          const newBal = Math.round(availableBalance - costKRW);
           const { data: newTrade } = await supabase.from('ai_trades').insert({
             symbol, side: 'buy', quantity: qty, price: buyPrice,
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
-            ai_reason: `[Main] [${logPrefix}|Score:${quantScore || 'N/A'}|${(positionSizePct*100).toFixed(0)}%] [${timeStr}] ${symbol} ${fmtKRWRaw(costKRW)} 매수 집행 | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(buyPrice)}] (점수: ${quantScore}점 / 근거: ${decision.reason})`,
+            ai_reason: `[Main] [${logPrefix}|Score:${quantScore || 'N/A'}|${(positionSizePct*100).toFixed(0)}%] [${timeStr}] ${symbol} ${fmtKRWRaw(costKRW)} 매수 집행 | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(buyPrice)}] (점수: ${quantScore}점 / 근거: ${decision.reason}) | [잔고 차감: ${fmtKRWRaw(Math.round(availableBalance))} → ${fmtKRWRaw(newBal)}]`,
             ai_confidence: decision.confidence,
           }).select().single();
 
           await supabase.from('ai_wallet').update({
-            balance: availableBalance - costKRW, updated_at: new Date().toISOString(),
+            balance: newBal, updated_at: new Date().toISOString(),
           }).eq('id', wallet.id);
           trade = newTrade;
         }
