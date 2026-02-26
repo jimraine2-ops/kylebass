@@ -63,9 +63,9 @@ export default function PennyStocksPage() {
       <Card className="border-primary/30">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
           <p className="font-medium text-foreground">☁️ Cloud Agent — 서버 백그라운드 자율 매매 시스템</p>
-          <p>• 100+ 종목 스캔 → <span className="text-primary font-medium">TOP 50 실시간 표시</span> → <span className="text-destructive font-medium">+10% 이상 서버에서 자동 매수</span></p>
-          <p>• 청산: 2~3%→50% 익절 | ATR×1.5 추격 손절 | -2% 즉시 손절 | 15분 타임컷</p>
-          <p>• 최대 동시 보유: 10종목 | 종목당 지갑의 10% 배분</p>
+          <p>• 100+ 종목 로테이션 스캔 → <span className="text-primary font-medium">TOP 50 실시간 표시</span> → <span className="text-destructive font-medium">+3% 이상 급등 시 서버에서 자동 매수</span></p>
+          <p>• 청산: +2%→50% 1차 익절 | +5% 고정 익절 | -2.5% 즉시 손절 | 고점+10% 후 -5% 추격익절</p>
+          <p>• 최대 동시 보유: 10종목 | 종목당 지갑의 10% 배분 | <span className="text-primary font-medium">타임컷 없음</span></p>
           <p className="text-primary font-medium mt-1">💡 이 화면은 서버 AI의 활동을 모니터링하는 관전 창입니다. 브라우저를 닫아도 매매는 계속됩니다.</p>
         </CardContent>
       </Card>
