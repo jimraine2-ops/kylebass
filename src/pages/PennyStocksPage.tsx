@@ -24,7 +24,7 @@ export default function PennyStocksPage() {
       <div className="rounded-lg p-2 border border-destructive/40 bg-destructive/5 flex items-center justify-center gap-2">
         <Flame className="w-4 h-4 text-destructive" />
         <span className="text-xs font-bold text-destructive">소형주 실시간 모니터링</span>
-        <span className="text-[10px] text-muted-foreground">| ₩13,500 미만 TOP 50 실시간 모니터링 | +10% 이상 서버 자동 매매</span>
+        <span className="text-[10px] text-muted-foreground">| ₩13,500 미만 100+ 종목 로테이션 스캔 | +3% 이상 서버 자동 매매</span>
       </div>
 
       {/* Server Status */}
