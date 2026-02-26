@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useScalpingPortfolio } from "@/hooks/useStockData";
 import { resetScalpingWallet, updateWalletBalance } from "@/lib/api";
-import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap } from "lucide-react";
+import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap, ShieldAlert, Ban } from "lucide-react";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -57,6 +57,10 @@ export function ScalpingDashboard() {
             <Zap className="w-3 h-3 mr-1" />
             소형주 초단타 모드: 가동 중
           </Badge>
+          <Badge className="bg-destructive/10 text-destructive border-destructive/30 text-xs">
+            <Ban className="w-3 h-3 mr-1" />
+            필터 적용: ₩1,000 이상 종목만 추적 중
+          </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
@@ -68,6 +72,7 @@ export function ScalpingDashboard() {
       <Card className="border-warning/30">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
           <p className="font-medium text-foreground">⚡ 공격적 초단타 엔진: ₩13,500 미만 전 종목 실시간 스캔</p>
+          <p>🚫 <span className="text-destructive font-medium">안전 필터: ₩1,000 미만 초저가주(동전주) 거래 원천 차단</span></p>
           <p>🎯 대상: 100+ 소형주 로테이션 스캔 → +3% 이상 급등 종목 즉시 진입</p>
           <p>✅ 진입: 당일 상승률 +3% 이상 포착 시 즉시 시장가 매수</p>
           <p>💰 자산 배분: 종목당 10% | 최대 동시 보유 10종목</p>
@@ -155,11 +160,19 @@ export function ScalpingDashboard() {
           <CardContent className="space-y-2">
             {openPositions.map((pos: any) => {
               const isProfit = (pos.unrealizedPnl || 0) >= 0;
+              const currentPriceKRW = Math.round((pos.currentPrice || 0) * 1350);
+              const isBelowFloor = currentPriceKRW < 1000;
               return (
-                <div key={pos.id} className="p-3 rounded-lg bg-muted/50 border border-border space-y-1">
+                <div key={pos.id} className={`p-3 rounded-lg bg-muted/50 border space-y-1 ${isBelowFloor ? 'border-destructive/50 bg-destructive/5' : 'border-border'}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="font-bold text-sm">{formatStockName(pos.symbol)}</span>
+                      {isBelowFloor && (
+                        <Badge variant="destructive" className="text-[9px] animate-pulse">
+                          <ShieldAlert className="w-2.5 h-2.5 mr-0.5" />
+                          ₩1,000 미만 경고
+                        </Badge>
+                      )}
                       <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * 1350).toLocaleString('ko-KR')}</span>
                       <Badge variant="outline" className="text-[9px]">
                         <Clock className="w-2.5 h-2.5 mr-0.5" />

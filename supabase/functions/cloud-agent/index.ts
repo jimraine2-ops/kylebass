@@ -9,6 +9,8 @@ const corsHeaders = {
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 const KRW_RATE = 1350;
+const MIN_PRICE_KRW = 1000; // ₩1,000 minimum price filter
+const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE; // ~$0.74
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
@@ -379,6 +381,11 @@ serve(async (req) => {
         if (!quoteData?.c) continue;
         const price = quoteData.c;
 
+        // ₩1,000 미만 초저가주 경고 — 보유 중인 종목이 저가로 추락한 경우
+        if (price < MIN_PRICE_USD) {
+          await addLog('scalping', 'warning', sym, `[Cloud-Scalp] [${timeStr}] ⚠️ ${sym} 초저가 경고: ${fmtKRW(price)} (₩1,000 미만) — 즉시 정리 필요`, { price, priceKRW: Math.round(toKRW(price)) });
+        }
+
         for (const pos of (scalpOpenPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
           const pnlPct = ((price - pos.price) / pos.price) * 100;
           let shouldClose = false;
@@ -492,14 +499,24 @@ serve(async (req) => {
             if (alreadyHolding) return null;
             const quoteData = await finnhubFetch(`/quote?symbol=${sym}`);
             if (!quoteData?.c || quoteData.c >= 10) return null;
+            // ₩1,000 미만 초저가주 차단
+            if (quoteData.c < MIN_PRICE_USD) {
+              return { sym, price: quoteData.c, changePct: 0, filtered: true };
+            }
             const changePct = quoteData.dp || 0;
             if (changePct < 3) return null; // +3% threshold
-            return { sym, price: quoteData.c, changePct };
+            return { sym, price: quoteData.c, changePct, filtered: false };
           } catch { return null; }
         }));
 
+        // Log filtered penny stocks
+        const filteredStocks = batchResults.filter((r: any) => r?.filtered);
+        for (const f of filteredStocks) {
+          await addLog('scalping', 'filter', f.sym, `[Cloud-Scalp] ${f.sym}: ${fmtKRW(f.price)} (₩1,000 미만 → 거래 차단)`, { price: f.price, priceKRW: Math.round(toKRW(f.price)) });
+        }
+
         // Sort by changePct desc to prioritize hottest stocks
-        const validResults = batchResults.filter(Boolean).sort((a: any, b: any) => b.changePct - a.changePct);
+        const validResults = batchResults.filter((r: any) => r && !r.filtered && r.changePct > 0).sort((a: any, b: any) => b.changePct - a.changePct);
 
         for (const r of validResults) {
           if (!r || scalpOpenCount >= 10) break;
@@ -510,6 +527,11 @@ serve(async (req) => {
           const costKRW = Math.round(qty * priceKRW);
 
           if (qty > 0 && costKRW <= scalpBalance) {
+            // Final price floor re-verification before execution
+            if (price < MIN_PRICE_USD) {
+              await addLog('scalping', 'filter', sym, `[Cloud-Scalp] [${timeStr}] ${sym} 저가주 필터링으로 인한 진입 취소 (${fmtKRW(price)} < ₩1,000)`, { price });
+              continue;
+            }
             const stopLoss = +(price * 0.975).toFixed(4); // -2.5%
             const takeProfit = +(price * 1.05).toFixed(4); // +5%
             const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5%`;
