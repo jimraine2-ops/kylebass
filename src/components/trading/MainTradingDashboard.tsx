@@ -237,6 +237,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected }: MainTradingDas
               <OpenPositionCard
                 key={pos.id}
                 position={pos}
+                livePrice={wsGetPrice?.(pos.symbol)}
                 onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
                 isSelected={pos.symbol === selectedSymbol}
               />
