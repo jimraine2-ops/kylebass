@@ -170,7 +170,7 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: Sc
               const wsLivePrice = wsGetPrice?.(pos.symbol);
               const displayPrice = wsLivePrice ?? pos.currentPrice ?? pos.price;
               const isProfit = (pos.unrealizedPnl || 0) >= 0;
-              const currentPriceKRW = Math.round(displayPrice * 1350);
+              const currentPriceKRW = Math.round(displayPrice * fxRate);
               const isBelowFloor = currentPriceKRW < 1000;
               return (
                 <div key={pos.id} className={`p-3 rounded-lg bg-muted/50 border space-y-1 ${isBelowFloor ? 'border-destructive/50 bg-destructive/5' : 'border-border'}`}>
