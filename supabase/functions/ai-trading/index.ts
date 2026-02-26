@@ -638,16 +638,18 @@ Respond with JSON ONLY:
 
       if (canEnter) {
         const positionPct = isPyramiding ? 0.10 : 0.15;
-        const maxInvestmentKRW = wallet.balance * positionPct;
+        const maxInvestmentKRW = Math.round(wallet.balance) * positionPct;
         const qty = Math.floor(maxInvestmentKRW / priceKRW);
-        const costKRW = qty * priceKRW;
+        const costKRW = Math.round(qty * priceKRW);
 
-        if (qty > 0 && costKRW <= wallet.balance) {
+        if (qty > 0 && costKRW <= Math.round(wallet.balance)) {
           const stopLoss = +(price * 0.975).toFixed(4);
           const takeProfit = +(price * 1.06).toFixed(4);
           const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
+          const balanceBefore = Math.round(wallet.balance);
+          const balanceAfter = Math.round(wallet.balance - costKRW);
 
-          const logMsg = `[Quant] 10대지표 퀀트엔진: [${symbol}] ${quantScore}점 포착 및 자율 매수 완료 [${tier}|${(positionPct*100).toFixed(0)}%|${qty}주@${fmtKRW(price)}|총${fmtKRWRaw(costKRW)}]`;
+          const logMsg = `[Quant] 10대지표 퀀트엔진: [${symbol}] ${quantScore}점 포착 및 자율 매수 완료 [${tier}|${(positionPct*100).toFixed(0)}%|${qty}주@${fmtKRW(price)}|총${fmtKRWRaw(costKRW)}] | [잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`;
 
           const { data: newTrade } = await supabase.from('ai_trades').insert({
             symbol, side: 'buy', quantity: qty, price,
@@ -657,7 +659,7 @@ Respond with JSON ONLY:
           }).select().single();
 
           await supabase.from('ai_wallet').update({
-            balance: wallet.balance - costKRW, updated_at: now.toISOString(),
+            balance: balanceAfter, updated_at: now.toISOString(),
           }).eq('id', wallet.id);
 
           trade = newTrade;
