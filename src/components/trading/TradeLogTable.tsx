@@ -27,7 +27,8 @@ function getStatusInfo(status: string): { label: string; variant: 'default' | 'd
   switch (status) {
     case 'open': return { label: '보유중', variant: 'outline', isExit: false };
     case 'profit_taken': return { label: '익절완료', variant: 'default', isExit: true };
-    case 'trailing_stop': return { label: '추격익절', variant: 'default', isExit: true };
+    case 'trailing_stop': return { label: '추격손절', variant: 'default', isExit: true };
+    case 'trailing_profit': return { label: '추격익절', variant: 'default', isExit: true };
     case 'stopped': return { label: '손절완료', variant: 'destructive', isExit: true };
     case 'score_exit': return { label: '점수청산', variant: 'secondary', isExit: true };
     case 'time_cut': return { label: '타임컷', variant: 'secondary', isExit: true };

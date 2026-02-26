@@ -91,7 +91,7 @@ export function MainTradingDashboard() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            📡 Data Source: Finnhub Real-time + Twelve Data (Verified)
+            📡 데이터: Finnhub 실시간 + Twelve Data 교차검증
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
             ⚡ 슬리피지 ±0.02% 적용
@@ -207,7 +207,7 @@ export function MainTradingDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
               <Wallet className="w-4 h-4 text-primary" />
-              <span className="text-xs text-muted-foreground">Buying Power</span>
+              <span className="text-xs text-muted-foreground">매수 여력</span>
             </div>
             <p className="text-xl font-bold font-mono">
               ₩{Math.round(confirmedBalance * 0.1).toLocaleString('ko-KR')}

@@ -55,7 +55,7 @@ export function ScalpingDashboard() {
         <div className="flex items-center gap-3">
           <Badge className="bg-warning/20 text-warning border-warning/30 text-xs animate-pulse">
             <Zap className="w-3 h-3 mr-1" />
-            Scalping Mode: ACTIVE
+            소형주 초단타 모드: 가동 중
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
@@ -67,11 +67,12 @@ export function ScalpingDashboard() {
       {/* Entry Rules Card */}
       <Card className="border-warning/30">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">⚡ 즉시 실행 알고리즘: ₩13,500 미만 즉시 초단타 엔진</p>
-          <p>🎯 대상: TOP 10 리스트 진입 즉시 자동 매수 (점수 필터 없음)</p>
-          <p>✅ 진입: TOP 10 포착 → 0.1초 이내 시장가 매수 집행</p>
-          <p>💰 자산 배분: 종목당 10% (₩1,000,000 기준 ₩100,000)</p>
-          <p>🛡️ 청산: 2~3%→50% 익절 | 잔여→ATR×2 추격 손절 | -2% 즉시 손절 | 15분 타임컷 | 장마감 30분 전 강제 청산</p>
+          <p className="font-medium text-foreground">⚡ 공격적 초단타 엔진: ₩13,500 미만 전 종목 실시간 스캔</p>
+          <p>🎯 대상: 100+ 소형주 로테이션 스캔 → +3% 이상 급등 종목 즉시 진입</p>
+          <p>✅ 진입: 당일 상승률 +3% 이상 포착 시 즉시 시장가 매수</p>
+          <p>💰 자산 배분: 종목당 10% | 최대 동시 보유 10종목</p>
+          <p>🛡️ 청산: +2%→50% 1차 익절 | +5% 고정 익절 | -2.5% 즉시 손절 | 고점+10% 후 -5% 추격익절</p>
+          <p className="text-primary font-medium">⏱️ 타임컷 없음 — 오직 지표와 가격에만 반응</p>
         </CardContent>
       </Card>
 
@@ -179,12 +180,12 @@ export function ScalpingDashboard() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-                    <span>SL: ₩{Math.round((pos.stop_loss || 0) * 1350).toLocaleString('ko-KR')} (-2%)</span>
-                    <span>TP: ₩{Math.round((pos.take_profit || 0) * 1350).toLocaleString('ko-KR')}</span>
-                    <span>타임컷: 15분</span>
-                    {pos.entry_score && <Badge variant="secondary" className="text-[9px]">진입점수: {pos.entry_score}</Badge>}
-                  </div>
+                    <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                     <span>손절: ₩{Math.round((pos.stop_loss || 0) * 1350).toLocaleString('ko-KR')} (-2.5%)</span>
+                     <span>익절: ₩{Math.round((pos.take_profit || 0) * 1350).toLocaleString('ko-KR')} (+5%)</span>
+                     <span>추격익절: 고점+10%→-5%</span>
+                     {pos.entry_score && <Badge variant="secondary" className="text-[9px]">상승률: +{pos.entry_score}%</Badge>}
+                   </div>
                 </div>
               );
             })}
@@ -245,7 +246,7 @@ export function ScalpingDashboard() {
                       const isProfit = (trade.pnl || 0) > 0;
                       const time = trade.closed_at ? new Date(trade.closed_at).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit', month: '2-digit', day: '2-digit' }) : '-';
                       const statusLabels: Record<string, string> = {
-                        profit_taken: '익절', stopped: '손절', score_exit: '점수청산', time_cut: '타임컷', closed: '종료',
+                        profit_taken: '익절', stopped: '손절', score_exit: '점수청산', time_cut: '타임컷', trailing_profit: '추격익절', closed: '종료',
                       };
                       return (
                         <tr key={trade.id} className="border-b border-border/50 hover:bg-muted/30">
