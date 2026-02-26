@@ -385,23 +385,41 @@ serve(async (req) => {
           let closeReason = '';
           let newStatus = 'closed';
 
-          if (pnlPct <= -2) {
+          // Track peak price for trailing stop
+          const peakPrice = Math.max(pos.peak_price || pos.price, price);
+          if (price > (pos.peak_price || pos.price)) {
+            await supabase.from('scalping_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
+          }
+
+          // -2.5% hard stop
+          if (pnlPct <= -2.5) {
             shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 손절 (-2% 도달: ${pnlPct.toFixed(2)}%)`;
+            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 손절 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
             newStatus = 'stopped';
-          } else if (pos.time_limit_at && now >= new Date(pos.time_limit_at) && pnlPct <= 0.5) {
+          }
+          // Trailing stop: +10% from entry peak, then -5% from peak
+          else if (peakPrice >= pos.price * 1.10) {
+            const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
+            if (dropFromPeak >= 5) {
+              const lockedPnlPct = ((price - pos.price) / pos.price * 100).toFixed(2);
+              shouldClose = true;
+              closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnlPct}% 확정)`;
+              newStatus = 'trailing_profit';
+            }
+          }
+          // ATR trailing stop
+          else if (pos.stop_loss && price <= pos.stop_loss) {
             shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 15분 타임컷`;
-            newStatus = 'time_cut';
-          } else if (pos.stop_loss && price <= pos.stop_loss) {
-            shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 추격 손절 터치`;
+            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 추격 손절 터치 (${fmtKRW(pos.stop_loss)})`;
             newStatus = 'stopped';
-          } else if (pos.take_profit && price >= pos.take_profit) {
+          }
+          // Fixed take profit 5%
+          else if (pos.take_profit && price >= pos.take_profit) {
             shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 익절 도달`;
+            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 익절 도달 (+5%)`;
             newStatus = 'profit_taken';
           }
+          // NO time-cut — removed entirely
 
           // Partial exit at 2%
           if (!shouldClose && pnlPct >= 2) {
@@ -410,44 +428,42 @@ serve(async (req) => {
             if (!hasFirst) {
               const sellQty = Math.floor(pos.quantity * 0.5);
               if (sellQty > 0) {
-                const partialPnl = toKRW((price - pos.price) * sellQty);
-                const sellValue = toKRW(sellQty * price);
-                partialExits.push({ type: 'first_partial', qty: sellQty, price, pnl: +partialPnl.toFixed(0), at: now.toISOString() });
+                const partialPnl = Math.round(toKRW((price - pos.price) * sellQty));
+                const sellValue = Math.round(toKRW(sellQty * price));
+                partialExits.push({ type: 'first_partial', qty: sellQty, price, pnl: partialPnl, at: now.toISOString() });
                 await supabase.from('scalping_trades').update({
                   quantity: pos.quantity - sellQty, partial_exits: partialExits,
                   stop_loss: Math.max(+(price - 2.0 * (price * 0.02)).toFixed(4), pos.stop_loss || 0),
                 }).eq('id', pos.id);
-                const partialReturn = Math.round(sellValue);
-                const newPartialBal = Math.round(scalpBalance + partialReturn);
+                const newPartialBal = Math.round(scalpBalance + sellValue);
                 await supabase.from('scalping_wallet').update({
                   balance: newPartialBal, updated_at: now.toISOString(),
                 }).eq('id', scalpWallet.id);
                 scalpBalance = newPartialBal;
-                await addLog('scalping', 'exit', sym, `[Cloud-Scalp] ${sym} 1차 50% 익절 (${pnlPct.toFixed(1)}%)`, { pnl: +partialPnl.toFixed(0) });
+                await addLog('scalping', 'exit', sym, `[Cloud-Scalp] ${sym} 1차 50% 익절 (${pnlPct.toFixed(1)}%) | [수익 실현] ${fmtKRWRaw(partialPnl)} 입금`, { pnl: partialPnl });
               }
             }
           }
 
           if (shouldClose) {
-            const pnlKRW = toKRW((price - pos.price) * pos.quantity);
-            const investmentKRW = toKRW(pos.price * pos.quantity);
+            const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
+            const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
             await supabase.from('scalping_trades').update({
-              status: newStatus, close_price: price, pnl: +pnlKRW.toFixed(0),
+              status: newStatus, close_price: price, pnl: pnlKRW,
               closed_at: now.toISOString(), ai_reason: closeReason,
             }).eq('id', pos.id);
-            const scalpReturnKRW = Math.round(investmentKRW + pnlKRW);
-            const newScalpBal = Math.round(scalpBalance + scalpReturnKRW);
+            const newScalpBal = Math.round(scalpBalance + investmentKRW + pnlKRW);
             await supabase.from('scalping_wallet').update({
               balance: newScalpBal, updated_at: now.toISOString(),
             }).eq('id', scalpWallet.id);
             scalpBalance = newScalpBal;
-            await addLog('scalping', 'exit', sym, closeReason, { pnl: +pnlKRW.toFixed(0) });
+            await addLog('scalping', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → 잔고: ${fmtKRWRaw(newScalpBal)}`, { pnl: pnlKRW });
           }
         }
         await new Promise(r => setTimeout(r, 200));
       }
 
-      // Scan penny stocks for new entries (use penny-stocks symbols)
+      // Scan penny stocks for new entries — lowered threshold to 15pts
       const PENNY_SYMBOLS = ['CGC', 'SNDL', 'SENS', 'CLOV', 'BBIG', 'MULN', 'TELL', 'GSAT', 'DNA', 'OPEN'];
       const scalpOpenCount = (scalpOpenPos || []).filter(p => p.status === 'open').length;
 
@@ -460,24 +476,23 @@ serve(async (req) => {
         if (!quoteData?.c || quoteData.c >= 10) continue;
 
         const changePct = quoteData.dp || 0;
-        if (changePct < 10) continue; // +10% threshold
+        if (changePct < 3) continue; // Lowered from +10% to +3% for more trades
 
         const price = quoteData.c;
         const priceKRW = toKRW(price);
         const maxKRW = scalpBalance * 0.10;
         const qty = Math.floor(maxKRW / priceKRW);
-        const costKRW = qty * priceKRW;
+        const costKRW = Math.round(qty * priceKRW);
 
         if (qty > 0 && costKRW <= scalpBalance) {
-          const stopLoss = +(price * 0.98).toFixed(4);
-          const takeProfit = +(price * 1.05).toFixed(4);
-          const timeLimitAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
-          const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)})`;
+          const stopLoss = +(price * 0.975).toFixed(4); // -2.5%
+          const takeProfit = +(price * 1.05).toFixed(4); // +5%
+          const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5%`;
 
           await supabase.from('scalping_trades').insert({
             symbol: sym, side: 'buy', quantity: qty, price,
             stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
-            entry_score: Math.round(changePct), time_limit_at: timeLimitAt,
+            entry_score: Math.round(changePct), time_limit_at: null, // NO time-cut
             ai_reason: logMsg, ai_confidence: 100,
           });
           const newScalpBuyBal = Math.round(scalpBalance - costKRW);
