@@ -26,6 +26,7 @@ export default function StockDetail() {
   const [stopLoss, setStopLoss] = useState("");
   const [takeProfit, setTakeProfit] = useState("");
 
+  const quote = quotes?.[0];
   const wsPrice = ws.getPrice(symbol);
   const livePrice = wsPrice ?? quote?.regularMarketPrice;
   const isUp = (quote?.regularMarketChange || 0) >= 0;
