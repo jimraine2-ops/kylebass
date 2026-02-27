@@ -85,10 +85,13 @@ export default function StockDetail() {
         </div>
         <div className="text-right">
           <p className="text-3xl font-bold font-mono">
-            {quote?.regularMarketPrice ? `₩${((quote.regularMarketPrice) * 1350).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}` : '—'}
+            {livePrice ? `₩${Math.round(livePrice * fxRate).toLocaleString('ko-KR')}` : '—'}
           </p>
-          <p className="text-xs text-muted-foreground font-mono">${quote?.regularMarketPrice?.toFixed(2)}</p>
-          <p className={`text-sm font-mono ${isUp ? 'stock-up' : 'stock-down'}`}>
+          <p className="text-xs text-muted-foreground font-mono">
+            ${livePrice?.toFixed(2)} · {fxLive ? '실시간' : '고정'} ₩{fxRate.toLocaleString('ko-KR')}/USD
+            {wsPrice ? ' 🟢' : ''}
+          </p>
+          <p className={`text-sm font-mono ${isUp ? 'text-stock-up' : 'text-stock-down'}`}>
             {isUp ? '+' : ''}{quote?.regularMarketChangePercent?.toFixed(2)}%
           </p>
         </div>
