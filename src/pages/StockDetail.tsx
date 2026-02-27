@@ -20,7 +20,8 @@ export default function StockDetail() {
   const chartData = chartResponse?.chartData;
   const { data: analysis, isLoading: analysisLoading } = useTechnicalAnalysis(symbol, chartData);
   const { data: sentiment } = useSentimentAnalysis(symbol);
-
+  const { rate: fxRate, isLive: fxLive, toKRW } = useExchangeRate();
+  const ws = useWebSocketPrices([symbol]);
   const [entryPrice, setEntryPrice] = useState("");
   const [stopLoss, setStopLoss] = useState("");
   const [takeProfit, setTakeProfit] = useState("");
