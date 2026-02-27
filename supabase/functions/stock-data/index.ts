@@ -171,7 +171,7 @@ function buildSyntheticChart(quote: any, symbol: string) {
   return { chartData, meta: { symbol, regularMarketPrice: quote.c } };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
