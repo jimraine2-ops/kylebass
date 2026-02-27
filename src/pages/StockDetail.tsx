@@ -10,6 +10,8 @@ import { TrendingUp, TrendingDown, Brain, Target, Shield, AlertTriangle } from "
 import { useState, useMemo } from "react";
 import CompanyNewsSection from "@/components/stock/CompanyNewsSection";
 import { formatStockName, getKoreanName } from "@/lib/koreanStockMap";
+import { useExchangeRate } from "@/hooks/useExchangeRate";
+import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 
 export default function StockDetail() {
   const { symbol = 'AAPL' } = useParams();
@@ -18,12 +20,15 @@ export default function StockDetail() {
   const chartData = chartResponse?.chartData;
   const { data: analysis, isLoading: analysisLoading } = useTechnicalAnalysis(symbol, chartData);
   const { data: sentiment } = useSentimentAnalysis(symbol);
-
+  const { rate: fxRate, isLive: fxLive, toKRW } = useExchangeRate();
+  const ws = useWebSocketPrices([symbol]);
   const [entryPrice, setEntryPrice] = useState("");
   const [stopLoss, setStopLoss] = useState("");
   const [takeProfit, setTakeProfit] = useState("");
 
   const quote = quotes?.[0];
+  const wsPrice = ws.getPrice(symbol);
+  const livePrice = wsPrice ?? quote?.regularMarketPrice;
   const isUp = (quote?.regularMarketChange || 0) >= 0;
 
   // R/R Ratio calculation
@@ -81,10 +86,13 @@ export default function StockDetail() {
         </div>
         <div className="text-right">
           <p className="text-3xl font-bold font-mono">
-            {quote?.regularMarketPrice ? `₩${((quote.regularMarketPrice) * 1350).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}` : '—'}
+            {livePrice ? `₩${Math.round(livePrice * fxRate).toLocaleString('ko-KR')}` : '—'}
           </p>
-          <p className="text-xs text-muted-foreground font-mono">${quote?.regularMarketPrice?.toFixed(2)}</p>
-          <p className={`text-sm font-mono ${isUp ? 'stock-up' : 'stock-down'}`}>
+          <p className="text-xs text-muted-foreground font-mono">
+            ${livePrice?.toFixed(2)} · {fxLive ? '실시간' : '고정'} ₩{fxRate.toLocaleString('ko-KR')}/USD
+            {wsPrice ? ' 🟢' : ''}
+          </p>
+          <p className={`text-sm font-mono ${isUp ? 'text-stock-up' : 'text-stock-down'}`}>
             {isUp ? '+' : ''}{quote?.regularMarketChangePercent?.toFixed(2)}%
           </p>
         </div>

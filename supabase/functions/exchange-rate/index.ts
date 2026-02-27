@@ -1,5 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -8,7 +6,6 @@ const corsHeaders = {
 // Cache exchange rate for 60 seconds
 let cachedRate: { rate: number; ts: number } | null = null;
 const CACHE_TTL = 60000;
-
 async function fetchExchangeRate(): Promise<number> {
   if (cachedRate && Date.now() - cachedRate.ts < CACHE_TTL) {
     return cachedRate.rate;
@@ -57,7 +54,7 @@ async function fetchExchangeRate(): Promise<number> {
   return 1380;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
