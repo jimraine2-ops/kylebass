@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useScalpingPortfolio } from "@/hooks/useStockData";
 import { resetScalpingWallet, updateWalletBalance } from "@/lib/api";
-import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap, ShieldAlert, Ban } from "lucide-react";
+import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap, ShieldAlert, Ban, DollarSign } from "lucide-react";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { toast } from "sonner";
 import { useState } from "react";
