@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -9,8 +8,8 @@ const corsHeaders = {
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 const KRW_RATE = 1350;
-const MIN_PRICE_KRW = 1000; // ₩1,000 minimum price filter
-const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE; // ~$0.74
+const MIN_PRICE_KRW = 1000;
+const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
@@ -37,7 +36,7 @@ async function finnhubFetch(path: string) {
   return null;
 }
 
-// ===== Technical Helpers (same as quant-signals) =====
+// ===== Technical Helpers =====
 function calculateEMA(data: number[], period: number): number[] {
   if (data.length === 0) return [];
   const k = 2 / (period + 1);
@@ -109,16 +108,11 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const n = closes.length - 1;
   if (n < 5) return null;
 
-  // 1. Sentiment (momentum proxy)
   const sentimentScore = changePct >= 5 ? 9 : changePct >= 3 ? 7 : changePct >= 1 ? 5 : changePct >= -1 ? 4 : 2;
-  
-  // 2. RVOL
   const currentVol = volumes[n];
   const avgVol = volumes.length >= 21 ? volumes.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 : currentVol;
   const rvol = avgVol > 0 ? currentVol / avgVol : 1;
   const rvolScore = rvol >= 3 ? 10 : rvol >= 2.5 ? 8 : rvol >= 2 ? 6 : rvol >= 1.5 ? 4 : 2;
-
-  // 3. Candle pattern
   const ema9 = calculateEMA(closes, 9);
   const ema21 = calculateEMA(closes, 21);
   const rsi = calculateRSI(closes, 14);
@@ -128,8 +122,6 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   if (ema9[n] > ema21[n] && closes[n] > ema9[n]) candleConfirms++;
   if (rsi[n] > 40 && rsi[n] < 70 && rsi[n] > (rsi[n-1]||50)) candleConfirms++;
   const candleScore = candleConfirms >= 2.5 ? 10 : candleConfirms >= 2 ? 7 : candleConfirms >= 1 ? 4 : 1;
-
-  // 4. ATR
   const atr = calculateATR(highs, lows, closes, 14);
   const currentATR = atr[atr.length - 1];
   const ema20 = calculateEMA(closes, 20);
@@ -137,27 +129,17 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const atrScore = closes[n] > keltnerUpper ? 10 : closes[n] > ema20[n] + currentATR ? 7 : 4;
   const recentHigh = Math.max(...highs.slice(-10));
   const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
-
-  // 5. Gap
   const gapPct = n > 0 ? ((opens[n] - closes[n-1]) / closes[n-1]) * 100 : 0;
   const gapScore = (gapPct >= 4 && gapPct <= 15) ? (closes[n] > opens[n] ? 10 : 5) : gapPct > 15 ? 2 : gapPct > 0 ? 3 : 1;
-
-  // 6. Short squeeze
   const high20 = Math.max(...closes.slice(-20));
   let squeezeScore = 0;
   if (closes[n] >= high20) squeezeScore += 6;
   if (avgVol > 0 && currentVol / avgVol > 2) squeezeScore += 4;
   squeezeScore = Math.min(10, squeezeScore);
-
-  // 7. Price position
   const allTimeHigh = Math.max(...highs);
   const distToATH = ((allTimeHigh - closes[n]) / allTimeHigh) * 100;
   const positionScore = distToATH <= 5 ? 10 : distToATH <= 10 ? 7 : distToATH <= 20 ? 4 : 2;
-
-  // 8. Sector synergy
   const sectorScore = changePct >= 5 ? 10 : changePct >= 3 ? 7 : changePct >= 1 ? 5 : 2;
-
-  // 9. Aggression
   let bullCount = 0, volInc = 0;
   for (let i = Math.max(0, n - 4); i <= n; i++) {
     if (closes[i] > opens[i]) bullCount++;
@@ -165,11 +147,8 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   }
   const aggression = (bullCount / 5) * 100;
   const aggrScore = aggression >= 80 && volInc >= 3 ? 10 : aggression >= 60 ? 7 : aggression >= 40 ? 4 : 2;
-
-  // 10. Pre-market
   const breakingHigh = closes[n] > Math.max(...highs.slice(Math.max(0, n - 5), n));
   const preMarketScore = breakingHigh ? 8 : 3;
-
   const totalScore = sentimentScore + rvolScore + candleScore + atrScore + gapScore + squeezeScore + positionScore + sectorScore + aggrScore + preMarketScore;
 
   return {
@@ -193,11 +172,9 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
 async function getQuoteAndCandles(symbol: string) {
   const quote = await finnhubFetch(`/quote?symbol=${symbol}`);
   if (!quote || !quote.c || quote.c === 0) return null;
-  
   const to = Math.floor(Date.now() / 1000);
   const from = to - 60 * 86400;
   const candles = await finnhubFetch(`/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${to}`);
-  
   let closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[];
   if (candles && candles.s !== 'no_data' && candles.t) {
     closes = candles.c; highs = candles.h; lows = candles.l; opens = candles.o; volumes = candles.v;
@@ -205,11 +182,10 @@ async function getQuoteAndCandles(symbol: string) {
     const s = generateSyntheticCandles(quote);
     closes = s.closes; highs = s.highs; lows = s.lows; opens = s.opens; volumes = s.volumes;
   }
-  
   return { quote, closes, highs, lows, opens, volumes };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -228,7 +204,6 @@ serve(async (req) => {
   };
 
   try {
-    // Verify this is a legitimate cron/internal call
     const authHeader = req.headers.get('Authorization');
     const body = await req.json().catch(() => ({}));
     const isCron = body?.source === 'cron';
@@ -239,7 +214,6 @@ serve(async (req) => {
       });
     }
 
-    // Update heartbeat
     await supabase.from('agent_status').update({
       last_heartbeat: new Date().toISOString(),
       is_running: true,
@@ -251,19 +225,36 @@ serve(async (req) => {
     // ========== PHASE 1: QUANT STRATEGY (Premium Stocks) ==========
     const QUANT_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD', 'PLTR', 'COIN', 'SOFI', 'HOOD', 'RIVN', 'NIO', 'MARA'];
 
-    // Get wallets
     const { data: mainWallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
     const { data: scalpWallet } = await supabase.from('scalping_wallet').select('*').limit(1).single();
     if (!mainWallet) throw new Error('No main wallet');
 
-    // Get open positions
     const { data: mainOpenPos } = await supabase.from('ai_trades').select('*').eq('status', 'open');
     const { data: scalpOpenPos } = await supabase.from('scalping_trades').select('*').eq('status', 'open');
 
     let mainBalance = mainWallet.balance;
     let scalpBalance = scalpWallet?.balance || 1000000;
 
-    await addLog('system', 'scan', null, `[${timeStr}] Cloud Agent 사이클 시작 — 대형주 ${QUANT_SYMBOLS.length}개 + 소형주 스캔`);
+    // ★ [자금 관리] 확정 잔고 = DB의 wallet.balance (매도 완료 시에만 갱신됨)
+    // 매수 가능 금액(Buying Power) = 확정 잔고 그 자체 (평가액 불포함)
+    const mainInitialBalance = mainWallet.initial_balance || mainBalance;
+    const scalpInitialBalance = scalpWallet?.initial_balance || scalpBalance;
+
+    // 자금 운용률 계산
+    const mainInvested = (mainOpenPos || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
+    const mainUtilization = mainInitialBalance > 0 ? ((mainInitialBalance - mainBalance) / mainInitialBalance) * 100 : 0;
+    const scalpInvested = (scalpOpenPos || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
+    const scalpUtilization = scalpInitialBalance > 0 ? ((scalpInitialBalance - scalpBalance) / scalpInitialBalance) * 100 : 0;
+
+    await addLog('system', 'scan', null, `[${timeStr}] Cloud Agent 사이클 시작 — 대형주 ${QUANT_SYMBOLS.length}개 + 소형주 스캔 | [자금현황] 대형주 확정잔고: ${fmtKRWRaw(Math.round(mainBalance))} (운용률 ${mainUtilization.toFixed(1)}%) | 소형주 확정잔고: ${fmtKRWRaw(Math.round(scalpBalance))} (운용률 ${scalpUtilization.toFixed(1)}%)`);
+
+    // ★ 자금 운용률 90% 이상 경고
+    if (mainUtilization >= 90) {
+      await addLog('quant', 'warning', null, `[자금경고] ⚠️ 대형주 자금 운용률 ${mainUtilization.toFixed(1)}% — 임계점 도달! 확정 잔고: ${fmtKRWRaw(Math.round(mainBalance))}`, { utilization: mainUtilization });
+    }
+    if (scalpUtilization >= 90) {
+      await addLog('scalping', 'warning', null, `[자금경고] ⚠️ 소형주 자금 운용률 ${scalpUtilization.toFixed(1)}% — 임계점 도달! 확정 잔고: ${fmtKRWRaw(Math.round(scalpBalance))}`, { utilization: scalpUtilization });
+    }
 
     // --- QUANT: Exit checks for all open positions ---
     const mainSymbolsToCheck = [...new Set((mainOpenPos || []).map((p: any) => p.symbol))];
@@ -302,25 +293,29 @@ serve(async (req) => {
           const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
           const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
           const balanceBefore = Math.round(mainBalance);
+          // ★ 매도 완료 시에만 확정 잔고 복구: 원금 + 손익
           const saleProceeds = investmentKRW + pnlKRW;
           const newBalance = Math.round(mainBalance + saleProceeds);
           await supabase.from('ai_trades').update({
             status: newStatus, close_price: price, pnl: pnlKRW,
             closed_at: now.toISOString(),
-            ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`,
+            ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}] [확정잔고 복구]`,
           }).eq('id', pos.id);
           await supabase.from('ai_wallet').update({
             balance: newBalance, updated_at: now.toISOString(),
           }).eq('id', mainWallet.id);
           mainBalance = newBalance;
-          await addLog('quant', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`, { pnl: pnlKRW, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('quant', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}] [확정잔고 복구]`, { pnl: pnlKRW, pnlPct: +pnlPct.toFixed(2) });
         }
       }
       await new Promise(r => setTimeout(r, 200));
     }
 
     // --- QUANT: Scan for new entries ---
+    // ★ Collect all candidates first, then sort by score (highest first) for priority allocation
     const mainOpenCount = (mainOpenPos || []).filter(p => p.status === 'open').length;
+    const quantCandidates: { sym: string; price: number; scoring: any }[] = [];
+
     for (let i = 0; i < QUANT_SYMBOLS.length; i += 3) {
       const batch = QUANT_SYMBOLS.slice(i, i + 3);
       const results = await Promise.all(batch.map(async (sym) => {
@@ -335,49 +330,63 @@ serve(async (req) => {
 
       for (const r of results) {
         if (!r || r.scoring.totalScore < 50) continue;
-
         const alreadyHolding = (mainOpenPos || []).some(p => p.symbol === r.sym && p.status === 'open');
         const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
         if (alreadyHolding && !isPyramiding) continue;
         if (mainOpenCount >= 10) continue;
-
         const sentimentOk = (r.scoring.indicators.sentiment.score || 0) > 0;
         const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= 1.5;
         const vwapOk = (r.scoring.indicators.candle.score || 0) >= 4;
         if (!sentimentOk || !rvolOk || !vwapOk) continue;
-
-        const positionPct = isPyramiding ? 0.10 : 0.15;
-        const maxKRW = mainBalance * positionPct;
-        const priceKRW = toKRW(r.price);
-        const qty = Math.floor(maxKRW / priceKRW);
-        const costKRW = Math.round(qty * priceKRW);
-
-        if (qty > 0 && costKRW <= mainBalance) {
-          const stopLoss = +(r.price * 0.975).toFixed(4);
-          const takeProfit = +(r.price * 1.06).toFixed(4);
-          const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
-          const balanceBefore = Math.round(mainBalance);
-          const newBuyBalance = Math.round(mainBalance - costKRW);
-          const logMsg = `[Cloud-Quant] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 자율 매수 [${tier}|${qty}주@${fmtKRW(r.price)}|${fmtKRWRaw(costKRW)}] | [잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
-
-          await supabase.from('ai_trades').insert({
-            symbol: r.sym, side: 'buy', quantity: qty, price: r.price,
-            stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
-            ai_reason: logMsg, ai_confidence: r.scoring.totalScore,
-          });
-          await supabase.from('ai_wallet').update({
-            balance: newBuyBalance, updated_at: now.toISOString(),
-          }).eq('id', mainWallet.id);
-          mainBalance = newBuyBalance;
-          await addLog('quant', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, qty, costKRW });
-        }
+        quantCandidates.push(r);
       }
       if (i + 3 < QUANT_SYMBOLS.length) await new Promise(r => setTimeout(r, 200));
     }
 
+    // ★ 점수 높은 종목 우선 배분 (Priority Allocation)
+    quantCandidates.sort((a, b) => b.scoring.totalScore - a.scoring.totalScore);
+
+    for (const r of quantCandidates) {
+      const alreadyHolding = (mainOpenPos || []).some(p => p.symbol === r.sym && p.status === 'open');
+      const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
+      const positionPct = isPyramiding ? 0.10 : 0.15;
+
+      // ★ [확정 잔고 기반] 매수 가능 금액 = 현재 확정 잔고 × 비중
+      const maxKRW = mainBalance * positionPct;
+      const priceKRW = toKRW(r.price);
+      const qty = Math.floor(maxKRW / priceKRW);
+      const costKRW = Math.round(qty * priceKRW);
+
+      // ★ [Hard Stop] 잔고 부족 시 진입 보류
+      if (qty <= 0 || costKRW > mainBalance) {
+        const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
+        await addLog('quant', 'hold', r.sym, `[Cloud-Quant] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 매수 신호 발생 → ⚠️ 잔고 부족으로 인한 진입 보류 [${tier}] | 필요: ${fmtKRWRaw(costKRW)} | 확정 잔고: ${fmtKRWRaw(Math.round(mainBalance))}`, { score: r.scoring.totalScore, needed: costKRW, available: Math.round(mainBalance) });
+        continue;
+      }
+
+      const stopLoss = +(r.price * 0.975).toFixed(4);
+      const takeProfit = +(r.price * 1.06).toFixed(4);
+      const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
+      const balanceBefore = Math.round(mainBalance);
+      // ★ 매수 즉시 확정 잔고 차감
+      const newBuyBalance = Math.round(mainBalance - costKRW);
+      const logMsg = `[Cloud-Quant] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 자율 매수 [${tier}|${qty}주@${fmtKRW(r.price)}|${fmtKRWRaw(costKRW)}] | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+
+      await supabase.from('ai_trades').insert({
+        symbol: r.sym, side: 'buy', quantity: qty, price: r.price,
+        stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
+        ai_reason: logMsg, ai_confidence: r.scoring.totalScore,
+      });
+      await supabase.from('ai_wallet').update({
+        balance: newBuyBalance, updated_at: now.toISOString(),
+      }).eq('id', mainWallet.id);
+      mainBalance = newBuyBalance;
+      await addLog('quant', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, qty, costKRW });
+    }
+
     // ========== PHASE 2: SCALPING STRATEGY (Penny Stocks) ==========
     if (scalpWallet) {
-      // === SELF-LEARNING: Build blacklist from trade history ===
+      // === SELF-LEARNING: Blacklist ===
       const { data: recentScalpLosses } = await supabase
         .from('scalping_trades')
         .select('symbol, pnl, status')
@@ -389,7 +398,6 @@ serve(async (req) => {
       for (const t of (recentScalpLosses || [])) {
         lossCount[t.symbol] = (lossCount[t.symbol] || 0) + 1;
       }
-      // Blacklist: symbols with 3+ losses
       const blacklistSymbols = new Set(
         Object.entries(lossCount).filter(([_, c]) => c >= 3).map(([s]) => s)
       );
@@ -397,7 +405,7 @@ serve(async (req) => {
         await addLog('scalping', 'learn', null, `[AI-Learn] 진입 금지 블랙리스트: ${[...blacklistSymbols].join(', ')} (3회+ 손절)`, {});
       }
 
-      // === SELF-LEARNING: Dynamic threshold from win rate ===
+      // === Dynamic threshold ===
       const { data: recentScalp } = await supabase
         .from('scalping_trades')
         .select('pnl')
@@ -407,22 +415,20 @@ serve(async (req) => {
       const recentWins = (recentScalp || []).filter(t => (t.pnl || 0) > 0).length;
       const recentTotal = (recentScalp || []).length;
       const recentWinRate = recentTotal > 0 ? (recentWins / recentTotal) * 100 : 50;
-      // Adjust entry threshold: tighter if losing, looser if winning
-      let dynamicEntryThreshold = 3; // default +3%
+      let dynamicEntryThreshold = 3;
       if (recentWinRate < 40) dynamicEntryThreshold = 5;
       else if (recentWinRate < 50) dynamicEntryThreshold = 4;
       else if (recentWinRate > 65) dynamicEntryThreshold = 2;
 
       await addLog('scalping', 'learn', null, `[AI-Learn] 최근 승률 ${recentWinRate.toFixed(1)}% → 동적 진입 기준: +${dynamicEntryThreshold}%`, {});
 
-      // Exit checks for scalping positions
+      // Exit checks
       const scalpSymbolsToCheck = [...new Set((scalpOpenPos || []).map((p: any) => p.symbol))];
       for (const sym of scalpSymbolsToCheck) {
         const quoteData = await finnhubFetch(`/quote?symbol=${sym}`);
         if (!quoteData?.c) continue;
         const price = quoteData.c;
 
-        // ₩1,000 미만 초저가주 경고 — 보유 중인 종목이 저가로 추락한 경우
         if (price < MIN_PRICE_USD) {
           await addLog('scalping', 'warning', sym, `[Cloud-Scalp] [${timeStr}] ⚠️ ${sym} 초저가 경고: ${fmtKRW(price)} (₩1,000 미만) — 즉시 정리 필요`, { price, priceKRW: Math.round(toKRW(price)) });
         }
@@ -433,20 +439,16 @@ serve(async (req) => {
           let closeReason = '';
           let newStatus = 'closed';
 
-          // Track peak price for trailing stop
           const peakPrice = Math.max(pos.peak_price || pos.price, price);
           if (price > (pos.peak_price || pos.price)) {
             await supabase.from('scalping_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
           }
 
-          // -2.5% hard stop
           if (pnlPct <= -2.5) {
             shouldClose = true;
             closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 손절 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
             newStatus = 'stopped';
-          }
-          // Trailing stop: +10% from entry peak, then -5% from peak
-          else if (peakPrice >= pos.price * 1.10) {
+          } else if (peakPrice >= pos.price * 1.10) {
             const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
             if (dropFromPeak >= 5) {
               const lockedPnlPct = ((price - pos.price) / pos.price * 100).toFixed(2);
@@ -454,22 +456,15 @@ serve(async (req) => {
               closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnlPct}% 확정)`;
               newStatus = 'trailing_profit';
             }
-          }
-          // ATR trailing stop
-          else if (pos.stop_loss && price <= pos.stop_loss) {
+          } else if (pos.stop_loss && price <= pos.stop_loss) {
             shouldClose = true;
             closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 추격 손절 터치 (${fmtKRW(pos.stop_loss)})`;
             newStatus = 'stopped';
-          }
-          // Fixed take profit 5%
-          else if (pos.take_profit && price >= pos.take_profit) {
+          } else if (pos.take_profit && price >= pos.take_profit) {
             shouldClose = true;
             closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 익절 도달 (+5%)`;
             newStatus = 'profit_taken';
-          }
-          // NO time-cut — removed entirely
-          // === INTELLIGENT EARLY EXIT: 블랙리스트 종목이면 본절 탈출 ===
-          else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0) {
+          } else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0) {
             shouldClose = true;
             closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 지능형 조기 대응 — 블랙리스트 종목 본절 탈출 (${pnlPct.toFixed(2)}%)`;
             newStatus = 'early_exit';
@@ -489,12 +484,13 @@ serve(async (req) => {
                   quantity: pos.quantity - sellQty, partial_exits: partialExits,
                   stop_loss: Math.max(+(price - 2.0 * (price * 0.02)).toFixed(4), pos.stop_loss || 0),
                 }).eq('id', pos.id);
+                // ★ 부분 매도 확정 → 확정 잔고에 매도 대금 복구
                 const newPartialBal = Math.round(scalpBalance + sellValue);
                 await supabase.from('scalping_wallet').update({
                   balance: newPartialBal, updated_at: now.toISOString(),
                 }).eq('id', scalpWallet.id);
                 scalpBalance = newPartialBal;
-                await addLog('scalping', 'exit', sym, `[Cloud-Scalp] ${sym} 1차 50% 익절 (${pnlPct.toFixed(1)}%) | [수익 실현] ${fmtKRWRaw(partialPnl)} 입금`, { pnl: partialPnl });
+                await addLog('scalping', 'exit', sym, `[Cloud-Scalp] ${sym} 1차 50% 익절 (${pnlPct.toFixed(1)}%) | [확정잔고 복구] ${fmtKRWRaw(sellValue)} 입금`, { pnl: partialPnl });
               }
             }
           }
@@ -503,22 +499,23 @@ serve(async (req) => {
             const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
             const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
             const balanceBefore = Math.round(scalpBalance);
+            // ★ 매도 완료 → 원금 + 손익을 확정 잔고에 복구
+            const newScalpBal = Math.round(scalpBalance + investmentKRW + pnlKRW);
             await supabase.from('scalping_trades').update({
               status: newStatus, close_price: price, pnl: pnlKRW,
-              closed_at: now.toISOString(), ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(Math.round(scalpBalance + investmentKRW + pnlKRW))}]`,
+              closed_at: now.toISOString(), ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [확정잔고 복구: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBal)}]`,
             }).eq('id', pos.id);
-            const newScalpBal = Math.round(scalpBalance + investmentKRW + pnlKRW);
             await supabase.from('scalping_wallet').update({
               balance: newScalpBal, updated_at: now.toISOString(),
             }).eq('id', scalpWallet.id);
             scalpBalance = newScalpBal;
-            await addLog('scalping', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBal)}]`, { pnl: pnlKRW, balanceBefore, balanceAfter: newScalpBal });
+            await addLog('scalping', 'exit', sym, `${closeReason} | [확정잔고 복구] ${fmtKRWRaw(pnlKRW)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBal)}]`, { pnl: pnlKRW, balanceBefore, balanceAfter: newScalpBal });
           }
         }
         await new Promise(r => setTimeout(r, 200));
       }
 
-      // Dynamic full-market penny stock scanning — 100 tickers across 4 rotation groups
+      // Penny stock scanning with priority allocation
       const PENNY_GROUPS = [
         ['NIO', 'LCID', 'GOEV', 'FFIE', 'MULN', 'WKHS', 'NKLA', 'CHPT', 'FCEL', 'PLUG',
          'SNDL', 'TLRY', 'ACB', 'CGC', 'MNMD', 'SENS', 'GNUS', 'BNGO', 'CLVS', 'DNA', 'ME', 'SDC', 'SOFI', 'HOOD', 'PSFE'],
@@ -529,39 +526,36 @@ serve(async (req) => {
         ['ZETA', 'AEVA', 'AMPX', 'ARVL', 'BEEM', 'BLNK', 'CANO', 'DM', 'EOSE', 'FLNC',
          'GLS', 'HYLN', 'KORE', 'LAZR', 'MAPS', 'NUVB', 'OUST', 'SHLS', 'TRMR', 'UPST', 'VNET', 'WRAP', 'XPEV', 'ARQQ', 'ENVX'],
       ];
-      // Rotate through groups each cycle to cover all 100 tickers across 4 cycles
       const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
       const pennyGroupIdx = cycleCount % PENNY_GROUPS.length;
       const pennyTickers = PENNY_GROUPS[pennyGroupIdx];
       let scalpOpenCount = (scalpOpenPos || []).filter(p => p.status === 'open').length;
 
-      await addLog('scalping', 'scan', null, `[Cloud-Scalp] [${timeStr}] 소형주 그룹 ${pennyGroupIdx + 1}/4 스캔 시작 (${pennyTickers.length}개 종목)`, {});
+      await addLog('scalping', 'scan', null, `[Cloud-Scalp] [${timeStr}] 소형주 그룹 ${pennyGroupIdx + 1}/4 스캔 시작 (${pennyTickers.length}개 종목) | 확정잔고: ${fmtKRWRaw(Math.round(scalpBalance))}`, {});
 
-      // Scan in batches of 5 for speed
+      // ★ Collect all candidates first, then sort by changePct (highest first)
+      const scalpCandidates: { sym: string; price: number; changePct: number }[] = [];
+
       for (let bi = 0; bi < pennyTickers.length; bi += 5) {
-        if (scalpOpenCount >= 10) break;
         const batch = pennyTickers.slice(bi, bi + 5);
         const batchResults = await Promise.all(batch.map(async (sym) => {
           try {
             const alreadyHolding = (scalpOpenPos || []).some(p => p.symbol === sym && p.status === 'open');
             if (alreadyHolding) return null;
-            // === BLACKLIST CHECK ===
             if (blacklistSymbols.has(sym)) {
               return { sym, price: 0, changePct: 0, filtered: true, reason: 'blacklist' };
             }
             const quoteData = await finnhubFetch(`/quote?symbol=${sym}`);
             if (!quoteData?.c || quoteData.c >= 10) return null;
-            // ₩1,000 미만 초저가주 차단
             if (quoteData.c < MIN_PRICE_USD) {
               return { sym, price: quoteData.c, changePct: 0, filtered: true, reason: 'low_price' };
             }
             const changePct = quoteData.dp || 0;
-            if (changePct < dynamicEntryThreshold) return null; // Dynamic threshold
+            if (changePct < dynamicEntryThreshold) return null;
             return { sym, price: quoteData.c, changePct, filtered: false };
           } catch { return null; }
         }));
 
-        // Log filtered penny stocks
         const filteredStocks = batchResults.filter((r: any) => r?.filtered);
         for (const f of filteredStocks) {
           const reason = f.reason === 'blacklist'
@@ -570,44 +564,55 @@ serve(async (req) => {
           await addLog('scalping', 'filter', f.sym, reason, { price: f.price, reason: f.reason });
         }
 
-        // Sort by changePct desc to prioritize hottest stocks
-        const validResults = batchResults.filter((r: any) => r && !r.filtered && r.changePct > 0).sort((a: any, b: any) => b.changePct - a.changePct);
-
+        const validResults = batchResults.filter((r: any) => r && !r.filtered && r.changePct > 0);
         for (const r of validResults) {
-          if (!r || scalpOpenCount >= 10) break;
-          const { sym, price, changePct } = r;
-          const priceKRW = toKRW(price);
-          const maxKRW = scalpBalance * 0.10;
-          const qty = Math.floor(maxKRW / priceKRW);
-          const costKRW = Math.round(qty * priceKRW);
-
-          if (qty > 0 && costKRW <= scalpBalance) {
-            // Final price floor re-verification before execution
-            if (price < MIN_PRICE_USD) {
-              await addLog('scalping', 'filter', sym, `[Cloud-Scalp] [${timeStr}] ${sym} 저가주 필터링으로 인한 진입 취소 (${fmtKRW(price)} < ₩1,000)`, { price });
-              continue;
-            }
-            const stopLoss = +(price * 0.975).toFixed(4); // -2.5%
-            const takeProfit = +(price * 1.05).toFixed(4); // +5%
-            const balanceBefore = Math.round(scalpBalance);
-            const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5% | [잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(Math.round(scalpBalance - costKRW))}]`;
-
-            await supabase.from('scalping_trades').insert({
-              symbol: sym, side: 'buy', quantity: qty, price,
-              stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
-              entry_score: Math.round(changePct), time_limit_at: null,
-              ai_reason: logMsg, ai_confidence: 100,
-            });
-            const newScalpBuyBal = Math.round(scalpBalance - costKRW);
-            await supabase.from('scalping_wallet').update({
-              balance: newScalpBuyBal, updated_at: now.toISOString(),
-            }).eq('id', scalpWallet.id);
-            scalpBalance = newScalpBuyBal;
-            scalpOpenCount++;
-            await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0), balanceBefore, balanceAfter: newScalpBuyBal });
-          }
+          if (r) scalpCandidates.push({ sym: r.sym, price: r.price, changePct: r.changePct });
         }
         if (bi + 5 < pennyTickers.length) await new Promise(r => setTimeout(r, 200));
+      }
+
+      // ★ 상승률 높은 종목 우선 배분 (Priority Allocation)
+      scalpCandidates.sort((a, b) => b.changePct - a.changePct);
+
+      for (const r of scalpCandidates) {
+        if (scalpOpenCount >= 10) break;
+        const { sym, price, changePct } = r;
+        const priceKRW = toKRW(price);
+        // ★ [확정 잔고 기반] 매수 금액 = 현재 확정 잔고 × 10%
+        const maxKRW = scalpBalance * 0.10;
+        const qty = Math.floor(maxKRW / priceKRW);
+        const costKRW = Math.round(qty * priceKRW);
+
+        // ★ [Hard Stop] 잔고 부족 시 진입 보류
+        if (qty <= 0 || costKRW > scalpBalance) {
+          await addLog('scalping', 'hold', sym, `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 매수 신호 → ⚠️ 잔고 부족으로 인한 진입 보류 | 필요: ${fmtKRWRaw(costKRW)} | 확정잔고: ${fmtKRWRaw(Math.round(scalpBalance))}`, { changePct, needed: costKRW, available: Math.round(scalpBalance) });
+          continue;
+        }
+
+        if (price < MIN_PRICE_USD) {
+          await addLog('scalping', 'filter', sym, `[Cloud-Scalp] [${timeStr}] ${sym} 저가주 필터링으로 인한 진입 취소 (${fmtKRW(price)} < ₩1,000)`, { price });
+          continue;
+        }
+
+        const stopLoss = +(price * 0.975).toFixed(4);
+        const takeProfit = +(price * 1.05).toFixed(4);
+        const balanceBefore = Math.round(scalpBalance);
+        // ★ 매수 즉시 확정 잔고에서 차감
+        const newScalpBuyBal = Math.round(scalpBalance - costKRW);
+        const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5% | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBuyBal)}]`;
+
+        await supabase.from('scalping_trades').insert({
+          symbol: sym, side: 'buy', quantity: qty, price,
+          stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
+          entry_score: Math.round(changePct), time_limit_at: null,
+          ai_reason: logMsg, ai_confidence: 100,
+        });
+        await supabase.from('scalping_wallet').update({
+          balance: newScalpBuyBal, updated_at: now.toISOString(),
+        }).eq('id', scalpWallet.id);
+        scalpBalance = newScalpBuyBal;
+        scalpOpenCount++;
+        await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0), balanceBefore, balanceAfter: newScalpBuyBal });
       }
     }
 

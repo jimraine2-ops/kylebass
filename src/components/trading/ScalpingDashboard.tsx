@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useScalpingPortfolio } from "@/hooks/useStockData";
 import { resetScalpingWallet, updateWalletBalance } from "@/lib/api";
-import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap, ShieldAlert, Ban } from "lucide-react";
+import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap, ShieldAlert, Ban, DollarSign } from "lucide-react";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -87,8 +87,37 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: Sc
         </CardContent>
       </Card>
 
+      {/* ★ 자금 운용률 경고 배너 */}
+      {(() => {
+        const scalpConfirmed = wallet?.balance || 1000000;
+        const scalpInitial = wallet?.initial_balance || scalpConfirmed;
+        const utilization = scalpInitial > 0 ? ((scalpInitial - scalpConfirmed) / scalpInitial) * 100 : 0;
+        return utilization >= 90 ? (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="p-3 flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-destructive animate-pulse" />
+              <span className="text-sm font-bold text-destructive">⚠️ 자금 운용률 임계점 도달: {utilization.toFixed(1)}%</span>
+              <span className="text-xs text-muted-foreground ml-2">확정 잔고의 대부분이 투입되었습니다.</span>
+            </CardContent>
+          </Card>
+        ) : null;
+      })()}
+
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
+        {/* ★ 매수 가능 현금 */}
+        <Card className="border-stock-up/40 bg-stock-up/5">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign className="w-4 h-4 text-stock-up" />
+              <span className="text-xs font-medium text-stock-up">매수 가능 현금</span>
+            </div>
+            <p className="text-lg font-bold font-mono text-stock-up">
+              ₩{Math.round(Math.max(0, wallet?.balance || 0)).toLocaleString('ko-KR')}
+            </p>
+            <p className="text-[10px] text-muted-foreground">종목당: ₩{Math.round(Math.max(0, (wallet?.balance || 0)) * 0.10).toLocaleString('ko-KR')}</p>
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">

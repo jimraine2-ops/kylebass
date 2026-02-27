@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAIPortfolio } from "@/hooks/useStockData";
 import { resetAIWallet, updateWalletBalance } from "@/lib/api";
-import { Wallet, Trophy, BarChart3, RotateCcw, Target, Scale, Activity, Landmark, TrendingUp } from "lucide-react";
+import { Wallet, Trophy, BarChart3, RotateCcw, Target, Scale, Activity, Landmark, TrendingUp, DollarSign, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -125,7 +125,35 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* ★ 자금 운용률 경고 배너 */}
+      {(() => {
+        const initialBal = wallet?.initial_balance || confirmedBalance;
+        const utilization = initialBal > 0 ? ((initialBal - confirmedBalance) / initialBal) * 100 : 0;
+        return utilization >= 90 ? (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="p-3 flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-destructive animate-pulse" />
+              <span className="text-sm font-bold text-destructive">⚠️ 자금 운용률 임계점 도달: {utilization.toFixed(1)}%</span>
+              <span className="text-xs text-muted-foreground ml-2">확정 잔고의 대부분이 투입되었습니다. 신규 매수가 제한될 수 있습니다.</span>
+            </CardContent>
+          </Card>
+        ) : null;
+      })()}
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {/* ★ 매수 가능 현금 (Buying Power) — 가장 눈에 띄게 */}
+        <Card className="border-stock-up/40 bg-stock-up/5">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign className="w-4 h-4 text-stock-up" />
+              <span className="text-xs font-medium text-stock-up">매수 가능 현금</span>
+            </div>
+            <p className="text-xl font-bold font-mono text-stock-up">
+              ₩{Math.round(Math.max(0, confirmedBalance)).toLocaleString('ko-KR')}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1">종목당 최대: ₩{Math.round(Math.max(0, confirmedBalance) * 0.15).toLocaleString('ko-KR')} (15%)</p>
+          </CardContent>
+        </Card>
         <Card className="border-primary/30">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-1">
