@@ -10,6 +10,8 @@ import { TrendingUp, TrendingDown, Brain, Target, Shield, AlertTriangle } from "
 import { useState, useMemo } from "react";
 import CompanyNewsSection from "@/components/stock/CompanyNewsSection";
 import { formatStockName, getKoreanName } from "@/lib/koreanStockMap";
+import { useExchangeRate } from "@/hooks/useExchangeRate";
+import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 
 export default function StockDetail() {
   const { symbol = 'AAPL' } = useParams();
