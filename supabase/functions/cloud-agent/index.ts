@@ -232,13 +232,56 @@ Deno.serve(async (req) => {
     const { data: mainOpenPos } = await supabase.from('ai_trades').select('*').eq('status', 'open');
     const { data: scalpOpenPos } = await supabase.from('scalping_trades').select('*').eq('status', 'open');
 
-    let mainBalance = mainWallet.balance;
-    let scalpBalance = scalpWallet?.balance || 1000000;
+    const mainInitialBalance = mainWallet.initial_balance || mainWallet.balance;
+    const scalpInitialBalance = scalpWallet?.initial_balance || scalpWallet?.balance || 1000000;
 
-    // ★ [자금 관리] 확정 잔고 = DB의 wallet.balance (매도 완료 시에만 갱신됨)
-    // 매수 가능 금액(Buying Power) = 확정 잔고 그 자체 (평가액 불포함)
-    const mainInitialBalance = mainWallet.initial_balance || mainBalance;
-    const scalpInitialBalance = scalpWallet?.initial_balance || scalpBalance;
+    // ★★★ [잔고 검증 Reconciliation] 매 사이클마다 거래 로그 기반으로 진짜 잔고 재계산
+    async function reconcileBalance(
+      walletTable: string, tradesTable: string, walletId: string, initBal: number
+    ): Promise<number> {
+      // 1) Sum all original buy costs (including partial-exited qty)
+      const { data: allTrades } = await supabase.from(tradesTable).select('*');
+      if (!allTrades || allTrades.length === 0) return initBal;
+
+      let totalBuyCost = 0;
+      let totalSaleProceeds = 0;
+
+      for (const t of allTrades) {
+        // Original qty = current qty + partial exit qty
+        const partialExits: any[] = t.partial_exits || [];
+        const partialQty = partialExits.reduce((s: number, pe: any) => s + (Number(pe.qty) || 0), 0);
+        const originalQty = Number(t.quantity) + partialQty;
+        totalBuyCost += Math.floor(Number(t.price) * originalQty * KRW_RATE);
+
+        // Sale proceeds from closed trades
+        if (t.status !== 'open' && t.close_price != null) {
+          totalSaleProceeds += Math.floor(Number(t.close_price) * Number(t.quantity) * KRW_RATE);
+        }
+
+        // Sale proceeds from partial exits
+        for (const pe of partialExits) {
+          totalSaleProceeds += Math.floor(Number(pe.qty) * Number(pe.price) * KRW_RATE);
+        }
+      }
+
+      const correctBalance = Math.floor(initBal - totalBuyCost + totalSaleProceeds);
+      return correctBalance;
+    }
+
+    let mainBalance = await reconcileBalance('ai_wallet', 'ai_trades', mainWallet.id, mainInitialBalance);
+    let scalpBalance = scalpWallet
+      ? await reconcileBalance('scalping_wallet', 'scalping_trades', scalpWallet.id, scalpInitialBalance)
+      : 1000000;
+
+    // Sync reconciled balance to DB if different
+    if (mainBalance !== Math.floor(mainWallet.balance)) {
+      await supabase.from('ai_wallet').update({ balance: mainBalance, updated_at: now.toISOString() }).eq('id', mainWallet.id);
+      await addLog('system', 'audit', null, `[잔고검증] 대형주 잔고 교정: ${fmtKRWRaw(Math.floor(mainWallet.balance))} → ${fmtKRWRaw(mainBalance)} (거래이력 기반 재계산)`, { before: Math.floor(mainWallet.balance), after: mainBalance });
+    }
+    if (scalpWallet && scalpBalance !== Math.floor(scalpWallet.balance)) {
+      await supabase.from('scalping_wallet').update({ balance: scalpBalance, updated_at: now.toISOString() }).eq('id', scalpWallet.id);
+      await addLog('system', 'audit', null, `[잔고검증] 소형주 잔고 교정: ${fmtKRWRaw(Math.floor(scalpWallet.balance))} → ${fmtKRWRaw(scalpBalance)} (거래이력 기반 재계산)`, { before: Math.floor(scalpWallet.balance), after: scalpBalance });
+    }
 
     // 자금 운용률 계산
     const mainInvested = (mainOpenPos || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
