@@ -403,7 +403,7 @@ Deno.serve(async (req) => {
       const maxKRW = mainBalance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
-      const costKRW = Math.round(qty * priceKRW);
+      const costKRW = Math.floor(qty * priceKRW);
 
       // ★ [Hard Stop] 잔고 부족 시 진입 보류
       if (qty <= 0 || costKRW > mainBalance) {
