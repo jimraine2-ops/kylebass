@@ -122,16 +122,17 @@ serve(async (req) => {
 
         if (shouldClose && pos.symbol === symbol) {
           const sellPrice = applySlippage(price, 'sell');
-          const pnlRaw = toKRW((sellPrice - pos.price) * pos.quantity);
-          const pnl = Math.round(pnlRaw);
-          const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
+          // ★ 정밀 회계: 매도대금 직접 계산
+          const saleProceeds = Math.floor(toKRW(sellPrice * pos.quantity));
+          const buyCost = Math.floor(toKRW(pos.price * pos.quantity));
+          const pnl = saleProceeds - buyCost;
           const pnlPct = ((sellPrice - pos.price) / pos.price * 100).toFixed(2);
-          const balanceBefore = Math.round(wallet.balance);
-          const balanceAfter = Math.round(wallet.balance + investmentKRW + pnl);
+          const balanceBefore = Math.floor(wallet.balance);
+          const balanceAfter = balanceBefore + saleProceeds;
           await supabase.from('ai_trades').update({
             status: newStatus, close_price: sellPrice, pnl,
             closed_at: new Date().toISOString(),
-            ai_reason: `${closeReason} | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(sellPrice)}] | 수익률: ${pnlPct}% | [수익 실현 완료] ${fmtKRWRaw(pnl)} 입금 → 잔고 업데이트 | [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
+            ai_reason: `${closeReason} | [API가격: ${fmtKRW(price)} → 슬리피지적용가: ${fmtKRW(sellPrice)}] | 수익률: ${pnlPct}% | PnL: ${fmtKRWRaw(pnl)} | 매도대금: ${fmtKRWRaw(saleProceeds)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
           }).eq('id', pos.id);
 
           await supabase.from('ai_wallet').update({
@@ -251,26 +252,11 @@ Respond with JSON ONLY:
     if (action === 'get-portfolio') {
       const { data: wallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
       const { data: openPositions } = await supabase.from('ai_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
-      // Fetch ALL closed trades for accurate reconciliation (no limit)
-      const { data: allTradesForReconciliation } = await supabase.from('ai_trades').select('id, price, quantity, pnl, status').neq('status', 'open');
+      // Fetch ALL closed trades for display (limited)
       const { data: allTrades } = await supabase.from('ai_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(50);
 
-      // === RECONCILIATION: Verify cash balance integrity ===
-      // Correct balance = initial_balance - sum(open position costs) + sum(closed trade sale proceeds)
-      const openCostKRW = (openPositions || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
-      // Use ALL closed trades (no limit) for accurate reconciliation
-      const closedInvestmentReturned = (allTradesForReconciliation || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
-      const expectedBalance = Math.round((wallet?.initial_balance || 1000000) - openCostKRW + closedInvestmentReturned);
-      
-      let reconciled = false;
-      if (wallet && Math.abs(wallet.balance - expectedBalance) > 100) {
-        // Auto-correct balance drift
-        await supabase.from('ai_wallet').update({
-          balance: expectedBalance, updated_at: new Date().toISOString(),
-        }).eq('id', wallet.id);
-        wallet.balance = expectedBalance;
-        reconciled = true;
-      }
+      // ★ Reconciliation은 cloud-agent가 매 사이클마다 수행 — 여기서는 DB 값을 신뢰
+      const reconciled = false;
 
       const openSymbols = [...new Set((openPositions || []).map((p: any) => p.symbol))];
       const realTimePrices: Record<string, number> = {};
@@ -512,29 +498,10 @@ Respond with JSON ONLY:
     if (action === 'get-scalping-portfolio') {
       const { data: wallet } = await supabase.from('scalping_wallet').select('*').limit(1).single();
       const { data: openPositions } = await supabase.from('scalping_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
-      // Fetch ALL closed trades for reconciliation (no limit), then limited set for display
-      const { data: allTradesForReconciliation } = await supabase.from('scalping_trades').select('id, price, quantity, pnl, status, partial_exits').neq('status', 'open');
       const { data: allTrades } = await supabase.from('scalping_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(100);
 
-      // === RECONCILIATION: Verify scalping cash balance integrity ===
-      const openCostKRW = (openPositions || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
-      // Account for partial exits that returned cash
-      const partialExitCash = (openPositions || []).reduce((sum: number, p: any) => {
-        const exits = p.partial_exits || [];
-        return sum + exits.reduce((s: number, e: any) => s + Math.round(toKRW(e.qty * e.price)), 0);
-      }, 0);
-      // Use ALL closed trades (no limit) for accurate reconciliation
-      const closedInvestmentReturned = (allTradesForReconciliation || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
-      const expectedBalance = Math.round((wallet?.initial_balance || 1000000) - openCostKRW + partialExitCash + closedInvestmentReturned);
-      
-      let reconciled = false;
-      if (wallet && Math.abs(wallet.balance - expectedBalance) > 100) {
-        await supabase.from('scalping_wallet').update({
-          balance: expectedBalance, updated_at: new Date().toISOString(),
-        }).eq('id', wallet.id);
-        wallet.balance = expectedBalance;
-        reconciled = true;
-      }
+      // ★ Reconciliation은 cloud-agent가 매 사이클마다 수행 — 여기서는 DB 값을 신뢰
+      const reconciled = false;
 
       const openSymbols = [...new Set((openPositions || []).map((p: any) => p.symbol))];
       const realTimePrices: Record<string, number> = {};
@@ -637,21 +604,22 @@ Respond with JSON ONLY:
         }
 
         if (shouldClose) {
-          const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
-          const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
-          const balanceBefore = Math.round(wallet.balance);
-          const saleProceeds = investmentKRW + pnlKRW; // Total cash returned from selling
-          const balanceAfter = Math.round(wallet.balance + saleProceeds);
+          // ★ 정밀 회계: 매도대금 직접 계산
+          const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
+          const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
+          const pnlKRW = saleProceeds - buyCost;
+          const balanceBefore = Math.floor(wallet.balance);
+          const balanceAfter = balanceBefore + saleProceeds;
           await supabase.from('ai_trades').update({
             status: newStatus, close_price: price, pnl: pnlKRW,
             closed_at: now.toISOString(),
-            ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
+            ai_reason: `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 매도대금: ${fmtKRWRaw(saleProceeds)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
           }).eq('id', pos.id);
           await supabase.from('ai_wallet').update({
             balance: balanceAfter, updated_at: now.toISOString(),
           }).eq('id', wallet.id);
           wallet.balance = balanceAfter;
-          logs.push(`${closeReason} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`);
+          logs.push(`${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`);
           closedTrades.push({ ...pos, pnl: pnlKRW, closeReason });
         }
       }
