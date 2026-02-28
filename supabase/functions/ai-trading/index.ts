@@ -604,21 +604,22 @@ Respond with JSON ONLY:
         }
 
         if (shouldClose) {
-          const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
-          const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
-          const balanceBefore = Math.round(wallet.balance);
-          const saleProceeds = investmentKRW + pnlKRW; // Total cash returned from selling
-          const balanceAfter = Math.round(wallet.balance + saleProceeds);
+          // ★ 정밀 회계: 매도대금 직접 계산
+          const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
+          const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
+          const pnlKRW = saleProceeds - buyCost;
+          const balanceBefore = Math.floor(wallet.balance);
+          const balanceAfter = balanceBefore + saleProceeds;
           await supabase.from('ai_trades').update({
             status: newStatus, close_price: price, pnl: pnlKRW,
             closed_at: now.toISOString(),
-            ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
+            ai_reason: `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 매도대금: ${fmtKRWRaw(saleProceeds)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`,
           }).eq('id', pos.id);
           await supabase.from('ai_wallet').update({
             balance: balanceAfter, updated_at: now.toISOString(),
           }).eq('id', wallet.id);
           wallet.balance = balanceAfter;
-          logs.push(`${closeReason} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`);
+          logs.push(`${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(balanceAfter)}]`);
           closedTrades.push({ ...pos, pnl: pnlKRW, closeReason });
         }
       }
