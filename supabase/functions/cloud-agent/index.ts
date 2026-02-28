@@ -525,20 +525,20 @@ Deno.serve(async (req) => {
             if (!hasFirst) {
               const sellQty = Math.floor(pos.quantity * 0.5);
               if (sellQty > 0) {
-                const partialPnl = Math.round(toKRW((price - pos.price) * sellQty));
-                const sellValue = Math.round(toKRW(sellQty * price));
+                const sellValue = Math.floor(sellQty * price * KRW_RATE);
+                const partialPnl = sellValue - Math.floor(sellQty * pos.price * KRW_RATE);
                 partialExits.push({ type: 'first_partial', qty: sellQty, price, pnl: partialPnl, at: now.toISOString() });
                 await supabase.from('scalping_trades').update({
                   quantity: pos.quantity - sellQty, partial_exits: partialExits,
                   stop_loss: Math.max(+(price - 2.0 * (price * 0.02)).toFixed(4), pos.stop_loss || 0),
                 }).eq('id', pos.id);
-                // ★ 부분 매도 확정 → 확정 잔고에 매도 대금 복구
-                const newPartialBal = Math.round(scalpBalance + sellValue);
+                // ★ 부분 매도 → 매도 대금(sellValue) 확정 잔고에 복구
+                const newPartialBal = scalpBalance + sellValue;
                 await supabase.from('scalping_wallet').update({
                   balance: newPartialBal, updated_at: now.toISOString(),
                 }).eq('id', scalpWallet.id);
                 scalpBalance = newPartialBal;
-                await addLog('scalping', 'exit', sym, `[Cloud-Scalp] ${sym} 1차 50% 익절 (${pnlPct.toFixed(1)}%) | [확정잔고 복구] ${fmtKRWRaw(sellValue)} 입금`, { pnl: partialPnl });
+                await addLog('scalping', 'exit', sym, `[Cloud-Scalp] ${sym} 1차 50% 익절 (${pnlPct.toFixed(1)}%) | 매도대금: ${fmtKRWRaw(sellValue)} | PnL: ${fmtKRWRaw(partialPnl)}`, { pnl: partialPnl, sellValue });
               }
             }
           }
