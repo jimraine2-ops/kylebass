@@ -333,22 +333,27 @@ Deno.serve(async (req) => {
         }
 
         if (shouldClose) {
-          const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
-          const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
-          const balanceBefore = Math.round(mainBalance);
-          // ★ 매도 완료 시에만 확정 잔고 복구: 원금 + 손익
-          const saleProceeds = investmentKRW + pnlKRW;
-          const newBalance = Math.round(mainBalance + saleProceeds);
+          // ★★★ [정밀 회계] 매도 대금 = 매도가 × 수량 × 환율 (직접 계산)
+          const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
+          const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
+          const pnlKRW = saleProceeds - buyCost;
+          const balanceBefore = mainBalance;
+          const newBalance = mainBalance + saleProceeds;
+          // ★ [감사 검증] 매도 후 잔고 == 매수 전 잔고 + 손익
+          const expectedBalance = balanceBefore + buyCost + pnlKRW; // should equal balanceBefore + saleProceeds
+          if (Math.abs(newBalance - expectedBalance) > 1) {
+            await addLog('system', 'error', sym, `[회계오류] 잔고 불일치! expected=${expectedBalance} actual=${newBalance}`, { saleProceeds, buyCost, pnlKRW });
+          }
           await supabase.from('ai_trades').update({
             status: newStatus, close_price: price, pnl: pnlKRW,
             closed_at: now.toISOString(),
-            ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고 변동: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}] [확정잔고 복구]`,
+            ai_reason: `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 매도대금: ${fmtKRWRaw(saleProceeds)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`,
           }).eq('id', pos.id);
           await supabase.from('ai_wallet').update({
             balance: newBalance, updated_at: now.toISOString(),
           }).eq('id', mainWallet.id);
           mainBalance = newBalance;
-          await addLog('quant', 'exit', sym, `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}] [확정잔고 복구]`, { pnl: pnlKRW, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('quant', 'exit', sym, `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 매도대금: ${fmtKRWRaw(saleProceeds)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`, { pnl: pnlKRW, pnlPct: +pnlPct.toFixed(2), saleProceeds, buyCost });
         }
       }
       await new Promise(r => setTimeout(r, 200));
