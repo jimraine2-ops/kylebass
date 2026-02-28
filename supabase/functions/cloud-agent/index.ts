@@ -544,20 +544,21 @@ Deno.serve(async (req) => {
           }
 
           if (shouldClose) {
-            const pnlKRW = Math.round(toKRW((price - pos.price) * pos.quantity));
-            const investmentKRW = Math.round(toKRW(pos.price * pos.quantity));
-            const balanceBefore = Math.round(scalpBalance);
-            // ★ 매도 완료 → 원금 + 손익을 확정 잔고에 복구
-            const newScalpBal = Math.round(scalpBalance + investmentKRW + pnlKRW);
+            // ★★★ [정밀 회계] 매도 대금 = 매도가 × 수량 × 환율
+            const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
+            const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
+            const pnlKRW = saleProceeds - buyCost;
+            const balanceBefore = scalpBalance;
+            const newScalpBal = scalpBalance + saleProceeds;
             await supabase.from('scalping_trades').update({
               status: newStatus, close_price: price, pnl: pnlKRW,
-              closed_at: now.toISOString(), ai_reason: `${closeReason} | [수익 실현 완료] ${fmtKRWRaw(pnlKRW)} → [확정잔고 복구: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBal)}]`,
+              closed_at: now.toISOString(), ai_reason: `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 매도대금: ${fmtKRWRaw(saleProceeds)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBal)}]`,
             }).eq('id', pos.id);
             await supabase.from('scalping_wallet').update({
               balance: newScalpBal, updated_at: now.toISOString(),
             }).eq('id', scalpWallet.id);
             scalpBalance = newScalpBal;
-            await addLog('scalping', 'exit', sym, `${closeReason} | [확정잔고 복구] ${fmtKRWRaw(pnlKRW)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBal)}]`, { pnl: pnlKRW, balanceBefore, balanceAfter: newScalpBal });
+            await addLog('scalping', 'exit', sym, `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 매도대금: ${fmtKRWRaw(saleProceeds)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBal)}]`, { pnl: pnlKRW, saleProceeds, buyCost, balanceBefore, balanceAfter: newScalpBal });
           }
         }
         await new Promise(r => setTimeout(r, 200));
