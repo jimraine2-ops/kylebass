@@ -417,7 +417,7 @@ Deno.serve(async (req) => {
       const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
       const balanceBefore = Math.round(mainBalance);
       // ★ 매수 즉시 확정 잔고 차감
-      const newBuyBalance = Math.round(mainBalance - costKRW);
+      const newBuyBalance = mainBalance - costKRW;
       const logMsg = `[Cloud-Quant] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 자율 매수 [${tier}|${qty}주@${fmtKRW(r.price)}|${fmtKRWRaw(costKRW)}] | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       await supabase.from('ai_trades').insert({
