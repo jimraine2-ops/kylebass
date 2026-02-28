@@ -497,29 +497,10 @@ Respond with JSON ONLY:
     if (action === 'get-scalping-portfolio') {
       const { data: wallet } = await supabase.from('scalping_wallet').select('*').limit(1).single();
       const { data: openPositions } = await supabase.from('scalping_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false });
-      // Fetch ALL closed trades for reconciliation (no limit), then limited set for display
-      const { data: allTradesForReconciliation } = await supabase.from('scalping_trades').select('id, price, quantity, pnl, status, partial_exits').neq('status', 'open');
       const { data: allTrades } = await supabase.from('scalping_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(100);
 
-      // === RECONCILIATION: Verify scalping cash balance integrity ===
-      const openCostKRW = (openPositions || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
-      // Account for partial exits that returned cash
-      const partialExitCash = (openPositions || []).reduce((sum: number, p: any) => {
-        const exits = p.partial_exits || [];
-        return sum + exits.reduce((s: number, e: any) => s + Math.round(toKRW(e.qty * e.price)), 0);
-      }, 0);
-      // Use ALL closed trades (no limit) for accurate reconciliation
-      const closedInvestmentReturned = (allTradesForReconciliation || []).reduce((sum: number, t: any) => sum + Math.round(toKRW(t.price * t.quantity)) + (t.pnl || 0), 0);
-      const expectedBalance = Math.round((wallet?.initial_balance || 1000000) - openCostKRW + partialExitCash + closedInvestmentReturned);
-      
-      let reconciled = false;
-      if (wallet && Math.abs(wallet.balance - expectedBalance) > 100) {
-        await supabase.from('scalping_wallet').update({
-          balance: expectedBalance, updated_at: new Date().toISOString(),
-        }).eq('id', wallet.id);
-        wallet.balance = expectedBalance;
-        reconciled = true;
-      }
+      // ★ Reconciliation은 cloud-agent가 매 사이클마다 수행 — 여기서는 DB 값을 신뢰
+      const reconciled = false;
 
       const openSymbols = [...new Set((openPositions || []).map((p: any) => p.symbol))];
       const realTimePrices: Record<string, number> = {};
