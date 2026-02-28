@@ -630,7 +630,7 @@ Deno.serve(async (req) => {
         // ★ [확정 잔고 기반] 매수 금액 = 현재 확정 잔고 × 10%
         const maxKRW = scalpBalance * 0.10;
         const qty = Math.floor(maxKRW / priceKRW);
-        const costKRW = Math.round(qty * priceKRW);
+        const costKRW = Math.floor(qty * priceKRW);
 
         // ★ [Hard Stop] 잔고 부족 시 진입 보류
         if (qty <= 0 || costKRW > scalpBalance) {
