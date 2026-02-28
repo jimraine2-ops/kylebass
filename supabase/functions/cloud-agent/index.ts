@@ -645,9 +645,9 @@ Deno.serve(async (req) => {
 
         const stopLoss = +(price * 0.975).toFixed(4);
         const takeProfit = +(price * 1.05).toFixed(4);
-        const balanceBefore = Math.round(scalpBalance);
+        const balanceBefore = scalpBalance;
         // ★ 매수 즉시 확정 잔고에서 차감
-        const newScalpBuyBal = Math.round(scalpBalance - costKRW);
+        const newScalpBuyBal = scalpBalance - costKRW;
         const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5% | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBuyBal)}]`;
 
         await supabase.from('scalping_trades').insert({
