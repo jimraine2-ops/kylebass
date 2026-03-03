@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -6,7 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350; // Fixed exchange rate: 1 USD = 1,350 KRW
 const SLIPPAGE_BUY = 0.0002;  // +0.02%
@@ -42,7 +40,7 @@ async function finnhubFetch(path: string) {
   return res.json();
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -196,7 +194,6 @@ serve(async (req) => {
       }
 
       let trade = null;
-      const canBuy = (!alreadyHolding || isPyramiding) && openCount < 5 && meetsScoreThreshold && basicConditionsMet;
 
       if (decision.action === 'BUY' && decision.confidence >= 40 && canBuy) {
         const buyPrice = applySlippage(price, 'buy');
