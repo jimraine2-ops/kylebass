@@ -145,12 +145,10 @@ serve(async (req) => {
         }
       }
 
-      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-      if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
-
+      // Rule-based decision (no AI call)
       const alreadyHolding = (openPositions || []).some(p => p.symbol === symbol && p.status === 'open');
       const openCount = (openPositions || []).filter(p => p.status === 'open').length;
-      const availableBalance = wallet.balance; // KRW
+      const availableBalance = wallet.balance;
 
       const meetsScoreThreshold = quantScore !== undefined ? quantScore >= 50 : false;
       let positionSizePct = 0;
@@ -171,49 +169,31 @@ serve(async (req) => {
       const rvolAbove = indicators?.rvol?.rvol >= 1.2;
       const aboveVwap = indicators?.confluence?.vwapCross || indicators?.confluence?.score >= 5;
       const basicConditionsMet = sentimentPositive && rvolAbove && aboveVwap;
-      const trailingMultiplier = 1.5;
 
       const now = new Date();
       const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-      const prompt = `You are an AI quant trading analyst operating in AGGRESSIVE MODE (Low Threshold: 50pts).
-Analyze this stock and decide whether to BUY, SELL, or HOLD.
-
-Symbol: ${symbol}
-Current Price: ${fmtKRW(price)} (USD $${price})
-Available Balance: ${fmtKRWRaw(availableBalance)}
-Already Holding: ${alreadyHolding ? 'Yes' : 'No'}
-Pyramiding Eligible: ${isPyramiding ? 'Yes' : 'No'}
-Open Positions: ${openCount}/5
-Quant Score: ${quantScore || 'N/A'}/100
-Entry Tier: ${entryTier} (Position Size: ${(positionSizePct * 100).toFixed(0)}%)
-Score Threshold Met (>=50): ${meetsScoreThreshold}
-Basic Conditions Met: ${basicConditionsMet ? 'Yes' : 'No'}
-Trailing Stop Multiplier: ATR × ${trailingMultiplier}
-Indicator Details: ${JSON.stringify(indicators || {})}
-
-Respond with JSON ONLY:
-{"action": "BUY"|"SELL"|"HOLD", "confidence": 0-100, "reason": "specific explanation", "quantity": number, "stopLoss": number, "takeProfit": number}`;
-
-      const aiResponse = await fetch(AI_GATEWAY, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'google/gemini-3-flash-preview', messages: [{ role: 'user', content: prompt }] }),
-      });
-
-      if (!aiResponse.ok) {
-        const status = aiResponse.status;
-        if (status === 429) return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        if (status === 402) return new Response(JSON.stringify({ error: 'Payment required' }), { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        throw new Error(`AI error: ${status}`);
+      // Rule-based decision
+      let decision: any;
+      const canBuy = (!alreadyHolding || isPyramiding) && openCount < 5 && meetsScoreThreshold && basicConditionsMet;
+      
+      if (canBuy && (quantScore || 0) >= 50) {
+        const buyPrice = applySlippage(price, 'buy');
+        const buyPriceKRW = toKRW(buyPrice);
+        const maxInvestmentKRW = availableBalance * positionSizePct;
+        const qty = Math.floor(maxInvestmentKRW / buyPriceKRW);
+        
+        decision = {
+          action: 'BUY',
+          confidence: quantScore || 50,
+          reason: `[Rule] 점수 ${quantScore}점, 조건 충족 (RVOL=${indicators?.rvol?.rvol?.toFixed(1)}, VWAP=${aboveVwap ? '상단' : '하단'})`,
+          quantity: qty,
+          stopLoss: +(price * 0.95).toFixed(4),
+          takeProfit: +(price * 1.08).toFixed(4),
+        };
+      } else {
+        decision = { action: 'HOLD', confidence: 0, reason: canBuy ? '조건 미충족' : '진입 불가', quantity: 0 };
       }
-
-      const aiData = await aiResponse.json();
-      let content = aiData.choices?.[0]?.message?.content || '';
-      content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      let decision;
-      try { decision = JSON.parse(content); }
-      catch { decision = { action: 'HOLD', confidence: 0, reason: 'AI 응답 파싱 실패', quantity: 0 }; }
 
       let trade = null;
       const canBuy = (!alreadyHolding || isPyramiding) && openCount < 5 && meetsScoreThreshold && basicConditionsMet;
