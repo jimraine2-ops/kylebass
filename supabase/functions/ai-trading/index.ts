@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const AI_GATEWAY = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350; // Fixed exchange rate: 1 USD = 1,350 KRW
 const SLIPPAGE_BUY = 0.0002;  // +0.02%
