@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchStockQuote, fetchChartData, fetchTechnicalAnalysis, fetchSentimentAnalysis, searchStocks, getMockNewsHeadlines, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews, getScalpingPortfolio } from "@/lib/api";
+import { fetchStockQuote, fetchChartData, searchStocks, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews, getScalpingPortfolio } from "@/lib/api";
 
 export function useStockQuotes(symbols: string[], enabled = true) {
   return useQuery({
@@ -31,26 +31,6 @@ export function useChartData(symbol: string, enabled = true) {
   });
 }
 
-export function useTechnicalAnalysis(symbol: string, chartData: any[] | undefined) {
-  return useQuery({
-    queryKey: ['technical-analysis', symbol],
-    queryFn: () => fetchTechnicalAnalysis(symbol, chartData!),
-    enabled: !!symbol && !!chartData && chartData.length > 0,
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
-}
-
-export function useSentimentAnalysis(symbol: string) {
-  const headlines = getMockNewsHeadlines(symbol);
-  return useQuery({
-    queryKey: ['sentiment-analysis', symbol],
-    queryFn: () => fetchSentimentAnalysis(symbol, headlines),
-    enabled: !!symbol,
-    staleTime: 10 * 60 * 1000,
-    retry: 1,
-  });
-}
 
 export function useStockSearch(query: string) {
   return useQuery({

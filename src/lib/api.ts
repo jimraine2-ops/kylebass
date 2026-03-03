@@ -47,22 +47,6 @@ export async function fetchCompanyNews(symbol: string) {
   return news;
 }
 
-export async function fetchTechnicalAnalysis(symbol: string, chartData: any[]) {
-  const { data, error } = await supabase.functions.invoke('ai-analysis', {
-    body: { action: 'technical-analysis', symbol, chartData },
-  });
-  if (error) throw error;
-  return data;
-}
-
-export async function fetchSentimentAnalysis(symbol: string, newsHeadlines: string[]) {
-  const { data, error } = await supabase.functions.invoke('ai-analysis', {
-    body: { action: 'sentiment-analysis', symbol, newsHeadlines },
-  });
-  if (error) throw error;
-  return data;
-}
-
 // Penny stocks
 export async function scanPennyStocks() {
   const { data, error } = await supabase.functions.invoke('penny-stocks', {
@@ -149,26 +133,3 @@ export async function updateWalletBalance(walletType: 'main' | 'scalping', newBa
   return data;
 }
 
-// Mock news headlines (fallback for sentiment analysis)
-export function getMockNewsHeadlines(symbol: string): string[] {
-  const headlines: Record<string, string[]> = {
-    AAPL: [
-      "Apple reports record quarterly revenue driven by iPhone sales",
-      "Apple Vision Pro sales exceed expectations in Asian markets",
-      "Analysts raise Apple price target following AI integration announcement",
-    ],
-    MSFT: [
-      "Microsoft Azure cloud revenue grows 35% year-over-year",
-      "Microsoft Copilot AI adoption accelerates across enterprise clients",
-    ],
-    NVDA: [
-      "NVIDIA's AI chip demand continues to outpace supply",
-      "NVIDIA revenue doubles as data center spending surges",
-    ],
-  };
-  return headlines[symbol] || [
-    `${symbol} reports better-than-expected quarterly earnings`,
-    `Analysts maintain buy rating on ${symbol} stock`,
-    `${symbol} announces strategic partnership in key market`,
-  ];
-}
