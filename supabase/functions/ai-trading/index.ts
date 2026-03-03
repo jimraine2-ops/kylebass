@@ -6,7 +6,6 @@ const corsHeaders = {
 };
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
-const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350; // Fixed exchange rate: 1 USD = 1,350 KRW
 const SLIPPAGE_BUY = 0.0002;  // +0.02%
 const SLIPPAGE_SELL = 0.0002; // -0.02%
