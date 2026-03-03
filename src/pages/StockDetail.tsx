@@ -4,22 +4,62 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useStockQuotes, useChartData, useTechnicalAnalysis, useSentimentAnalysis } from "@/hooks/useStockData";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, Area, AreaChart, ComposedChart } from "recharts";
-import { TrendingUp, TrendingDown, Brain, Target, Shield, AlertTriangle } from "lucide-react";
+import { useStockQuotes, useChartData } from "@/hooks/useStockData";
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, Area, ComposedChart, Bar, Line } from "recharts";
+import { TrendingUp, TrendingDown, Target, Shield } from "lucide-react";
 import { useState, useMemo } from "react";
 import CompanyNewsSection from "@/components/stock/CompanyNewsSection";
 import { formatStockName, getKoreanName } from "@/lib/koreanStockMap";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 
+// ===== Local technical indicator calculations =====
+function calculateRSI(closes: number[], period = 14): number | null {
+  if (closes.length < period + 1) return null;
+  let gains = 0, losses = 0;
+  for (let i = closes.length - period; i < closes.length; i++) {
+    const change = closes[i] - closes[i - 1];
+    if (change > 0) gains += change; else losses -= change;
+  }
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
+  if (avgLoss === 0) return 100;
+  return 100 - (100 / (1 + avgGain / avgLoss));
+}
+
+function calculateEMA(data: number[], period: number): number {
+  if (data.length === 0) return 0;
+  if (data.length < period) return data.reduce((a, b) => a + b, 0) / data.length;
+  const k = 2 / (period + 1);
+  let ema = data.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < data.length; i++) ema = data[i] * k + ema * (1 - k);
+  return ema;
+}
+
+function calculateMA(data: number[], period: number): number | null {
+  if (data.length < period) return null;
+  return data.slice(-period).reduce((a, b) => a + b, 0) / period;
+}
+
+function calculateMACD(closes: number[]) {
+  const ema12 = calculateEMA(closes, 12);
+  const ema26 = calculateEMA(closes, 26);
+  const macdLine = ema12 - ema26;
+  const macdValues: number[] = [];
+  for (let i = Math.max(0, closes.length - 9); i < closes.length; i++) {
+    const e12 = calculateEMA(closes.slice(0, i + 1), 12);
+    const e26 = calculateEMA(closes.slice(0, i + 1), 26);
+    macdValues.push(e12 - e26);
+  }
+  const signal = macdValues.length > 0 ? macdValues.reduce((a, b) => a + b, 0) / macdValues.length : 0;
+  return { macd: macdLine, signal, histogram: macdLine - signal };
+}
+
 export default function StockDetail() {
   const { symbol = 'AAPL' } = useParams();
   const { data: quotes } = useStockQuotes([symbol]);
   const { data: chartResponse, isLoading: chartLoading } = useChartData(symbol);
   const chartData = chartResponse?.chartData;
-  const { data: analysis, isLoading: analysisLoading } = useTechnicalAnalysis(symbol, chartData);
-  const { data: sentiment } = useSentimentAnalysis(symbol);
   const { rate: fxRate, isLive: fxLive, toKRW } = useExchangeRate();
   const ws = useWebSocketPrices([symbol]);
   const [entryPrice, setEntryPrice] = useState("");
@@ -42,14 +82,26 @@ export default function StockDetail() {
     return { ratio: reward / risk, risk, reward, riskPercent: (risk / entry) * 100, rewardPercent: (reward / entry) * 100 };
   }, [entryPrice, stopLoss, takeProfit]);
 
-  // Auto-fill from AI recommendation
-  useMemo(() => {
-    if (analysis?.recommendation && quote?.regularMarketPrice) {
-      if (!entryPrice) setEntryPrice(quote.regularMarketPrice.toFixed(2));
-      if (!stopLoss && analysis.recommendation.stopLoss) setStopLoss(analysis.recommendation.stopLoss.toFixed(2));
-      if (!takeProfit && analysis.recommendation.takeProfit) setTakeProfit(analysis.recommendation.takeProfit.toFixed(2));
-    }
-  }, [analysis, quote]);
+  // Calculate technical indicators locally from chart data
+  const indicators = useMemo(() => {
+    if (!chartData || chartData.length < 2) return null;
+    const closes = chartData.map((d: any) => d.close).filter(Boolean);
+    const volumes = chartData.map((d: any) => d.volume).filter(Boolean);
+    if (closes.length < 5) return null;
+
+    const rsi = calculateRSI(closes);
+    const macd = calculateMACD(closes);
+    const ma5 = calculateMA(closes, 5);
+    const ma20 = calculateMA(closes, 20);
+    const ma60 = calculateMA(closes, 60);
+    const ma200 = calculateMA(closes, 200);
+    const avgVolume = volumes.slice(-20).reduce((a: number, b: number) => a + b, 0) / Math.min(volumes.length, 20);
+    const currentVolume = volumes[volumes.length - 1] || 0;
+    const volumeRatio = avgVolume > 0 ? currentVolume / avgVolume : 1;
+    const currentPrice = closes[closes.length - 1];
+
+    return { rsi, macd, ma5, ma20, ma60, ma200, volumeRatio, currentPrice };
+  }, [chartData]);
 
   // Chart data with MA overlays
   const enrichedChart = useMemo(() => {
@@ -58,15 +110,12 @@ export default function StockDetail() {
       const closes = chartData.slice(0, i + 1).map((c: any) => c.close);
       return {
         ...d,
-        dateLabel: d.date?.slice(5), // MM-DD
+        dateLabel: d.date?.slice(5),
         ma5: closes.length >= 5 ? closes.slice(-5).reduce((a: number, b: number) => a + b, 0) / 5 : null,
         ma20: closes.length >= 20 ? closes.slice(-20).reduce((a: number, b: number) => a + b, 0) / 20 : null,
       };
     });
   }, [chartData]);
-
-  const rec = analysis?.recommendation;
-  const recColor = rec?.recommendation === '매수' ? 'stock-up' : rec?.recommendation === '매도' ? 'stock-down' : 'text-warning';
 
   return (
     <div className="space-y-6">
@@ -121,121 +170,112 @@ export default function StockDetail() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Technical Indicators */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Target className="w-4 h-4 text-primary" />
-              기술적 지표
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {analysisLoading ? <Skeleton className="h-40" /> : analysis ? (
-              <>
-                {/* RSI */}
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-medium">RSI (14)</span>
-                    <span className={`text-sm font-mono font-bold ${analysis.rsi > 70 ? 'stock-down' : analysis.rsi < 30 ? 'stock-up' : 'text-muted-foreground'}`}>
-                      {analysis.rsi?.toFixed(1)}
-                    </span>
+      {/* Technical Indicators - Raw Data Display */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Target className="w-4 h-4 text-primary" />
+            기술적 지표 (수치 데이터)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!indicators ? (
+            chartLoading ? <Skeleton className="h-40" /> : <p className="text-sm text-muted-foreground">차트 데이터 로딩 중...</p>
+          ) : (
+            <>
+              {/* RSI */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm font-medium">RSI (14)</span>
+                  <span className={`text-sm font-mono font-bold ${
+                    indicators.rsi != null ? (indicators.rsi > 70 ? 'text-stock-down' : indicators.rsi < 30 ? 'text-stock-up' : 'text-muted-foreground') : ''
+                  }`}>
+                    {indicators.rsi?.toFixed(1) ?? 'N/A'}
+                  </span>
+                </div>
+                {indicators.rsi != null && (
+                  <>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden relative">
+                      <div className="absolute inset-y-0 left-0 bg-stock-up rounded-full" style={{ width: '30%' }} />
+                      <div className="absolute inset-y-0 left-[30%] bg-muted-foreground/30 rounded-full" style={{ width: '40%' }} />
+                      <div className="absolute inset-y-0 left-[70%] bg-stock-down rounded-full" style={{ width: '30%' }} />
+                      <div className="absolute top-0 bottom-0 w-1 bg-foreground rounded-full" style={{ left: `${Math.min(indicators.rsi, 100)}%` }} />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                      <span>과매도 (&lt;30)</span>
+                      <span>중립</span>
+                      <span>과매수 (&gt;70)</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* MACD */}
+              <div>
+                <p className="text-sm font-medium mb-1">MACD</p>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="bg-muted rounded p-2 text-center">
+                    <p className="text-muted-foreground">MACD</p>
+                    <p className={`font-mono font-bold ${indicators.macd.macd >= 0 ? 'text-stock-up' : 'text-stock-down'}`}>
+                      {indicators.macd.macd.toFixed(3)}
+                    </p>
                   </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden relative">
-                    <div className="absolute inset-y-0 left-0 bg-stock-up rounded-full" style={{ width: '30%' }} />
-                    <div className="absolute inset-y-0 left-[30%] bg-muted-foreground/30 rounded-full" style={{ width: '40%' }} />
-                    <div className="absolute inset-y-0 left-[70%] bg-stock-down rounded-full" style={{ width: '30%' }} />
-                    <div className="absolute top-0 bottom-0 w-1 bg-foreground rounded-full" style={{ left: `${Math.min(analysis.rsi, 100)}%` }} />
+                  <div className="bg-muted rounded p-2 text-center">
+                    <p className="text-muted-foreground">Signal</p>
+                    <p className="font-mono font-bold">{indicators.macd.signal.toFixed(3)}</p>
                   </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                    <span>과매도 (&lt;30)</span>
-                    <span>중립</span>
-                    <span>과매수 (&gt;70)</span>
+                  <div className="bg-muted rounded p-2 text-center">
+                    <p className="text-muted-foreground">Histogram</p>
+                    <p className={`font-mono font-bold ${indicators.macd.histogram >= 0 ? 'text-stock-up' : 'text-stock-down'}`}>
+                      {indicators.macd.histogram.toFixed(3)}
+                    </p>
                   </div>
                 </div>
+                {indicators.macd.histogram >= 0 && indicators.macd.macd > indicators.macd.signal ? (
+                  <Badge className="mt-2 bg-stock-up/20 text-stock-up border-0">🟢 골든크로스</Badge>
+                ) : (
+                  <Badge variant="destructive" className="mt-2 bg-stock-down/20 text-stock-down border-0">🔴 데드크로스</Badge>
+                )}
+              </div>
 
-                {/* MACD */}
-                <div>
-                  <p className="text-sm font-medium mb-1">MACD</p>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className="bg-muted rounded p-2 text-center">
-                      <p className="text-muted-foreground">MACD</p>
-                      <p className={`font-mono font-bold ${analysis.macd?.macd >= 0 ? 'stock-up' : 'stock-down'}`}>
-                        {analysis.macd?.macd?.toFixed(3)}
+              {/* Moving Averages */}
+              <div>
+                <p className="text-sm font-medium mb-1">이동평균선</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                  {[
+                    { label: 'MA5', value: indicators.ma5 },
+                    { label: 'MA20', value: indicators.ma20 },
+                    { label: 'MA60', value: indicators.ma60 },
+                    { label: 'MA200', value: indicators.ma200 },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="bg-muted rounded p-2 text-center">
+                      <p className="text-muted-foreground">{label}</p>
+                      <p className={`font-mono font-bold ${
+                        value != null && indicators.currentPrice
+                          ? (indicators.currentPrice > value ? 'text-stock-up' : 'text-stock-down')
+                          : ''
+                      }`}>
+                        {value != null ? `$${value.toFixed(2)}` : 'N/A'}
                       </p>
-                    </div>
-                    <div className="bg-muted rounded p-2 text-center">
-                      <p className="text-muted-foreground">Signal</p>
-                      <p className="font-mono font-bold">{analysis.macd?.signal?.toFixed(3)}</p>
-                    </div>
-                    <div className="bg-muted rounded p-2 text-center">
-                      <p className="text-muted-foreground">Histogram</p>
-                      <p className={`font-mono font-bold ${analysis.macd?.histogram >= 0 ? 'stock-up' : 'stock-down'}`}>
-                        {analysis.macd?.histogram?.toFixed(3)}
-                      </p>
-                    </div>
-                  </div>
-                  {analysis.macd?.histogram >= 0 && analysis.macd?.macd > analysis.macd?.signal ? (
-                    <Badge className="mt-2 bg-stock-up/20 stock-up border-0">🟢 골든크로스</Badge>
-                  ) : (
-                    <Badge variant="destructive" className="mt-2 bg-stock-down/20 stock-down border-0">🔴 데드크로스</Badge>
-                  )}
-                </div>
-
-                {/* Volume */}
-                <div>
-                  <p className="text-sm font-medium mb-1">거래량 비율</p>
-                  <p className={`text-lg font-bold font-mono ${analysis.volumeRatio > 1.5 ? 'stock-up' : analysis.volumeRatio < 0.5 ? 'stock-down' : ''}`}>
-                    {analysis.volumeRatio?.toFixed(2)}x
-                    <span className="text-xs text-muted-foreground ml-2">
-                      {analysis.volumeRatio > 1.5 ? '평균 이상 (강세 신호)' : analysis.volumeRatio < 0.5 ? '평균 이하 (약세 신호)' : '평균 수준'}
-                    </span>
-                  </p>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">차트 데이터 로딩 후 분석됩니다</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* AI Recommendation */}
-        <Card className={rec ? `border-l-4 ${rec.recommendation === '매수' ? 'border-l-stock-up' : rec.recommendation === '매도' ? 'border-l-stock-down' : 'border-l-warning'}` : ''}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Brain className="w-4 h-4 text-primary" />
-              AI 매매 추천
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {analysisLoading ? <Skeleton className="h-40" /> : rec ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <span className={`text-2xl font-bold ${recColor}`}>{rec.recommendation}</span>
-                  <Badge variant="outline" className="font-mono">신뢰도 {rec.confidence}%</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">{rec.summary}</p>
-                <div className="space-y-1">
-                  {rec.reasons?.map((reason: string, i: number) => (
-                    <div key={i} className="flex items-start gap-2 text-xs">
-                      <span className="text-primary mt-0.5">•</span>
-                      <span>{reason}</span>
                     </div>
                   ))}
                 </div>
-                {sentiment?.warning && (
-                  <div className="flex items-center gap-2 p-2 rounded bg-stock-down/10 text-xs">
-                    <AlertTriangle className="w-3 h-3 text-stock-down shrink-0" />
-                    <span className="stock-down">{sentiment.warning}</span>
-                  </div>
-                )}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">분석 중...</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+
+              {/* Volume Ratio */}
+              <div>
+                <p className="text-sm font-medium mb-1">거래량 비율</p>
+                <p className={`text-lg font-bold font-mono ${indicators.volumeRatio > 1.5 ? 'text-stock-up' : indicators.volumeRatio < 0.5 ? 'text-stock-down' : ''}`}>
+                  {indicators.volumeRatio.toFixed(2)}x
+                  <span className="text-xs text-muted-foreground ml-2">
+                    {indicators.volumeRatio > 1.5 ? '평균 이상 (강세 신호)' : indicators.volumeRatio < 0.5 ? '평균 이하 (약세 신호)' : '평균 수준'}
+                  </span>
+                </p>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Company News */}
       <CompanyNewsSection symbol={symbol} />
@@ -266,7 +306,7 @@ export default function StockDetail() {
               {rrRatio ? (
                 <div className={`w-full p-3 rounded-lg text-center ${rrRatio.ratio >= 2 ? 'bg-stock-up/10' : rrRatio.ratio >= 1 ? 'bg-warning/10' : 'bg-stock-down/10'}`}>
                   <p className="text-xs text-muted-foreground">손익비</p>
-                  <p className={`text-2xl font-bold font-mono ${rrRatio.ratio >= 2 ? 'stock-up' : rrRatio.ratio >= 1 ? 'text-warning' : 'stock-down'}`}>
+                  <p className={`text-2xl font-bold font-mono ${rrRatio.ratio >= 2 ? 'text-stock-up' : rrRatio.ratio >= 1 ? 'text-warning' : 'text-stock-down'}`}>
                     1:{rrRatio.ratio.toFixed(1)}
                   </p>
                   <p className="text-[10px] text-muted-foreground">

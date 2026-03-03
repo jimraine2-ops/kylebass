@@ -13,7 +13,6 @@ import AlertsPage from "@/pages/AlertsPage";
 import PennyStocksPage from "@/pages/PennyStocksPage";
 import AITradingPage from "@/pages/AITradingPage";
 import RecommendationPage from "@/pages/RecommendationPage";
-import LearningReportPage from "@/pages/LearningReportPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,7 +35,6 @@ const App = () => (
               <Route path="/penny-stocks" element={<PennyStocksPage />} />
               <Route path="/ai-trading" element={<AITradingPage />} />
               <Route path="/recommendations" element={<RecommendationPage />} />
-              <Route path="/learning-report" element={<LearningReportPage />} />
               <Route path="/search" element={<StockDetail />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
