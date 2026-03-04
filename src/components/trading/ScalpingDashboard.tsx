@@ -3,9 +3,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useScalpingPortfolio } from "@/hooks/useStockData";
 import { resetScalpingWallet, updateWalletBalance } from "@/lib/api";
-import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap, ShieldAlert, Ban, DollarSign } from "lucide-react";
+import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap, ShieldAlert, Ban, DollarSign, Info } from "lucide-react";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -326,6 +327,14 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: Sc
           )}
         </CardContent>
       </Card>
+
+      {/* Data Retention Notice */}
+      <Alert className="border-muted-foreground/20">
+        <Info className="h-4 w-4" />
+        <AlertDescription className="text-xs text-muted-foreground">
+          최근 2일간의 매매 기록만 보존됩니다 (비용 최적화 모드). 미체결 포지션은 삭제되지 않습니다.
+        </AlertDescription>
+      </Alert>
     </div>
   );
 }
