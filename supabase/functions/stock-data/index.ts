@@ -45,15 +45,29 @@ async function finnhubFetch(path: string, retries = 5): Promise<any> {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const res = await fetch(url);
-      if (res.status === 429) {
+      if (res.status === 429 || res.status === 502 || res.status === 503) {
         const delay = 2000 * Math.pow(2, attempt) + Math.random() * 2000;
-        console.warn(`Finnhub 429 rate limit, retry ${attempt + 1}/${retries} in ${Math.round(delay)}ms`);
+        console.warn(`Finnhub ${res.status}, retry ${attempt + 1}/${retries} in ${Math.round(delay)}ms`);
         await new Promise(r => setTimeout(r, delay));
         continue;
       }
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(`Finnhub error ${res.status}: ${text}`);
+        if (text.trim().startsWith('<!') || text.includes('<html')) {
+          console.warn(`Finnhub returned HTML (status ${res.status}), retrying...`);
+          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          continue;
+        }
+        throw new Error(`Finnhub error ${res.status}: ${text.substring(0, 200)}`);
+      }
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        if (text.trim().startsWith('<!') || text.includes('<html')) {
+          console.warn(`Finnhub returned HTML content, retrying...`);
+          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          continue;
+        }
       }
       const data = await res.json();
       setCache(path, data);
