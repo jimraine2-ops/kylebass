@@ -102,9 +102,9 @@ export default function RecommendationPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <ScrollArea className="h-[calc(100vh-420px)] min-h-[400px]">
-                <div className="space-y-3 pr-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pr-3">
                   {sortedStocks.length === 0 ? (
-                    <Card>
+                    <Card className="col-span-full">
                       <CardContent className="p-8 text-center text-muted-foreground">
                         분석 가능한 종목이 없습니다.
                       </CardContent>

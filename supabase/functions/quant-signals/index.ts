@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Deno.serve used directly
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,16 +13,34 @@ function getToken(): string {
   return key;
 }
 
-async function finnhubFetch(path: string) {
+async function finnhubFetch(path: string, retries = 3) {
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    await res.text(); // consume body
-    return null;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (res.status === 429 || res.status === 502 || res.status === 503) {
+        await res.text();
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        continue;
+      }
+      if (!res.ok) { await res.text(); return null; }
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        const txt = await res.text();
+        if (txt.trim().startsWith('<!') || txt.includes('<html')) {
+          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+          continue;
+        }
+      }
+      return await res.json();
+    } catch {
+      if (attempt === retries - 1) return null;
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
   }
-  return res.json();
+  return null;
 }
 
 // ===== Technical Indicator Helpers =====
@@ -278,7 +296,7 @@ async function analyzeSymbol(sym: string) {
   };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -287,25 +305,27 @@ serve(async (req) => {
     const { action, symbols } = await req.json();
 
     if (action === 'analyze') {
-      // Reduced default list to stay within CPU limits (~15 symbols)
+      // 30종목 확장 (두 그룹 15개씩 교차 요청)
       const defaultSymbols = [
         'AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD',
-        'PLTR', 'COIN', 'SOFI', 'HOOD', 'RIVN', 'NIO', 'MARA'
+        'PLTR', 'COIN', 'SOFI', 'HOOD', 'RIVN', 'NIO', 'MARA',
+        'INTC', 'QCOM', 'AVGO', 'CRM', 'NFLX', 'UBER', 'SQ', 'PYPL',
+        'BA', 'DIS', 'SNAP', 'SHOP', 'CRWD', 'NET', 'ABNB',
       ];
 
-      const targetSymbols: string[] = (symbols || defaultSymbols).slice(0, 20); // Hard cap at 20
+      const targetSymbols: string[] = (symbols || defaultSymbols).slice(0, 35);
 
       const results: any[] = [];
 
-      // Process in batches of 3 with delay
-      for (let i = 0; i < targetSymbols.length; i += 3) {
-        const batch = targetSymbols.slice(i, i + 3);
+      // Process in batches of 5 with 500ms staggered delay between groups
+      for (let i = 0; i < targetSymbols.length; i += 5) {
+        const batch = targetSymbols.slice(i, i + 5);
         const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
         for (const r of batchResults) {
           if (r) results.push(r);
         }
-        if (i + 3 < targetSymbols.length) {
-          await new Promise(resolve => setTimeout(resolve, 200));
+        if (i + 5 < targetSymbols.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
 

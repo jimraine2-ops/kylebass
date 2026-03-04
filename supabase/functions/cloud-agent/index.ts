@@ -222,8 +222,13 @@ Deno.serve(async (req) => {
     const now = new Date();
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-    // ========== PHASE 1: QUANT STRATEGY (Premium Stocks) ==========
-    const QUANT_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD', 'PLTR', 'COIN', 'SOFI', 'HOOD', 'RIVN', 'NIO', 'MARA'];
+    // ========== PHASE 1: QUANT STRATEGY (Premium Stocks — 30종목) ==========
+    const QUANT_SYMBOLS = [
+      'AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD',
+      'PLTR', 'COIN', 'SOFI', 'HOOD', 'RIVN', 'NIO', 'MARA',
+      'INTC', 'QCOM', 'AVGO', 'CRM', 'NFLX', 'UBER', 'SQ', 'PYPL',
+      'BA', 'DIS', 'SNAP', 'SHOP', 'CRWD', 'NET', 'ABNB',
+    ];
 
     const { data: mainWallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
     const { data: scalpWallet } = await supabase.from('scalping_wallet').select('*').limit(1).single();
