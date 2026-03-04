@@ -222,8 +222,13 @@ Deno.serve(async (req) => {
     const now = new Date();
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
-    // ========== PHASE 1: QUANT STRATEGY (Premium Stocks) ==========
-    const QUANT_SYMBOLS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD', 'PLTR', 'COIN', 'SOFI', 'HOOD', 'RIVN', 'NIO', 'MARA'];
+    // ========== PHASE 1: QUANT STRATEGY (Premium Stocks — 30종목) ==========
+    const QUANT_SYMBOLS = [
+      'AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD',
+      'PLTR', 'COIN', 'SOFI', 'HOOD', 'RIVN', 'NIO', 'MARA',
+      'INTC', 'QCOM', 'AVGO', 'CRM', 'NFLX', 'UBER', 'SQ', 'PYPL',
+      'BA', 'DIS', 'SNAP', 'SHOP', 'CRWD', 'NET', 'ABNB',
+    ];
 
     const { data: mainWallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
     const { data: scalpWallet } = await supabase.from('scalping_wallet').select('*').limit(1).single();
@@ -364,8 +369,8 @@ Deno.serve(async (req) => {
     const mainOpenCount = (mainOpenPos || []).filter(p => p.status === 'open').length;
     const quantCandidates: { sym: string; price: number; scoring: any }[] = [];
 
-    for (let i = 0; i < QUANT_SYMBOLS.length; i += 3) {
-      const batch = QUANT_SYMBOLS.slice(i, i + 3);
+    for (let i = 0; i < QUANT_SYMBOLS.length; i += 5) {
+      const batch = QUANT_SYMBOLS.slice(i, i + 5);
       const results = await Promise.all(batch.map(async (sym) => {
         try {
           const data = await getQuoteAndCandles(sym);
@@ -388,7 +393,7 @@ Deno.serve(async (req) => {
         if (!sentimentOk || !rvolOk || !vwapOk) continue;
         quantCandidates.push(r);
       }
-      if (i + 3 < QUANT_SYMBOLS.length) await new Promise(r => setTimeout(r, 200));
+      if (i + 5 < QUANT_SYMBOLS.length) await new Promise(r => setTimeout(r, 300));
     }
 
     // ★ 점수 높은 종목 우선 배분 (Priority Allocation)
