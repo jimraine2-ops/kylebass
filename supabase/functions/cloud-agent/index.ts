@@ -546,27 +546,27 @@ Deno.serve(async (req) => {
 
           if (pnlPct <= -2.5) {
             shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 손절 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
+            closeReason = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} 손절 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
             newStatus = 'stopped';
           } else if (peakPrice >= pos.price * 1.10) {
             const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
             if (dropFromPeak >= 5) {
               const lockedPnlPct = ((price - pos.price) / pos.price * 100).toFixed(2);
               shouldClose = true;
-              closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnlPct}% 확정)`;
+              closeReason = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnlPct}% 확정)`;
               newStatus = 'trailing_profit';
             }
           } else if (pos.stop_loss && price <= pos.stop_loss) {
             shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 추격 손절 터치 (${fmtKRW(pos.stop_loss)})`;
+            closeReason = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} 추격 손절 터치 (${fmtKRW(pos.stop_loss)})`;
             newStatus = 'stopped';
           } else if (pos.take_profit && price >= pos.take_profit) {
             shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 익절 도달 (+5%)`;
+            closeReason = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} 익절 도달 (+5%)`;
             newStatus = 'profit_taken';
           } else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0) {
             shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 지능형 조기 대응 — 블랙리스트 종목 본절 탈출 (${pnlPct.toFixed(2)}%)`;
+            closeReason = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} 지능형 조기 대응 — 블랙리스트 종목 본절 탈출 (${pnlPct.toFixed(2)}%)`;
             newStatus = 'early_exit';
           }
 
