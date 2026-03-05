@@ -23,17 +23,6 @@ export function TopBar() {
   const enableApiSearch = debouncedQuery.length >= 1 && !hasKoreanResults;
   const { data: apiResults, isLoading } = useStockSearch(enableApiSearch ? debouncedQuery : "");
 
-  // Collect symbols for quant score preview
-  const dropdownSymbols = useMemo(() => {
-    if (hasKoreanResults) return koreanResults.map(e => e.symbol);
-    if (apiResults && apiResults.length > 0) return apiResults.map((r: any) => r.symbol);
-    return [];
-  }, [hasKoreanResults, koreanResults, apiResults]);
-
-  const { scoreMap, isLoading: scoresLoading } = useSearchScores(
-    open && dropdownSymbols.length > 0 ? dropdownSymbols.slice(0, 10) : []
-  );
-
   // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -44,37 +33,6 @@ export function TopBar() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-
-  const handleSelect = (symbol: string) => {
-    setQuery("");
-    setOpen(false);
-    navigate(`/stock/${symbol}`);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (koreanResults.length > 0) {
-      handleSelect(koreanResults[0].symbol);
-      return;
-    }
-    if (query.trim()) {
-      handleSelect(query.trim().toUpperCase());
-    }
-  };
-
-  const showDropdown = open && debouncedQuery.length >= 1;
-  const showLoading = isLoading && !hasKoreanResults;
-
-  const renderScoreBadge = (symbol: string) => {
-    const scoreData = scoreMap.get(symbol);
-    if (scoreData) {
-      return <SearchScoreBadge score={scoreData.totalScore} reason={scoreData.reason} />;
-    }
-    if (scoresLoading) {
-      return <SearchScoreLoading />;
-    }
-    return null;
-  };
 
   return (
     <header className="h-14 border-b border-border flex items-center gap-4 px-4 bg-card/50 backdrop-blur-sm">
