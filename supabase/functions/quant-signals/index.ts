@@ -256,12 +256,19 @@ function getTopReason(indicators: any): string {
 
 // Analyze a single symbol — only 2 API calls max (quote + candle)
 async function analyzeSymbol(sym: string) {
+  // First get quote — this is mandatory
   const quote = await finnhubFetch(`/quote?symbol=${sym}`);
-  if (!quote || !quote.c || quote.c === 0) return null;
+  if (!quote || !quote.c || quote.c === 0) {
+    // If rate limited, try a simpler approach: use just the quote data we can get
+    return null;
+  }
 
   const changePct = quote.dp || 0;
   let closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[];
 
+  // Add small delay before candle request to avoid rate limiting
+  await new Promise(r => setTimeout(r, 300));
+  
   const to = Math.floor(Date.now() / 1000);
   const from = to - 60 * 86400;
   const candles = await finnhubFetch(`/stock/candle?symbol=${sym}&resolution=D&from=${from}&to=${to}`);
@@ -269,6 +276,7 @@ async function analyzeSymbol(sym: string) {
   if (candles && candles.s !== 'no_data' && candles.t) {
     closes = candles.c; highs = candles.h; lows = candles.l; opens = candles.o; volumes = candles.v;
   } else {
+    // Fallback to synthetic candles based on quote
     const synthetic = generateSyntheticCandles(quote);
     closes = synthetic.closes; highs = synthetic.highs; lows = synthetic.lows; opens = synthetic.opens; volumes = synthetic.volumes;
   }
