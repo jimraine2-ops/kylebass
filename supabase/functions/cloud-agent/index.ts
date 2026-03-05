@@ -338,7 +338,7 @@ Deno.serve(async (req) => {
     const scalpInvested = (scalpOpenPos || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
     const scalpUtilization = scalpInitialBalance > 0 ? ((scalpInitialBalance - scalpBalance) / scalpInitialBalance) * 100 : 0;
 
-    await addLog('system', 'scan', null, `[${timeStr}] Cloud Agent 사이클 시작 — 대형주 ${QUANT_SYMBOLS.length}개 + 소형주 스캔 | [자금현황] 대형주 확정잔고: ${fmtKRWRaw(Math.round(mainBalance))} (운용률 ${mainUtilization.toFixed(1)}%) | 소형주 확정잔고: ${fmtKRWRaw(Math.round(scalpBalance))} (운용률 ${scalpUtilization.toFixed(1)}%)`);
+    await addLog('system', 'scan', null, `[${timeStr}] [${sessionLabel}] Cloud Agent 사이클 시작 — 대형주 ${QUANT_SYMBOLS.length}개 + 소형주 스캔 | 세션: ${sessionLabel} (스프레드 보정 ×${spreadMul}) | [자금현황] 대형주 확정잔고: ${fmtKRWRaw(Math.round(mainBalance))} (운용률 ${mainUtilization.toFixed(1)}%) | 소형주 확정잔고: ${fmtKRWRaw(Math.round(scalpBalance))} (운용률 ${scalpUtilization.toFixed(1)}%)`);
 
     // ★ 자금 운용률 90% 이상 경고
     if (mainUtilization >= 90) {
