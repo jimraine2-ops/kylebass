@@ -13,33 +13,37 @@ function getToken(): string {
   return key;
 }
 
-async function finnhubFetch(path: string, retries = 3) {
+async function finnhubFetch(path: string, retries = 5) {
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const res = await fetch(url);
-      console.log(`[finnhubFetch] ${path} status=${res.status}`);
-      if (res.status === 429 || res.status === 502 || res.status === 503) {
+      if (res.status === 429) {
+        await res.text();
+        // Exponential backoff: 2s, 4s, 8s, 16s, 32s
+        const wait = 2000 * Math.pow(2, attempt);
+        console.log(`[finnhubFetch] ${path} rate limited (429), retry ${attempt+1}/${retries} in ${wait}ms`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      if (res.status === 502 || res.status === 503) {
         await res.text();
         await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
         continue;
       }
-      if (!res.ok) { const txt = await res.text(); console.log(`[finnhubFetch] ${path} not ok: ${txt}`); return null; }
+      if (!res.ok) { await res.text(); return null; }
       const ct = res.headers.get('content-type') || '';
       if (!ct.includes('application/json')) {
         const txt = await res.text();
-        console.log(`[finnhubFetch] ${path} non-json: ${txt.substring(0, 200)}`);
         if (txt.trim().startsWith('<!') || txt.includes('<html')) {
           await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
           continue;
         }
       }
-      const json = await res.json();
-      return json;
+      return await res.json();
     } catch (e) {
-      console.log(`[finnhubFetch] ${path} error: ${e}`);
       if (attempt === retries - 1) return null;
       await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
