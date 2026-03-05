@@ -73,10 +73,18 @@ export function useScalpingPortfolio() {
 export function useQuantSignals(symbols?: string[]) {
   return useQuery({
     queryKey: ['quant-signals', symbols?.join(',')],
-    queryFn: () => fetchQuantSignals(symbols),
+    queryFn: async () => {
+      const data = await fetchQuantSignals(symbols);
+      // If we requested specific symbols but got empty results, treat as transient failure
+      if (symbols && symbols.length > 0 && (!data?.results || data.results.length === 0)) {
+        throw new Error('Rate limited - retrying');
+      }
+      return data;
+    },
     staleTime: 10000,
     refetchInterval: 30000,
-    retry: 1,
+    retry: 5,
+    retryDelay: (attemptIndex) => Math.min(3000 * (attemptIndex + 1), 15000),
   });
 }
 
