@@ -34,7 +34,7 @@ function setCache(key: string, data: any) {
   quoteCache.set(key, { data, ts: Date.now() });
 }
 
-async function finnhubFetch(path: string, retries = 5): Promise<any> {
+async function finnhubFetch(path: string, retries = 3): Promise<any> {
   const cached = getCached(path);
   if (cached) return cached;
 
@@ -45,17 +45,22 @@ async function finnhubFetch(path: string, retries = 5): Promise<any> {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const res = await fetch(url);
-      if (res.status === 429 || res.status === 502 || res.status === 503) {
-        const delay = 2000 * Math.pow(2, attempt) + Math.random() * 2000;
-        console.warn(`Finnhub ${res.status}, retry ${attempt + 1}/${retries} in ${Math.round(delay)}ms`);
+      if (res.status === 429) {
+        await res.text();
+        if (attempt >= retries - 1) return null; // Don't throw, return null
+        const delay = 1000 * (attempt + 1) + Math.random() * 500;
         await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      if (res.status === 502 || res.status === 503) {
+        await res.text();
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         continue;
       }
       if (!res.ok) {
         const text = await res.text();
         if (text.trim().startsWith('<!') || text.includes('<html')) {
-          console.warn(`Finnhub returned HTML (status ${res.status}), retrying...`);
-          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
           continue;
         }
         throw new Error(`Finnhub error ${res.status}: ${text.substring(0, 200)}`);
@@ -64,8 +69,7 @@ async function finnhubFetch(path: string, retries = 5): Promise<any> {
       if (!contentType.includes('application/json')) {
         const text = await res.text();
         if (text.trim().startsWith('<!') || text.includes('<html')) {
-          console.warn(`Finnhub returned HTML content, retrying...`);
-          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
           continue;
         }
       }
@@ -77,7 +81,7 @@ async function finnhubFetch(path: string, retries = 5): Promise<any> {
       await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
   }
-  throw new Error('Finnhub rate limit exceeded after retries');
+  return null; // Graceful fallback instead of throwing
 }
 
 // Global request queue to serialize ALL finnhub calls across actions
