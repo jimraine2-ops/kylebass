@@ -7,7 +7,6 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useStockSearch } from "@/hooks/useStockData";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { searchKoreanStocks, type KoreanStockEntry } from "@/lib/koreanStockMap";
-import { useSearchScores, SearchScoreBadge, SearchScoreLoading } from "@/components/search/SearchScoreBadge";
 
 export function TopBar() {
   const [query, setQuery] = useState("");
