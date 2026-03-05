@@ -262,6 +262,9 @@ Deno.serve(async (req) => {
 
     const now = new Date();
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const sessionInfo = getMarketSession();
+    const sessionLabel = sessionInfo.label;
+    const spreadMul = sessionInfo.spreadMultiplier;
 
     // ========== PHASE 1: QUANT STRATEGY (Premium Stocks — 30종목) ==========
     const QUANT_SYMBOLS = [
