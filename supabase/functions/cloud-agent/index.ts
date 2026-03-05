@@ -473,7 +473,7 @@ Deno.serve(async (req) => {
       const logMsg = `[Cloud-Quant] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 자율 매수 [${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote} | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       await supabase.from('ai_trades').insert({
-        symbol: r.sym, side: 'buy', quantity: qty, price: r.price,
+        symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,
         stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
         ai_reason: logMsg, ai_confidence: r.scoring.totalScore,
       });
