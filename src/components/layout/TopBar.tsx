@@ -7,7 +7,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useStockSearch } from "@/hooks/useStockData";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { searchKoreanStocks, type KoreanStockEntry } from "@/lib/koreanStockMap";
-import { formatKRW } from "@/lib/krw";
+import { useSearchScores, SearchScoreBadge, SearchScoreLoading } from "@/components/search/SearchScoreBadge";
 
 export function TopBar() {
   const [query, setQuery] = useState("");
@@ -23,6 +23,17 @@ export function TopBar() {
   // Finnhub API 검색 (한국어 결과 없을 때 또는 영어/티커 입력 시)
   const enableApiSearch = debouncedQuery.length >= 1 && !hasKoreanResults;
   const { data: apiResults, isLoading } = useStockSearch(enableApiSearch ? debouncedQuery : "");
+
+  // Collect symbols for quant score preview
+  const dropdownSymbols = useMemo(() => {
+    if (hasKoreanResults) return koreanResults.map(e => e.symbol);
+    if (apiResults && apiResults.length > 0) return apiResults.map((r: any) => r.symbol);
+    return [];
+  }, [hasKoreanResults, koreanResults, apiResults]);
+
+  const { scoreMap, isLoading: scoresLoading } = useSearchScores(
+    open && dropdownSymbols.length > 0 ? dropdownSymbols.slice(0, 10) : []
+  );
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -43,7 +54,6 @@ export function TopBar() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // 한국어 입력 시 첫 번째 결과의 심볼로 이동
     if (koreanResults.length > 0) {
       handleSelect(koreanResults[0].symbol);
       return;
@@ -55,6 +65,17 @@ export function TopBar() {
 
   const showDropdown = open && debouncedQuery.length >= 1;
   const showLoading = isLoading && !hasKoreanResults;
+
+  const renderScoreBadge = (symbol: string) => {
+    const scoreData = scoreMap.get(symbol);
+    if (scoreData) {
+      return <SearchScoreBadge score={scoreData.totalScore} reason={scoreData.reason} />;
+    }
+    if (scoresLoading) {
+      return <SearchScoreLoading />;
+    }
+    return null;
+  };
 
   return (
     <header className="h-14 border-b border-border flex items-center gap-4 px-4 bg-card/50 backdrop-blur-sm">
@@ -109,18 +130,21 @@ export function TopBar() {
                           </p>
                         </div>
                       </div>
-                      {entry.category && (
-                        <span className="text-[10px] text-muted-foreground shrink-0 bg-muted px-1.5 py-0.5 rounded">
-                          {entry.category}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {renderScoreBadge(entry.symbol)}
+                        {entry.category && (
+                          <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                            {entry.category}
+                          </span>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
               </>
             )}
 
-            {/* Finnhub API 결과 (한국어 결과 없을 때) */}
+            {/* Finnhub API 결과 */}
             {!hasKoreanResults && (
               <>
                 {showLoading && (
@@ -153,9 +177,12 @@ export function TopBar() {
                               {r.shortname || r.description || "—"}
                             </span>
                           </div>
-                          <span className="text-xs text-muted-foreground shrink-0">
-                            {r.type || r.exchange || ""}
-                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {renderScoreBadge(r.symbol)}
+                            <span className="text-xs text-muted-foreground">
+                              {r.type || r.exchange || ""}
+                            </span>
+                          </div>
                         </li>
                       ))}
                     </ul>
