@@ -13,7 +13,7 @@ function getToken(): string {
   return key;
 }
 
-async function finnhubFetch(path: string, retries = 5) {
+async function finnhubFetch(path: string, retries = 4) {
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
@@ -22,15 +22,14 @@ async function finnhubFetch(path: string, retries = 5) {
       const res = await fetch(url);
       if (res.status === 429) {
         await res.text();
-        // Exponential backoff: 2s, 4s, 8s, 16s, 32s
-        const wait = 2000 * Math.pow(2, attempt);
-        console.log(`[finnhubFetch] ${path} rate limited (429), retry ${attempt+1}/${retries} in ${wait}ms`);
+        // Short backoff: 1.5s, 3s, 4.5s, 6s
+        const wait = 1500 * (attempt + 1);
         await new Promise(r => setTimeout(r, wait));
         continue;
       }
       if (res.status === 502 || res.status === 503) {
         await res.text();
-        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         continue;
       }
       if (!res.ok) { await res.text(); return null; }
@@ -43,7 +42,7 @@ async function finnhubFetch(path: string, retries = 5) {
         }
       }
       return await res.json();
-    } catch (e) {
+    } catch {
       if (attempt === retries - 1) return null;
       await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
