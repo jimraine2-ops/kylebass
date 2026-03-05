@@ -20,22 +20,26 @@ async function finnhubFetch(path: string, retries = 3) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const res = await fetch(url);
+      console.log(`[finnhubFetch] ${path} status=${res.status}`);
       if (res.status === 429 || res.status === 502 || res.status === 503) {
         await res.text();
         await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
         continue;
       }
-      if (!res.ok) { await res.text(); return null; }
+      if (!res.ok) { const txt = await res.text(); console.log(`[finnhubFetch] ${path} not ok: ${txt}`); return null; }
       const ct = res.headers.get('content-type') || '';
       if (!ct.includes('application/json')) {
         const txt = await res.text();
+        console.log(`[finnhubFetch] ${path} non-json: ${txt.substring(0, 200)}`);
         if (txt.trim().startsWith('<!') || txt.includes('<html')) {
           await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
           continue;
         }
       }
-      return await res.json();
-    } catch {
+      const json = await res.json();
+      return json;
+    } catch (e) {
+      console.log(`[finnhubFetch] ${path} error: ${e}`);
       if (attempt === retries - 1) return null;
       await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
