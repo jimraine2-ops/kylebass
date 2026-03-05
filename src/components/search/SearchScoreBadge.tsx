@@ -18,7 +18,9 @@ function getScoreBg(score: number): string {
 }
 
 export function useSearchScores(symbols: string[]) {
-  const { data, isLoading } = useQuantSignals(symbols.length > 0 ? symbols : undefined);
+  // Only fetch scores for max 5 symbols to keep search fast
+  const limitedSymbols = symbols.slice(0, 5);
+  const { data, isLoading } = useQuantSignals(limitedSymbols.length > 0 ? limitedSymbols : undefined);
   
   const scoreMap = new Map<string, { totalScore: number; reason: string }>();
   if (data?.results) {
