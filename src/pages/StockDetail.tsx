@@ -9,6 +9,7 @@ import { XAxis, YAxis, Tooltip, ResponsiveContainer, Area, ComposedChart, Bar, L
 import { TrendingUp, TrendingDown, Target, Shield } from "lucide-react";
 import { useState, useMemo } from "react";
 import CompanyNewsSection from "@/components/stock/CompanyNewsSection";
+import { QuantScorePanel } from "@/components/stock/QuantScorePanel";
 import { formatStockName, getKoreanName } from "@/lib/koreanStockMap";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
