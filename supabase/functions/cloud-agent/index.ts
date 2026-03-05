@@ -461,13 +461,16 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const stopLoss = +(r.price * 0.975).toFixed(4);
-      const takeProfit = +(r.price * 1.06).toFixed(4);
+      // ★ [스프레드 보정] 장외 시간대에는 슬리피지 확대 적용
+      const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul);
+      const stopLoss = +(adjustedPrice * 0.975).toFixed(4);
+      const takeProfit = +(adjustedPrice * 1.06).toFixed(4);
       const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
       const balanceBefore = Math.round(mainBalance);
       // ★ 매수 즉시 확정 잔고 차감
       const newBuyBalance = mainBalance - costKRW;
-      const logMsg = `[Cloud-Quant] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 자율 매수 [${tier}|${qty}주@${fmtKRW(r.price)}|${fmtKRWRaw(costKRW)}] | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 보정 ×${spreadMul}` : '';
+      const logMsg = `[Cloud-Quant] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 자율 매수 [${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote} | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       await supabase.from('ai_trades').insert({
         symbol: r.sym, side: 'buy', quantity: qty, price: r.price,
