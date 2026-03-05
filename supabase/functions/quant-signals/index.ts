@@ -13,16 +13,23 @@ function getToken(): string {
   return key;
 }
 
-async function finnhubFetch(path: string, retries = 3) {
+async function finnhubFetch(path: string, retries = 4) {
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const res = await fetch(url);
-      if (res.status === 429 || res.status === 502 || res.status === 503) {
+      if (res.status === 429) {
         await res.text();
-        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        // Short backoff: 1.5s, 3s, 4.5s, 6s
+        const wait = 1500 * (attempt + 1);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      if (res.status === 502 || res.status === 503) {
+        await res.text();
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         continue;
       }
       if (!res.ok) { await res.text(); return null; }
@@ -249,12 +256,19 @@ function getTopReason(indicators: any): string {
 
 // Analyze a single symbol — only 2 API calls max (quote + candle)
 async function analyzeSymbol(sym: string) {
+  // First get quote — this is mandatory
   const quote = await finnhubFetch(`/quote?symbol=${sym}`);
-  if (!quote || !quote.c || quote.c === 0) return null;
+  if (!quote || !quote.c || quote.c === 0) {
+    // If rate limited, try a simpler approach: use just the quote data we can get
+    return null;
+  }
 
   const changePct = quote.dp || 0;
   let closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[];
 
+  // Add small delay before candle request to avoid rate limiting
+  await new Promise(r => setTimeout(r, 300));
+  
   const to = Math.floor(Date.now() / 1000);
   const from = to - 60 * 86400;
   const candles = await finnhubFetch(`/stock/candle?symbol=${sym}&resolution=D&from=${from}&to=${to}`);
@@ -262,6 +276,7 @@ async function analyzeSymbol(sym: string) {
   if (candles && candles.s !== 'no_data' && candles.t) {
     closes = candles.c; highs = candles.h; lows = candles.l; opens = candles.o; volumes = candles.v;
   } else {
+    // Fallback to synthetic candles based on quote
     const synthetic = generateSyntheticCandles(quote);
     closes = synthetic.closes; highs = synthetic.highs; lows = synthetic.lows; opens = synthetic.opens; volumes = synthetic.volumes;
   }
@@ -317,26 +332,42 @@ Deno.serve(async (req) => {
 
       const results: any[] = [];
 
-      // Process in batches of 5 with 500ms staggered delay between groups
-      for (let i = 0; i < targetSymbols.length; i += 5) {
-        const batch = targetSymbols.slice(i, i + 5);
-        const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
-        for (const r of batchResults) {
-          if (r) results.push(r);
+      if (targetSymbols.length <= 3) {
+        // For small requests (single stock detail page), process sequentially 
+        for (const sym of targetSymbols) {
+          try {
+            const r = await analyzeSymbol(sym);
+            if (r) results.push(r);
+          } catch { /* skip */ }
+          if (targetSymbols.length > 1) {
+            await new Promise(resolve => setTimeout(resolve, 1200));
+          }
         }
-        if (i + 5 < targetSymbols.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+      } else {
+        // For large batch requests, process in batches of 3 with longer delays
+        for (let i = 0; i < targetSymbols.length; i += 3) {
+          const batch = targetSymbols.slice(i, i + 3);
+          const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
+          for (const r of batchResults) {
+            if (r) results.push(r);
+          }
+          if (i + 3 < targetSymbols.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
         }
       }
 
       const premium = results.filter(r => r.price >= 10).sort((a, b) => b.totalScore - a.totalScore);
       const penny = results.filter(r => r.price < 10).sort((a, b) => b.totalScore - a.totalScore);
 
+      const allSorted = [...premium, ...penny].sort((a, b) => b.totalScore - a.totalScore);
+
       return new Response(JSON.stringify({
         premium,
         penny,
         allScanned: targetSymbols.length,
-        recommendations: [...premium, ...penny].sort((a, b) => b.totalScore - a.totalScore)
+        recommendations: allSorted,
+        results: allSorted,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
