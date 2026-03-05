@@ -726,7 +726,7 @@ Deno.serve(async (req) => {
       total_cycles: mainWallet ? (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1 : 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] Cloud Agent 사이클 완료`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] Cloud Agent 사이클 완료 — 전 시간대 통합 매매 활성`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
