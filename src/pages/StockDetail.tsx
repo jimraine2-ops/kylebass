@@ -171,6 +171,9 @@ export default function StockDetail() {
         </CardContent>
       </Card>
 
+      {/* AI 10대 지표 종합 분석 */}
+      <QuantScorePanel symbol={symbol} currentPrice={livePrice ?? null} fxRate={fxRate} />
+
       {/* Technical Indicators - Raw Data Display */}
       <Card>
         <CardHeader className="pb-2">
