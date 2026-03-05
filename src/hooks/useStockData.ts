@@ -43,11 +43,11 @@ export function useStockSearch(query: string) {
 
 export function usePennyStocks() {
   return useQuery({
-    queryKey: ['penny-stocks-top10'],
+    queryKey: ['penny-stocks-top50'],
     queryFn: () => scanPennyStocks(),
-    refetchInterval: 30000,
+    refetchInterval: 10000, // 10초 갱신
     retry: 3,
-    staleTime: 10000,
+    staleTime: 8000,
     refetchOnWindowFocus: false,
   });
 }

@@ -634,8 +634,8 @@ Deno.serve(async (req) => {
 
       await addLog('scalping', 'scan', null, `[Cloud-Scalp] [${timeStr}] 소형주 그룹 ${pennyGroupIdx + 1}/4 스캔 시작 (${pennyTickers.length}개 종목) | 확정잔고: ${fmtKRWRaw(Math.round(scalpBalance))}`, {});
 
-      // ★ Collect all candidates first, then sort by changePct (highest first)
-      const scalpCandidates: { sym: string; price: number; changePct: number }[] = [];
+      // ★ Collect all candidates with 10-indicator scoring, then sort by score (highest first)
+      const scalpCandidates: { sym: string; price: number; changePct: number; quantScore: number }[] = [];
 
       for (let bi = 0; bi < pennyTickers.length; bi += 5) {
         const batch = pennyTickers.slice(bi, bi + 5);
@@ -644,16 +644,18 @@ Deno.serve(async (req) => {
             const alreadyHolding = (scalpOpenPos || []).some(p => p.symbol === sym && p.status === 'open');
             if (alreadyHolding) return null;
             if (blacklistSymbols.has(sym)) {
-              return { sym, price: 0, changePct: 0, filtered: true, reason: 'blacklist' };
+              return { sym, price: 0, changePct: 0, quantScore: 0, filtered: true, reason: 'blacklist' };
             }
-            const quoteData = await finnhubFetch(`/quote?symbol=${sym}`);
-            if (!quoteData?.c || quoteData.c >= 10) return null;
-            if (quoteData.c < MIN_PRICE_USD) {
-              return { sym, price: quoteData.c, changePct: 0, filtered: true, reason: 'low_price' };
+            const data = await getQuoteAndCandles(sym);
+            if (!data || !data.quote.c || data.quote.c >= 10) return null;
+            if (data.quote.c < MIN_PRICE_USD) {
+              return { sym, price: data.quote.c, changePct: 0, quantScore: 0, filtered: true, reason: 'low_price' };
             }
-            const changePct = quoteData.dp || 0;
+            const changePct = data.quote.dp || 0;
             if (changePct < dynamicEntryThreshold) return null;
-            return { sym, price: quoteData.c, changePct, filtered: false };
+            // ★ 10-Indicator Scoring
+            const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
+            return { sym, price: data.quote.c, changePct, quantScore: scoring?.totalScore || 0, filtered: false };
           } catch { return null; }
         }));
 
@@ -667,56 +669,64 @@ Deno.serve(async (req) => {
 
         const validResults = batchResults.filter((r: any) => r && !r.filtered && r.changePct > 0);
         for (const r of validResults) {
-          if (r) scalpCandidates.push({ sym: r.sym, price: r.price, changePct: r.changePct });
+          if (r) scalpCandidates.push({ sym: r.sym, price: r.price, changePct: r.changePct, quantScore: r.quantScore || 0 });
         }
         if (bi + 5 < pennyTickers.length) await new Promise(r => setTimeout(r, 200));
       }
 
-      // ★ 상승률 높은 종목 우선 배분 (Priority Allocation)
-      scalpCandidates.sort((a, b) => b.changePct - a.changePct);
+      // ★ 10대 지표 점수 높은 종목 우선 배분
+      scalpCandidates.sort((a, b) => b.quantScore - a.quantScore);
+
+      if (scalpCandidates.length > 0) {
+        const summary = scalpCandidates.slice(0, 10).map(c => `${c.sym}(${c.quantScore}점/+${c.changePct.toFixed(1)}%)`).join(', ');
+        await addLog('scalping', 'scan', null, `[Cloud-Scalp] [${timeStr}] 매수 후보 ${scalpCandidates.length}개 (점수순): ${summary}`, {});
+      }
 
       for (const r of scalpCandidates) {
         if (scalpOpenCount >= 10) break;
-        const { sym, price, changePct } = r;
+        const { sym, price, changePct, quantScore } = r;
+
+        // ★ 10대 지표 50점 이상만 진입
+        if (quantScore < 50) {
+          await addLog('scalping', 'skip', sym, `[Cloud-Scalp] ${sym} +${changePct.toFixed(1)}% but 점수 ${quantScore} < 50 → 보류`, { quantScore, changePct });
+          continue;
+        }
+
         const priceKRW = toKRW(price);
-        // ★ [확정 잔고 기반] 매수 금액 = 현재 확정 잔고 × 10%
         const maxKRW = scalpBalance * 0.10;
         const qty = Math.floor(maxKRW / priceKRW);
         const costKRW = Math.floor(qty * priceKRW);
 
-        // ★ [Hard Stop] 잔고 부족 시 진입 보류
         if (qty <= 0 || costKRW > scalpBalance) {
-          await addLog('scalping', 'hold', sym, `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 매수 신호 → ⚠️ 잔고 부족으로 인한 진입 보류 | 필요: ${fmtKRWRaw(costKRW)} | 확정잔고: ${fmtKRWRaw(Math.round(scalpBalance))}`, { changePct, needed: costKRW, available: Math.round(scalpBalance) });
+          await addLog('scalping', 'hold', sym, `[Cloud-Scalp] [${timeStr}] ${sym} ${quantScore}점/+${changePct.toFixed(1)}% → ⚠️ 잔고 부족 | 필요: ${fmtKRWRaw(costKRW)} | 확정잔고: ${fmtKRWRaw(Math.round(scalpBalance))}`, {});
           continue;
         }
 
         if (price < MIN_PRICE_USD) {
-          await addLog('scalping', 'filter', sym, `[Cloud-Scalp] [${timeStr}] ${sym} 저가주 필터링으로 인한 진입 취소 (${fmtKRW(price)} < ₩1,000)`, { price });
+          await addLog('scalping', 'filter', sym, `[Cloud-Scalp] ${sym} 저가주 필터링 (${fmtKRW(price)} < ₩1,000)`, {});
           continue;
         }
 
-        // ★ [스프레드 보정] 장외 시간대에는 슬리피지 확대 적용
         const adjPrice = applySessionSlippage(price, 'buy', spreadMul);
         const stopLoss = +(adjPrice * 0.975).toFixed(4);
         const takeProfit = +(adjPrice * 1.05).toFixed(4);
         const balanceBefore = scalpBalance;
-        // ★ 매수 즉시 확정 잔고에서 차감
         const newScalpBuyBal = scalpBalance - costKRW;
         const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 보정 ×${spreadMul}` : '';
-        const logMsg = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(adjPrice)})${spreadNote} | 손절 -2.5% / 익절 +5% / 추격익절 고점-5% | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBuyBal)}]`;
+        const logMsg = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} 10대지표 ${quantScore}점/+${changePct.toFixed(1)}% 급등 즉시 매수 (${qty}주@${fmtKRW(adjPrice)})${spreadNote} | 손절 -2.5%/익절 +5%/추격익절 고점-5% | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBuyBal)}]`;
 
         await supabase.from('scalping_trades').insert({
           symbol: sym, side: 'buy', quantity: qty, price: adjPrice,
           stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
-          entry_score: Math.round(changePct), time_limit_at: null,
-          ai_reason: logMsg, ai_confidence: 100,
+          entry_score: quantScore, time_limit_at: null,
+          ai_reason: logMsg, ai_confidence: quantScore,
         });
         await supabase.from('scalping_wallet').update({
           balance: newScalpBuyBal, updated_at: now.toISOString(),
         }).eq('id', scalpWallet.id);
         scalpBalance = newScalpBuyBal;
         scalpOpenCount++;
-        await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0), balanceBefore, balanceAfter: newScalpBuyBal });
+        await addLog('scalping', 'buy', sym, logMsg, { quantScore, changePct: +changePct.toFixed(1), qty, costKRW, balanceBefore, balanceAfter: newScalpBuyBal });
       }
     }
 
