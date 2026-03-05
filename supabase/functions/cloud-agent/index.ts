@@ -728,43 +728,6 @@ Deno.serve(async (req) => {
         scalpOpenCount++;
         await addLog('scalping', 'buy', sym, logMsg, { quantScore, changePct: +changePct.toFixed(1), qty, costKRW, balanceBefore, balanceAfter: newScalpBuyBal });
       }
-        const qty = Math.floor(maxKRW / priceKRW);
-        const costKRW = Math.floor(qty * priceKRW);
-
-        // ★ [Hard Stop] 잔고 부족 시 진입 보류
-        if (qty <= 0 || costKRW > scalpBalance) {
-          await addLog('scalping', 'hold', sym, `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 매수 신호 → ⚠️ 잔고 부족으로 인한 진입 보류 | 필요: ${fmtKRWRaw(costKRW)} | 확정잔고: ${fmtKRWRaw(Math.round(scalpBalance))}`, { changePct, needed: costKRW, available: Math.round(scalpBalance) });
-          continue;
-        }
-
-        if (price < MIN_PRICE_USD) {
-          await addLog('scalping', 'filter', sym, `[Cloud-Scalp] [${timeStr}] ${sym} 저가주 필터링으로 인한 진입 취소 (${fmtKRW(price)} < ₩1,000)`, { price });
-          continue;
-        }
-
-        // ★ [스프레드 보정] 장외 시간대에는 슬리피지 확대 적용
-        const adjPrice = applySessionSlippage(price, 'buy', spreadMul);
-        const stopLoss = +(adjPrice * 0.975).toFixed(4);
-        const takeProfit = +(adjPrice * 1.05).toFixed(4);
-        const balanceBefore = scalpBalance;
-        // ★ 매수 즉시 확정 잔고에서 차감
-        const newScalpBuyBal = scalpBalance - costKRW;
-        const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 보정 ×${spreadMul}` : '';
-        const logMsg = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(adjPrice)})${spreadNote} | 손절 -2.5% / 익절 +5% / 추격익절 고점-5% | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBuyBal)}]`;
-
-        await supabase.from('scalping_trades').insert({
-          symbol: sym, side: 'buy', quantity: qty, price: adjPrice,
-          stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
-          entry_score: Math.round(changePct), time_limit_at: null,
-          ai_reason: logMsg, ai_confidence: 100,
-        });
-        await supabase.from('scalping_wallet').update({
-          balance: newScalpBuyBal, updated_at: now.toISOString(),
-        }).eq('id', scalpWallet.id);
-        scalpBalance = newScalpBuyBal;
-        scalpOpenCount++;
-        await addLog('scalping', 'buy', sym, logMsg, { changePct: +changePct.toFixed(1), qty, costKRW: +costKRW.toFixed(0), balanceBefore, balanceAfter: newScalpBuyBal });
-      }
     }
 
     // Update cycle count
