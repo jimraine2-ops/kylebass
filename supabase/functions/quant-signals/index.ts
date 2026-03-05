@@ -1,5 +1,3 @@
-// Deno.serve used directly
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -7,13 +5,36 @@ const corsHeaders = {
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 
+// ===== In-Memory Cache =====
+const cache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL = 90_000; // 90 seconds
+
+function getCached(key: string) {
+  const entry = cache.get(key);
+  if (entry && Date.now() - entry.ts < CACHE_TTL) return entry.data;
+  return null;
+}
+function setCache(key: string, data: any) {
+  cache.set(key, { data, ts: Date.now() });
+  // Evict old entries periodically
+  if (cache.size > 200) {
+    const now = Date.now();
+    for (const [k, v] of cache) {
+      if (now - v.ts > CACHE_TTL) cache.delete(k);
+    }
+  }
+}
+
 function getToken(): string {
   const key = Deno.env.get('FINNHUB_API_KEY');
   if (!key) throw new Error('FINNHUB_API_KEY not configured');
   return key;
 }
 
-async function finnhubFetch(path: string, retries = 4) {
+async function finnhubFetch(path: string, retries = 3) {
+  const cached = getCached(path);
+  if (cached) return cached;
+
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
@@ -22,14 +43,12 @@ async function finnhubFetch(path: string, retries = 4) {
       const res = await fetch(url);
       if (res.status === 429) {
         await res.text();
-        // Short backoff: 1.5s, 3s, 4.5s, 6s
-        const wait = 1500 * (attempt + 1);
-        await new Promise(r => setTimeout(r, wait));
+        await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
         continue;
       }
       if (res.status === 502 || res.status === 503) {
         await res.text();
-        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
         continue;
       }
       if (!res.ok) { await res.text(); return null; }
@@ -37,14 +56,16 @@ async function finnhubFetch(path: string, retries = 4) {
       if (!ct.includes('application/json')) {
         const txt = await res.text();
         if (txt.trim().startsWith('<!') || txt.includes('<html')) {
-          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+          await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
           continue;
         }
       }
-      return await res.json();
+      const json = await res.json();
+      setCache(path, json);
+      return json;
     } catch {
       if (attempt === retries - 1) return null;
-      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
     }
   }
   return null;
@@ -125,10 +146,9 @@ function generateSyntheticCandles(quote: any, days = 40) {
   return { closes, highs, lows, opens, volumes };
 }
 
-// ===== Lightweight Scoring (no extra API calls) =====
+// ===== Lightweight Scoring =====
 
 function scoreSentimentFromQuote(changePct: number): { score: number; details: string } {
-  // Use price momentum as proxy for sentiment (no extra API call)
   if (changePct >= 5) return { score: 9, details: `강한 상승 모멘텀 ${changePct.toFixed(1)}%` };
   if (changePct >= 3) return { score: 7, details: `상승 모멘텀 ${changePct.toFixed(1)}%` };
   if (changePct >= 1) return { score: 5, details: `소폭 상승 ${changePct.toFixed(1)}%` };
@@ -177,7 +197,7 @@ function scoreATR(highs: number[], lows: number[], closes: number[]): { score: n
   const priceAboveKeltner = closes[n] > keltnerUpper;
   const recentHigh = Math.max(...highs.slice(-10));
   const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
-  let score = priceAboveKeltner ? 10 : closes[n] > ema20[n] + currentATR ? 7 : 4;
+  const score = priceAboveKeltner ? 10 : closes[n] > ema20[n] + currentATR ? 7 : 4;
   return { score, details: `ATR: ${currentATR.toFixed(4)}, Keltner: ${priceAboveKeltner ? 'O' : 'X'}`, trailingStop };
 }
 
@@ -216,7 +236,6 @@ function scorePricePosition(closes: number[], highs: number[]): { score: number;
 }
 
 function scoreSectorSynergy(changePct: number): { score: number; details: string } {
-  // Simplified: just use own momentum as proxy (no extra API call for SPY/peers)
   if (changePct >= 5) return { score: 10, details: `강한 상대강도` };
   if (changePct >= 3) return { score: 7, details: `양호한 상대강도` };
   if (changePct >= 1) return { score: 5, details: `보통` };
@@ -254,34 +273,36 @@ function getTopReason(indicators: any): string {
   return entries.slice(0, 2).map(([k, v]) => `${labels[k] || k}(${v.score})`).join(' + ');
 }
 
-// Analyze a single symbol — only 2 API calls max (quote + candle)
+// Result-level cache
+const resultCache = new Map<string, { data: any; ts: number }>();
+const RESULT_TTL = 60_000; // 60s for full analysis results
+
 async function analyzeSymbol(sym: string) {
-  // First get quote — this is mandatory
-  const quote = await finnhubFetch(`/quote?symbol=${sym}`);
-  if (!quote || !quote.c || quote.c === 0) {
-    // If rate limited, try a simpler approach: use just the quote data we can get
-    return null;
-  }
+  // Check result cache first
+  const cached = resultCache.get(sym);
+  if (cached && Date.now() - cached.ts < RESULT_TTL) return cached.data;
+
+  // Fetch quote and candles in PARALLEL (key optimization)
+  const to = Math.floor(Date.now() / 1000);
+  const from = to - 60 * 86400;
+  
+  const [quote, candles] = await Promise.all([
+    finnhubFetch(`/quote?symbol=${sym}`),
+    finnhubFetch(`/stock/candle?symbol=${sym}&resolution=D&from=${from}&to=${to}`),
+  ]);
+
+  if (!quote || !quote.c || quote.c === 0) return null;
 
   const changePct = quote.dp || 0;
   let closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[];
 
-  // Add small delay before candle request to avoid rate limiting
-  await new Promise(r => setTimeout(r, 300));
-  
-  const to = Math.floor(Date.now() / 1000);
-  const from = to - 60 * 86400;
-  const candles = await finnhubFetch(`/stock/candle?symbol=${sym}&resolution=D&from=${from}&to=${to}`);
-
   if (candles && candles.s !== 'no_data' && candles.t) {
     closes = candles.c; highs = candles.h; lows = candles.l; opens = candles.o; volumes = candles.v;
   } else {
-    // Fallback to synthetic candles based on quote
     const synthetic = generateSyntheticCandles(quote);
     closes = synthetic.closes; highs = synthetic.highs; lows = synthetic.lows; opens = synthetic.opens; volumes = synthetic.volumes;
   }
 
-  // All scoring is now purely computational — no extra API calls
   const sentiment = scoreSentimentFromQuote(changePct);
   const rvol = scoreRVOL(volumes);
   const candle = scoreCandlePattern(closes, highs, lows, volumes);
@@ -294,12 +315,11 @@ async function analyzeSymbol(sym: string) {
   const preMarket = scorePreMarket(volumes, closes, highs);
 
   const indicators = { sentiment, rvol, candle, atr, gap, squeeze, position, sectorSynergy, aggression, preMarket };
-
   const totalScore = sentiment.score + rvol.score + candle.score + atr.score +
     gap.score + squeeze.score + position.score + sectorSynergy.score +
     aggression.score + preMarket.score;
 
-  return {
+  const result = {
     symbol: sym,
     price: quote.c,
     change: quote.d,
@@ -309,6 +329,9 @@ async function analyzeSymbol(sym: string) {
     trailingStop: atr.trailingStop,
     reason: getTopReason(indicators),
   };
+
+  resultCache.set(sym, { data: result, ts: Date.now() });
+  return result;
 }
 
 Deno.serve(async (req) => {
@@ -320,7 +343,6 @@ Deno.serve(async (req) => {
     const { action, symbols } = await req.json();
 
     if (action === 'analyze') {
-      // 30종목 확장 (두 그룹 15개씩 교차 요청)
       const defaultSymbols = [
         'AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD',
         'PLTR', 'COIN', 'SOFI', 'HOOD', 'RIVN', 'NIO', 'MARA',
@@ -329,42 +351,36 @@ Deno.serve(async (req) => {
       ];
 
       const targetSymbols: string[] = (symbols || defaultSymbols).slice(0, 35);
-
       const results: any[] = [];
 
-      if (targetSymbols.length <= 3) {
-        // For small requests (single stock detail page), process sequentially 
-        for (const sym of targetSymbols) {
-          try {
-            const r = await analyzeSymbol(sym);
-            if (r) results.push(r);
-          } catch { /* skip */ }
-          if (targetSymbols.length > 1) {
-            await new Promise(resolve => setTimeout(resolve, 1200));
-          }
+      if (targetSymbols.length <= 5) {
+        // Small batch: fully parallel — no delays
+        const batchResults = await Promise.all(
+          targetSymbols.map(sym => analyzeSymbol(sym).catch(() => null))
+        );
+        for (const r of batchResults) {
+          if (r) results.push(r);
         }
       } else {
-        // For large batch requests, process in batches of 3 with longer delays
-        for (let i = 0; i < targetSymbols.length; i += 3) {
-          const batch = targetSymbols.slice(i, i + 3);
+        // Large batch: parallel batches of 5 with minimal delay
+        for (let i = 0; i < targetSymbols.length; i += 5) {
+          const batch = targetSymbols.slice(i, i + 5);
           const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
           for (const r of batchResults) {
             if (r) results.push(r);
           }
-          if (i + 3 < targetSymbols.length) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+          if (i + 5 < targetSymbols.length) {
+            await new Promise(resolve => setTimeout(resolve, 500));
           }
         }
       }
 
       const premium = results.filter(r => r.price >= 10).sort((a, b) => b.totalScore - a.totalScore);
       const penny = results.filter(r => r.price < 10).sort((a, b) => b.totalScore - a.totalScore);
-
       const allSorted = [...premium, ...penny].sort((a, b) => b.totalScore - a.totalScore);
 
       return new Response(JSON.stringify({
-        premium,
-        penny,
+        premium, penny,
         allScanned: targetSymbols.length,
         recommendations: allSorted,
         results: allSorted,
