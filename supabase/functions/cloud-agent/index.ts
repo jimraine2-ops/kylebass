@@ -365,19 +365,19 @@ Deno.serve(async (req) => {
 
         if (pnlPct <= -2.5) {
           shouldClose = true;
-          closeReason = `[Cloud] [${timeStr}] [${sym}] 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
         } else if (quantScore < 40) {
           shouldClose = true;
-          closeReason = `[Cloud] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 40)`;
+          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 40)`;
           newStatus = 'score_exit';
         } else if (pos.take_profit && price >= pos.take_profit) {
           shouldClose = true;
-          closeReason = `[Cloud] [${timeStr}] [${sym}] 목표가 도달 익절`;
+          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 목표가 도달 익절`;
           newStatus = 'profit_taken';
         } else if (pos.stop_loss && price <= pos.stop_loss) {
           shouldClose = true;
-          closeReason = `[Cloud] [${timeStr}] [${sym}] 추격 손절 터치`;
+          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 추격 손절 터치`;
           newStatus = 'trailing_stop';
         }
 
