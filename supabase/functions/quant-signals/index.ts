@@ -332,15 +332,28 @@ Deno.serve(async (req) => {
 
       const results: any[] = [];
 
-      // Process in batches of 5 with 500ms staggered delay between groups
-      for (let i = 0; i < targetSymbols.length; i += 5) {
-        const batch = targetSymbols.slice(i, i + 5);
-        const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
-        for (const r of batchResults) {
-          if (r) results.push(r);
+      if (targetSymbols.length <= 3) {
+        // For small requests (single stock detail page), process sequentially 
+        for (const sym of targetSymbols) {
+          try {
+            const r = await analyzeSymbol(sym);
+            if (r) results.push(r);
+          } catch { /* skip */ }
+          if (targetSymbols.length > 1) {
+            await new Promise(resolve => setTimeout(resolve, 1200));
+          }
         }
-        if (i + 5 < targetSymbols.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+      } else {
+        // For large batch requests, process in batches of 3 with longer delays
+        for (let i = 0; i < targetSymbols.length; i += 3) {
+          const batch = targetSymbols.slice(i, i + 3);
+          const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
+          for (const r of batchResults) {
+            if (r) results.push(r);
+          }
+          if (i + 3 < targetSymbols.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
         }
       }
 
