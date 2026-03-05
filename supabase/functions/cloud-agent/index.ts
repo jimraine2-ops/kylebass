@@ -695,15 +695,18 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const stopLoss = +(price * 0.975).toFixed(4);
-        const takeProfit = +(price * 1.05).toFixed(4);
+        // ★ [스프레드 보정] 장외 시간대에는 슬리피지 확대 적용
+        const adjPrice = applySessionSlippage(price, 'buy', spreadMul);
+        const stopLoss = +(adjPrice * 0.975).toFixed(4);
+        const takeProfit = +(adjPrice * 1.05).toFixed(4);
         const balanceBefore = scalpBalance;
         // ★ 매수 즉시 확정 잔고에서 차감
         const newScalpBuyBal = scalpBalance - costKRW;
-        const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5% | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBuyBal)}]`;
+        const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 보정 ×${spreadMul}` : '';
+        const logMsg = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(adjPrice)})${spreadNote} | 손절 -2.5% / 익절 +5% / 추격익절 고점-5% | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBuyBal)}]`;
 
         await supabase.from('scalping_trades').insert({
-          symbol: sym, side: 'buy', quantity: qty, price,
+          symbol: sym, side: 'buy', quantity: qty, price: adjPrice,
           stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
           entry_score: Math.round(changePct), time_limit_at: null,
           ai_reason: logMsg, ai_confidence: 100,
