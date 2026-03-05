@@ -332,11 +332,14 @@ Deno.serve(async (req) => {
       const premium = results.filter(r => r.price >= 10).sort((a, b) => b.totalScore - a.totalScore);
       const penny = results.filter(r => r.price < 10).sort((a, b) => b.totalScore - a.totalScore);
 
+      const allSorted = [...premium, ...penny].sort((a, b) => b.totalScore - a.totalScore);
+
       return new Response(JSON.stringify({
         premium,
         penny,
         allScanned: targetSymbols.length,
-        recommendations: [...premium, ...penny].sort((a, b) => b.totalScore - a.totalScore)
+        recommendations: allSorted,
+        results: allSorted,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
