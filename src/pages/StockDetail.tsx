@@ -9,6 +9,7 @@ import { XAxis, YAxis, Tooltip, ResponsiveContainer, Area, ComposedChart, Bar, L
 import { TrendingUp, TrendingDown, Target, Shield } from "lucide-react";
 import { useState, useMemo } from "react";
 import CompanyNewsSection from "@/components/stock/CompanyNewsSection";
+import { QuantScorePanel } from "@/components/stock/QuantScorePanel";
 import { formatStockName, getKoreanName } from "@/lib/koreanStockMap";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
@@ -169,6 +170,9 @@ export default function StockDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* AI 10대 지표 종합 분석 */}
+      <QuantScorePanel symbol={symbol} currentPrice={livePrice ?? null} fxRate={fxRate} />
 
       {/* Technical Indicators - Raw Data Display */}
       <Card>
