@@ -17,6 +17,47 @@ function fmtKRWRaw(krw: number): string { return `₩${krw.toLocaleString('ko-KR
 
 function getToken(): string { return Deno.env.get('FINNHUB_API_KEY') || ''; }
 
+// ===== Session Detection (US Eastern Time) =====
+type SessionType = 'DAY' | 'PRE_MARKET' | 'REGULAR' | 'AFTER_HOURS';
+
+function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number } {
+  const now = new Date();
+  const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const et = new Date(etStr);
+  const h = et.getHours();
+  const m = et.getMinutes();
+  const day = et.getDay();
+  const time = h * 60 + m;
+
+  // Weekend → DAY session (데이장)
+  if (day === 0 || day === 6) {
+    return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5 };
+  }
+  // Pre-market: 4:00 AM - 9:30 AM ET
+  if (time >= 240 && time < 570) {
+    return { session: 'PRE_MARKET', label: '프리마켓', spreadMultiplier: 2.0 };
+  }
+  // Regular: 9:30 AM - 4:00 PM ET
+  if (time >= 570 && time < 960) {
+    return { session: 'REGULAR', label: '정규장', spreadMultiplier: 1.0 };
+  }
+  // After-hours: 4:00 PM - 8:00 PM ET
+  if (time >= 960 && time < 1200) {
+    return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8 };
+  }
+  // Closed (8 PM - 4 AM ET) → DAY session
+  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5 };
+}
+
+// ===== Spread-Aware Limit Pricing =====
+// Off-hours: apply wider slippage to prevent overpaying on thin order books
+function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultiplier: number): number {
+  const BASE_SLIPPAGE = 0.0002; // 0.02%
+  const slippage = BASE_SLIPPAGE * spreadMultiplier;
+  if (side === 'buy') return +(price * (1 + slippage)).toFixed(4);
+  return +(price * (1 - slippage)).toFixed(4);
+}
+
 async function finnhubFetch(path: string) {
   const token = getToken();
   if (!token) return null;
@@ -221,6 +262,9 @@ Deno.serve(async (req) => {
 
     const now = new Date();
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const sessionInfo = getMarketSession();
+    const sessionLabel = sessionInfo.label;
+    const spreadMul = sessionInfo.spreadMultiplier;
 
     // ========== PHASE 1: QUANT STRATEGY (Premium Stocks — 30종목) ==========
     const QUANT_SYMBOLS = [
@@ -294,7 +338,7 @@ Deno.serve(async (req) => {
     const scalpInvested = (scalpOpenPos || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
     const scalpUtilization = scalpInitialBalance > 0 ? ((scalpInitialBalance - scalpBalance) / scalpInitialBalance) * 100 : 0;
 
-    await addLog('system', 'scan', null, `[${timeStr}] Cloud Agent 사이클 시작 — 대형주 ${QUANT_SYMBOLS.length}개 + 소형주 스캔 | [자금현황] 대형주 확정잔고: ${fmtKRWRaw(Math.round(mainBalance))} (운용률 ${mainUtilization.toFixed(1)}%) | 소형주 확정잔고: ${fmtKRWRaw(Math.round(scalpBalance))} (운용률 ${scalpUtilization.toFixed(1)}%)`);
+    await addLog('system', 'scan', null, `[${timeStr}] [${sessionLabel}] Cloud Agent 사이클 시작 — 대형주 ${QUANT_SYMBOLS.length}개 + 소형주 스캔 | 세션: ${sessionLabel} (스프레드 보정 ×${spreadMul}) | [자금현황] 대형주 확정잔고: ${fmtKRWRaw(Math.round(mainBalance))} (운용률 ${mainUtilization.toFixed(1)}%) | 소형주 확정잔고: ${fmtKRWRaw(Math.round(scalpBalance))} (운용률 ${scalpUtilization.toFixed(1)}%)`);
 
     // ★ 자금 운용률 90% 이상 경고
     if (mainUtilization >= 90) {
@@ -321,19 +365,19 @@ Deno.serve(async (req) => {
 
         if (pnlPct <= -2.5) {
           shouldClose = true;
-          closeReason = `[Cloud] [${timeStr}] [${sym}] 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
         } else if (quantScore < 40) {
           shouldClose = true;
-          closeReason = `[Cloud] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 40)`;
+          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 40)`;
           newStatus = 'score_exit';
         } else if (pos.take_profit && price >= pos.take_profit) {
           shouldClose = true;
-          closeReason = `[Cloud] [${timeStr}] [${sym}] 목표가 도달 익절`;
+          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 목표가 도달 익절`;
           newStatus = 'profit_taken';
         } else if (pos.stop_loss && price <= pos.stop_loss) {
           shouldClose = true;
-          closeReason = `[Cloud] [${timeStr}] [${sym}] 추격 손절 터치`;
+          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 추격 손절 터치`;
           newStatus = 'trailing_stop';
         }
 
@@ -417,16 +461,19 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const stopLoss = +(r.price * 0.975).toFixed(4);
-      const takeProfit = +(r.price * 1.06).toFixed(4);
+      // ★ [스프레드 보정] 장외 시간대에는 슬리피지 확대 적용
+      const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul);
+      const stopLoss = +(adjustedPrice * 0.975).toFixed(4);
+      const takeProfit = +(adjustedPrice * 1.06).toFixed(4);
       const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
       const balanceBefore = Math.round(mainBalance);
       // ★ 매수 즉시 확정 잔고 차감
       const newBuyBalance = mainBalance - costKRW;
-      const logMsg = `[Cloud-Quant] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 자율 매수 [${tier}|${qty}주@${fmtKRW(r.price)}|${fmtKRWRaw(costKRW)}] | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 보정 ×${spreadMul}` : '';
+      const logMsg = `[Cloud-Quant] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 자율 매수 [${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote} | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       await supabase.from('ai_trades').insert({
-        symbol: r.sym, side: 'buy', quantity: qty, price: r.price,
+        symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,
         stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
         ai_reason: logMsg, ai_confidence: r.scoring.totalScore,
       });
@@ -499,27 +546,27 @@ Deno.serve(async (req) => {
 
           if (pnlPct <= -2.5) {
             shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 손절 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
+            closeReason = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} 손절 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
             newStatus = 'stopped';
           } else if (peakPrice >= pos.price * 1.10) {
             const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
             if (dropFromPeak >= 5) {
               const lockedPnlPct = ((price - pos.price) / pos.price * 100).toFixed(2);
               shouldClose = true;
-              closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnlPct}% 확정)`;
+              closeReason = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnlPct}% 확정)`;
               newStatus = 'trailing_profit';
             }
           } else if (pos.stop_loss && price <= pos.stop_loss) {
             shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 추격 손절 터치 (${fmtKRW(pos.stop_loss)})`;
+            closeReason = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} 추격 손절 터치 (${fmtKRW(pos.stop_loss)})`;
             newStatus = 'stopped';
           } else if (pos.take_profit && price >= pos.take_profit) {
             shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 익절 도달 (+5%)`;
+            closeReason = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} 익절 도달 (+5%)`;
             newStatus = 'profit_taken';
           } else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0) {
             shouldClose = true;
-            closeReason = `[Cloud-Scalp] [${timeStr}] ${sym} 지능형 조기 대응 — 블랙리스트 종목 본절 탈출 (${pnlPct.toFixed(2)}%)`;
+            closeReason = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} 지능형 조기 대응 — 블랙리스트 종목 본절 탈출 (${pnlPct.toFixed(2)}%)`;
             newStatus = 'early_exit';
           }
 
@@ -648,15 +695,18 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const stopLoss = +(price * 0.975).toFixed(4);
-        const takeProfit = +(price * 1.05).toFixed(4);
+        // ★ [스프레드 보정] 장외 시간대에는 슬리피지 확대 적용
+        const adjPrice = applySessionSlippage(price, 'buy', spreadMul);
+        const stopLoss = +(adjPrice * 0.975).toFixed(4);
+        const takeProfit = +(adjPrice * 1.05).toFixed(4);
         const balanceBefore = scalpBalance;
         // ★ 매수 즉시 확정 잔고에서 차감
         const newScalpBuyBal = scalpBalance - costKRW;
-        const logMsg = `[Cloud-Scalp] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(price)}) | 손절 -2.5% / 익절 +5% / 추격익절 고점-5% | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBuyBal)}]`;
+        const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 보정 ×${spreadMul}` : '';
+        const logMsg = `[Cloud-Scalp] [${sessionLabel}] [${timeStr}] ${sym} +${changePct.toFixed(1)}% 급등 포착 즉시 매수 (${qty}주@${fmtKRW(adjPrice)})${spreadNote} | 손절 -2.5% / 익절 +5% / 추격익절 고점-5% | [확정잔고 차감: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newScalpBuyBal)}]`;
 
         await supabase.from('scalping_trades').insert({
-          symbol: sym, side: 'buy', quantity: qty, price,
+          symbol: sym, side: 'buy', quantity: qty, price: adjPrice,
           stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
           entry_score: Math.round(changePct), time_limit_at: null,
           ai_reason: logMsg, ai_confidence: 100,
@@ -676,7 +726,7 @@ Deno.serve(async (req) => {
       total_cycles: mainWallet ? (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1 : 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] Cloud Agent 사이클 완료`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] Cloud Agent 사이클 완료 — 전 시간대 통합 매매 활성`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
