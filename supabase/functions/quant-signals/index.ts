@@ -250,6 +250,7 @@ function getTopReason(indicators: any): string {
 // Analyze a single symbol — only 2 API calls max (quote + candle)
 async function analyzeSymbol(sym: string) {
   const quote = await finnhubFetch(`/quote?symbol=${sym}`);
+  console.log(`[analyzeSymbol] ${sym} quote:`, JSON.stringify(quote));
   if (!quote || !quote.c || quote.c === 0) return null;
 
   const changePct = quote.dp || 0;
