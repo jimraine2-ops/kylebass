@@ -17,6 +17,47 @@ function fmtKRWRaw(krw: number): string { return `₩${krw.toLocaleString('ko-KR
 
 function getToken(): string { return Deno.env.get('FINNHUB_API_KEY') || ''; }
 
+// ===== Session Detection (US Eastern Time) =====
+type SessionType = 'DAY' | 'PRE_MARKET' | 'REGULAR' | 'AFTER_HOURS';
+
+function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number } {
+  const now = new Date();
+  const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const et = new Date(etStr);
+  const h = et.getHours();
+  const m = et.getMinutes();
+  const day = et.getDay();
+  const time = h * 60 + m;
+
+  // Weekend → DAY session (데이장)
+  if (day === 0 || day === 6) {
+    return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5 };
+  }
+  // Pre-market: 4:00 AM - 9:30 AM ET
+  if (time >= 240 && time < 570) {
+    return { session: 'PRE_MARKET', label: '프리마켓', spreadMultiplier: 2.0 };
+  }
+  // Regular: 9:30 AM - 4:00 PM ET
+  if (time >= 570 && time < 960) {
+    return { session: 'REGULAR', label: '정규장', spreadMultiplier: 1.0 };
+  }
+  // After-hours: 4:00 PM - 8:00 PM ET
+  if (time >= 960 && time < 1200) {
+    return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8 };
+  }
+  // Closed (8 PM - 4 AM ET) → DAY session
+  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5 };
+}
+
+// ===== Spread-Aware Limit Pricing =====
+// Off-hours: apply wider slippage to prevent overpaying on thin order books
+function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultiplier: number): number {
+  const BASE_SLIPPAGE = 0.0002; // 0.02%
+  const slippage = BASE_SLIPPAGE * spreadMultiplier;
+  if (side === 'buy') return +(price * (1 + slippage)).toFixed(4);
+  return +(price * (1 - slippage)).toFixed(4);
+}
+
 async function finnhubFetch(path: string) {
   const token = getToken();
   if (!token) return null;
