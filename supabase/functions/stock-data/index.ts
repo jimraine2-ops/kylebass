@@ -330,6 +330,14 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Stock data error:', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    // Return graceful fallback instead of 500 for rate limit errors
+    const msg = error.message || '';
+    if (msg.includes('rate limit') || msg.includes('429')) {
+      return new Response(JSON.stringify({ quotes: [], error: 'Rate limited, please retry', rateLimited: true }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    return new Response(JSON.stringify({ error: msg }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });
