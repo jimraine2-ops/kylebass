@@ -374,9 +374,9 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Sort by score descending, take top 30 with score >= 60
+      // Sort by score descending, take top 30 (show all candidates, highlight 60+ as strong)
       allResults.sort((a, b) => b.totalScore - a.totalScore);
-      const top30 = allResults.filter(r => r.totalScore >= 60).slice(0, 30);
+      const top30 = allResults.slice(0, 30);
 
       // Detect NEW entries (not in previous top 30)
       const previousTop = (globalThis as any).__prevTop30 || new Set<string>();
