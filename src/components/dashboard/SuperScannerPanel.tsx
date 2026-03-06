@@ -131,8 +131,9 @@ export function SuperScannerPanel() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant="outline" className={`text-[10px] font-mono ${
-                        stock.totalScore >= 70 ? 'border-[hsl(var(--stock-up)/0.4)] text-[hsl(var(--stock-up))]' :
-                        'border-[hsl(var(--warning)/0.4)] text-[hsl(var(--warning))]'
+                        stock.totalScore >= 60 ? 'border-[hsl(var(--stock-up)/0.4)] text-[hsl(var(--stock-up))]' :
+                        stock.totalScore >= 45 ? 'border-[hsl(var(--warning)/0.4)] text-[hsl(var(--warning))]' :
+                        'border-border text-muted-foreground'
                       }`}>
                         {stock.totalScore}점
                       </Badge>
