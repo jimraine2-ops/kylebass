@@ -124,6 +124,15 @@ export async function quantAutoTrade(symbol: string, price: number, quantScore: 
   return data;
 }
 
+// Super Scanner - Full market 10-indicator scan
+export async function fetchSuperScan() {
+  const { data, error } = await supabase.functions.invoke('quant-signals', {
+    body: { action: 'super-scan' },
+  });
+  if (error) throw error;
+  return data;
+}
+
 // Update wallet balance
 export async function updateWalletBalance(walletType: 'main' | 'scalping', newBalance: number) {
   const { data, error } = await supabase.functions.invoke('ai-trading', {

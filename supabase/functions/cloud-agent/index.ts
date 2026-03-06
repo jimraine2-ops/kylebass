@@ -266,13 +266,36 @@ Deno.serve(async (req) => {
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
 
-    // ========== PHASE 1: QUANT STRATEGY (Premium Stocks — 30종목) ==========
-    const QUANT_SYMBOLS = [
+    // ========== PHASE 1: QUANT STRATEGY (Full Market Scan — 60+ 종목 순환) ==========
+    // Expanded universe: rotate through groups each cycle for broader coverage
+    const QUANT_UNIVERSE = [
       'AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD',
       'PLTR', 'COIN', 'SOFI', 'HOOD', 'RIVN', 'NIO', 'MARA',
       'INTC', 'QCOM', 'AVGO', 'CRM', 'NFLX', 'UBER', 'SQ', 'PYPL',
       'BA', 'DIS', 'SNAP', 'SHOP', 'CRWD', 'NET', 'ABNB',
+      // Extended universe
+      'MU', 'AMAT', 'LRCX', 'ARM', 'TSM', 'NOW', 'SNOW', 'DDOG',
+      'ORCL', 'ADBE', 'PANW', 'FTNT', 'ZS', 'MDB',
+      'JPM', 'GS', 'V', 'MA', 'LLY', 'UNH', 'ISRG', 'NVO',
+      'XOM', 'CVX', 'ENPH', 'FSLR', 'LMT', 'RTX',
+      'BABA', 'PDD', 'SE', 'CPNG', 'MSTR', 'RIOT',
+      'CAT', 'DE', 'HON', 'FCX', 'ALB', 'ANET',
+      'AI', 'SOUN', 'IONQ', 'RGTI', 'RBLX', 'SPOT',
+      'AFRM', 'NU', 'DASH', 'BKNG', 'PINS', 'RDDT',
     ];
+    // Use 30 symbols per cycle (rotate through the full universe)
+    const quantCycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
+    const quantGroupSize = 30;
+    const quantStartIdx = (quantCycleCount * quantGroupSize) % QUANT_UNIVERSE.length;
+    const QUANT_SYMBOLS: string[] = [];
+    for (let i = 0; i < quantGroupSize; i++) {
+      QUANT_SYMBOLS.push(QUANT_UNIVERSE[(quantStartIdx + i) % QUANT_UNIVERSE.length]);
+    }
+    // Always include symbols we currently hold (for exit checks)
+    const heldMainSymbols = (mainOpenPos || []).map((p: any) => p.symbol);
+    for (const s of heldMainSymbols) {
+      if (!QUANT_SYMBOLS.includes(s)) QUANT_SYMBOLS.push(s);
+    }
 
     const { data: mainWallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
     const { data: scalpWallet } = await supabase.from('scalping_wallet').select('*').limit(1).single();
@@ -482,6 +505,43 @@ Deno.serve(async (req) => {
       }).eq('id', mainWallet.id);
       mainBalance = newBuyBalance;
       await addLog('quant', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, qty, costKRW });
+    }
+
+    // ========== AUTO-REPLACEMENT: 보유 종목 중 40점 미만 → 더 높은 점수 종목으로 교체 검토 ==========
+    {
+      const refreshedOpenPos = (await supabase.from('ai_trades').select('*').eq('status', 'open')).data || [];
+      for (const pos of refreshedOpenPos) {
+        const data = await getQuoteAndCandles(pos.symbol);
+        if (!data) continue;
+        const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
+        const currentScore = scoring?.totalScore || 0;
+        if (currentScore >= 40) continue; // Still viable, keep
+
+        // Find a better candidate from scanned results
+        const betterCandidate = quantCandidates.find(c =>
+          c.scoring.totalScore >= 60 &&
+          !refreshedOpenPos.some(p => p.symbol === c.sym)
+        );
+
+        if (betterCandidate) {
+          // Close underperforming position
+          const price = data.quote.c;
+          const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
+          const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
+          const pnlKRW = saleProceeds - buyCost;
+          const closeReason = `[Auto-Replace] ${pos.symbol} 점수 ${currentScore} < 40 → ${betterCandidate.sym} ${betterCandidate.scoring.totalScore}점으로 교체`;
+
+          await supabase.from('ai_trades').update({
+            status: 'replaced', close_price: price, pnl: pnlKRW,
+            closed_at: now.toISOString(),
+            ai_reason: `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)}`,
+          }).eq('id', pos.id);
+          mainBalance += saleProceeds;
+          await supabase.from('ai_wallet').update({ balance: mainBalance, updated_at: now.toISOString() }).eq('id', mainWallet.id);
+          await addLog('quant', 'replace', pos.symbol, closeReason, { oldScore: currentScore, newSymbol: betterCandidate.sym, newScore: betterCandidate.scoring.totalScore, pnl: pnlKRW });
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
     }
 
     // ========== PHASE 2: SCALPING STRATEGY (Penny Stocks) ==========

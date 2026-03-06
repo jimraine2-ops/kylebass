@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchStockQuote, fetchChartData, searchStocks, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews, getScalpingPortfolio } from "@/lib/api";
+import { fetchStockQuote, fetchChartData, searchStocks, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews, getScalpingPortfolio, fetchSuperScan } from "@/lib/api";
 
 export function useStockQuotes(symbols: string[], enabled = true) {
   return useQuery({
@@ -94,6 +94,16 @@ export function useCompanyNews(symbol: string) {
     queryFn: () => fetchCompanyNews(symbol),
     enabled: !!symbol,
     staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+export function useSuperScan() {
+  return useQuery({
+    queryKey: ['super-scan'],
+    queryFn: () => fetchSuperScan(),
+    refetchInterval: 60000, // 1분 갱신
+    staleTime: 50000,
     retry: 2,
   });
 }
