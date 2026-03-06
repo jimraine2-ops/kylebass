@@ -56,7 +56,7 @@ export function SuperScannerPanel() {
               </CardTitle>
               <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <span>스캔 범위: {totalCached}개 종목</span>
-                <Badge variant="outline" className="text-[9px]">60점↑ {top30.length}개</Badge>
+                <Badge variant="outline" className="text-[9px]">TOP {top30.length}개</Badge>
               </div>
             </div>
           </CardHeader>
