@@ -25,8 +25,8 @@ export function SuperScannerPanel() {
   }, [top30]);
 
   const getScoreColor = (score: number) => {
-    if (score >= 70) return 'hsl(var(--stock-up))';
-    if (score >= 60) return 'hsl(var(--warning))';
+    if (score >= 60) return 'hsl(var(--stock-up))';
+    if (score >= 45) return 'hsl(var(--warning))';
     return 'hsl(var(--stock-down))';
   };
 
@@ -56,7 +56,7 @@ export function SuperScannerPanel() {
               </CardTitle>
               <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <span>스캔 범위: {totalCached}개 종목</span>
-                <Badge variant="outline" className="text-[9px]">60점↑ {top30.length}개</Badge>
+                <Badge variant="outline" className="text-[9px]">TOP {top30.length}개</Badge>
               </div>
             </div>
           </CardHeader>
@@ -98,7 +98,7 @@ export function SuperScannerPanel() {
         <CardContent>
           {top30.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              현재 60점 이상 종목이 없습니다. 시장 데이터 수집 중...
+              시장 데이터 수집 중... 잠시 후 종목이 표시됩니다.
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -131,8 +131,9 @@ export function SuperScannerPanel() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant="outline" className={`text-[10px] font-mono ${
-                        stock.totalScore >= 70 ? 'border-[hsl(var(--stock-up)/0.4)] text-[hsl(var(--stock-up))]' :
-                        'border-[hsl(var(--warning)/0.4)] text-[hsl(var(--warning))]'
+                        stock.totalScore >= 60 ? 'border-[hsl(var(--stock-up)/0.4)] text-[hsl(var(--stock-up))]' :
+                        stock.totalScore >= 45 ? 'border-[hsl(var(--warning)/0.4)] text-[hsl(var(--warning))]' :
+                        'border-border text-muted-foreground'
                       }`}>
                         {stock.totalScore}점
                       </Badge>
