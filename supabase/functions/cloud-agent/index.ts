@@ -266,13 +266,36 @@ Deno.serve(async (req) => {
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
 
-    // ========== PHASE 1: QUANT STRATEGY (Premium Stocks — 30종목) ==========
-    const QUANT_SYMBOLS = [
+    // ========== PHASE 1: QUANT STRATEGY (Full Market Scan — 60+ 종목 순환) ==========
+    // Expanded universe: rotate through groups each cycle for broader coverage
+    const QUANT_UNIVERSE = [
       'AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD',
       'PLTR', 'COIN', 'SOFI', 'HOOD', 'RIVN', 'NIO', 'MARA',
       'INTC', 'QCOM', 'AVGO', 'CRM', 'NFLX', 'UBER', 'SQ', 'PYPL',
       'BA', 'DIS', 'SNAP', 'SHOP', 'CRWD', 'NET', 'ABNB',
+      // Extended universe
+      'MU', 'AMAT', 'LRCX', 'ARM', 'TSM', 'NOW', 'SNOW', 'DDOG',
+      'ORCL', 'ADBE', 'PANW', 'FTNT', 'ZS', 'MDB',
+      'JPM', 'GS', 'V', 'MA', 'LLY', 'UNH', 'ISRG', 'NVO',
+      'XOM', 'CVX', 'ENPH', 'FSLR', 'LMT', 'RTX',
+      'BABA', 'PDD', 'SE', 'CPNG', 'MSTR', 'RIOT',
+      'CAT', 'DE', 'HON', 'FCX', 'ALB', 'ANET',
+      'AI', 'SOUN', 'IONQ', 'RGTI', 'RBLX', 'SPOT',
+      'AFRM', 'NU', 'DASH', 'BKNG', 'PINS', 'RDDT',
     ];
+    // Use 30 symbols per cycle (rotate through the full universe)
+    const quantCycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
+    const quantGroupSize = 30;
+    const quantStartIdx = (quantCycleCount * quantGroupSize) % QUANT_UNIVERSE.length;
+    const QUANT_SYMBOLS: string[] = [];
+    for (let i = 0; i < quantGroupSize; i++) {
+      QUANT_SYMBOLS.push(QUANT_UNIVERSE[(quantStartIdx + i) % QUANT_UNIVERSE.length]);
+    }
+    // Always include symbols we currently hold (for exit checks)
+    const heldMainSymbols = (mainOpenPos || []).map((p: any) => p.symbol);
+    for (const s of heldMainSymbols) {
+      if (!QUANT_SYMBOLS.includes(s)) QUANT_SYMBOLS.push(s);
+    }
 
     const { data: mainWallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
     const { data: scalpWallet } = await supabase.from('scalping_wallet').select('*').limit(1).single();
