@@ -98,7 +98,7 @@ export function SuperScannerPanel() {
         <CardContent>
           {top30.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
-              현재 60점 이상 종목이 없습니다. 시장 데이터 수집 중...
+              시장 데이터 수집 중... 잠시 후 종목이 표시됩니다.
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
