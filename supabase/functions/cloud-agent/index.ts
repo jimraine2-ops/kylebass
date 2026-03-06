@@ -291,6 +291,10 @@ Deno.serve(async (req) => {
     for (let i = 0; i < quantGroupSize; i++) {
       QUANT_SYMBOLS.push(QUANT_UNIVERSE[(quantStartIdx + i) % QUANT_UNIVERSE.length]);
     }
+
+    const { data: mainOpenPos } = await supabase.from('ai_trades').select('*').eq('status', 'open');
+    const { data: scalpOpenPos } = await supabase.from('scalping_trades').select('*').eq('status', 'open');
+
     // Always include symbols we currently hold (for exit checks)
     const heldMainSymbols = (mainOpenPos || []).map((p: any) => p.symbol);
     for (const s of heldMainSymbols) {
@@ -300,9 +304,6 @@ Deno.serve(async (req) => {
     const { data: mainWallet } = await supabase.from('ai_wallet').select('*').limit(1).single();
     const { data: scalpWallet } = await supabase.from('scalping_wallet').select('*').limit(1).single();
     if (!mainWallet) throw new Error('No main wallet');
-
-    const { data: mainOpenPos } = await supabase.from('ai_trades').select('*').eq('status', 'open');
-    const { data: scalpOpenPos } = await supabase.from('scalping_trades').select('*').eq('status', 'open');
 
     const mainInitialBalance = mainWallet.initial_balance || mainWallet.balance;
     const scalpInitialBalance = scalpWallet?.initial_balance || scalpWallet?.balance || 1000000;
