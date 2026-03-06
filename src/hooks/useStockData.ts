@@ -97,3 +97,13 @@ export function useCompanyNews(symbol: string) {
     retry: 2,
   });
 }
+
+export function useSuperScan() {
+  return useQuery({
+    queryKey: ['super-scan'],
+    queryFn: () => fetchSuperScan(),
+    refetchInterval: 60000, // 1분 갱신
+    staleTime: 50000,
+    retry: 2,
+  });
+}
