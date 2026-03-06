@@ -25,8 +25,8 @@ export function SuperScannerPanel() {
   }, [top30]);
 
   const getScoreColor = (score: number) => {
-    if (score >= 70) return 'hsl(var(--stock-up))';
-    if (score >= 60) return 'hsl(var(--warning))';
+    if (score >= 60) return 'hsl(var(--stock-up))';
+    if (score >= 45) return 'hsl(var(--warning))';
     return 'hsl(var(--stock-down))';
   };
 
