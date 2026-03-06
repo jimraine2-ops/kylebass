@@ -507,6 +507,43 @@ Deno.serve(async (req) => {
       await addLog('quant', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, qty, costKRW });
     }
 
+    // ========== AUTO-REPLACEMENT: 보유 종목 중 40점 미만 → 더 높은 점수 종목으로 교체 검토 ==========
+    {
+      const refreshedOpenPos = (await supabase.from('ai_trades').select('*').eq('status', 'open')).data || [];
+      for (const pos of refreshedOpenPos) {
+        const data = await getQuoteAndCandles(pos.symbol);
+        if (!data) continue;
+        const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
+        const currentScore = scoring?.totalScore || 0;
+        if (currentScore >= 40) continue; // Still viable, keep
+
+        // Find a better candidate from scanned results
+        const betterCandidate = quantCandidates.find(c =>
+          c.scoring.totalScore >= 60 &&
+          !refreshedOpenPos.some(p => p.symbol === c.sym)
+        );
+
+        if (betterCandidate) {
+          // Close underperforming position
+          const price = data.quote.c;
+          const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
+          const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
+          const pnlKRW = saleProceeds - buyCost;
+          const closeReason = `[Auto-Replace] ${pos.symbol} 점수 ${currentScore} < 40 → ${betterCandidate.sym} ${betterCandidate.scoring.totalScore}점으로 교체`;
+
+          await supabase.from('ai_trades').update({
+            status: 'replaced', close_price: price, pnl: pnlKRW,
+            closed_at: now.toISOString(),
+            ai_reason: `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)}`,
+          }).eq('id', pos.id);
+          mainBalance += saleProceeds;
+          await supabase.from('ai_wallet').update({ balance: mainBalance, updated_at: now.toISOString() }).eq('id', mainWallet.id);
+          await addLog('quant', 'replace', pos.symbol, closeReason, { oldScore: currentScore, newSymbol: betterCandidate.sym, newScore: betterCandidate.scoring.totalScore, pnl: pnlKRW });
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
+
     // ========== PHASE 2: SCALPING STRATEGY (Penny Stocks) ==========
     if (scalpWallet) {
       // === SELF-LEARNING: Blacklist ===
