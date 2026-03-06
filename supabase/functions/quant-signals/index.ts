@@ -7,7 +7,7 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 
 // ===== In-Memory Cache =====
 const cache = new Map<string, { data: any; ts: number }>();
-const CACHE_TTL = 90_000; // 90 seconds
+const CACHE_TTL = 90_000;
 
 function getCached(key: string) {
   const entry = cache.get(key);
@@ -16,8 +16,7 @@ function getCached(key: string) {
 }
 function setCache(key: string, data: any) {
   cache.set(key, { data, ts: Date.now() });
-  // Evict old entries periodically
-  if (cache.size > 200) {
+  if (cache.size > 500) {
     const now = Date.now();
     for (const [k, v] of cache) {
       if (now - v.ts > CACHE_TTL) cache.delete(k);
@@ -34,31 +33,19 @@ function getToken(): string {
 async function finnhubFetch(path: string, retries = 3) {
   const cached = getCached(path);
   if (cached) return cached;
-
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const res = await fetch(url);
-      if (res.status === 429) {
-        await res.text();
-        await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
-        continue;
-      }
-      if (res.status === 502 || res.status === 503) {
-        await res.text();
-        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-        continue;
-      }
+      if (res.status === 429) { await res.text(); await new Promise(r => setTimeout(r, 800 * (attempt + 1))); continue; }
+      if (res.status === 502 || res.status === 503) { await res.text(); await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
       if (!res.ok) { await res.text(); return null; }
       const ct = res.headers.get('content-type') || '';
       if (!ct.includes('application/json')) {
         const txt = await res.text();
-        if (txt.trim().startsWith('<!') || txt.includes('<html')) {
-          await new Promise(r => setTimeout(r, 800 * (attempt + 1)));
-          continue;
-        }
+        if (txt.trim().startsWith('<!') || txt.includes('<html')) { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); continue; }
       }
       const json = await res.json();
       setCache(path, json);
@@ -76,9 +63,7 @@ function calculateEMA(data: number[], period: number): number[] {
   if (data.length === 0) return [];
   const k = 2 / (period + 1);
   const ema: number[] = [data[0]];
-  for (let i = 1; i < data.length; i++) {
-    ema.push(data[i] * k + ema[i - 1] * (1 - k));
-  }
+  for (let i = 1; i < data.length; i++) ema.push(data[i] * k + ema[i - 1] * (1 - k));
   return ema;
 }
 
@@ -90,8 +75,7 @@ function calculateRSI(closes: number[], period = 14): number[] {
     const change = closes[i] - closes[i - 1];
     if (change > 0) avgGain += change; else avgLoss -= change;
   }
-  avgGain /= period;
-  avgLoss /= period;
+  avgGain /= period; avgLoss /= period;
   rsi[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
   for (let i = period + 1; i < closes.length; i++) {
     const change = closes[i] - closes[i - 1];
@@ -139,131 +123,79 @@ function generateSyntheticCandles(quote: any, days = 40) {
     const vol = Math.floor(1000000 + Math.random() * 5000000);
     closes.push(close); highs.push(high); lows.push(low); opens.push(open); volumes.push(vol);
   }
-  closes[closes.length - 1] = c;
-  highs[highs.length - 1] = h;
-  lows[lows.length - 1] = l;
-  opens[opens.length - 1] = o;
+  closes[closes.length - 1] = c; highs[highs.length - 1] = h; lows[lows.length - 1] = l; opens[opens.length - 1] = o;
   return { closes, highs, lows, opens, volumes };
 }
 
-// ===== Lightweight Scoring =====
-
-function scoreSentimentFromQuote(changePct: number): { score: number; details: string } {
-  if (changePct >= 5) return { score: 9, details: `강한 상승 모멘텀 ${changePct.toFixed(1)}%` };
-  if (changePct >= 3) return { score: 7, details: `상승 모멘텀 ${changePct.toFixed(1)}%` };
-  if (changePct >= 1) return { score: 5, details: `소폭 상승 ${changePct.toFixed(1)}%` };
-  if (changePct >= -1) return { score: 4, details: `횡보 ${changePct.toFixed(1)}%` };
-  return { score: 2, details: `하락 ${changePct.toFixed(1)}%` };
-}
-
-function scoreRVOL(volumes: number[]): { score: number; details: string; rvol: number } {
-  if (volumes.length < 21) return { score: 3, details: '데이터 제한적', rvol: 1.0 };
-  const currentVol = volumes[volumes.length - 1];
-  const avgVol = volumes.slice(-21, -1).reduce((a, b) => a + b, 0) / 20;
-  const rvol = avgVol > 0 ? currentVol / avgVol : 1;
-  let score = 0;
-  if (rvol >= 3.0) score = 10;
-  else if (rvol >= 2.5) score = 8;
-  else if (rvol >= 2.0) score = 6;
-  else if (rvol >= 1.5) score = 4;
-  else if (rvol >= 1.0) score = 2;
-  return { score, details: `RVOL: ${rvol.toFixed(1)}x`, rvol };
-}
-
-function scoreCandlePattern(closes: number[], highs: number[], lows: number[], volumes: number[]): { score: number; details: string } {
-  if (closes.length < 30) return { score: 3, details: '데이터 제한적' };
+// ===== 10-Indicator Scoring =====
+function score10Indicators(quote: any, closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[]) {
+  const changePct = quote.dp || 0;
   const n = closes.length - 1;
+  if (n < 5) return null;
+
+  const sentimentScore = changePct >= 5 ? 9 : changePct >= 3 ? 7 : changePct >= 1 ? 5 : changePct >= -1 ? 4 : 2;
+  const currentVol = volumes[n];
+  const avgVol = volumes.length >= 21 ? volumes.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 : currentVol;
+  const rvol = avgVol > 0 ? currentVol / avgVol : 1;
+  const rvolScore = rvol >= 3 ? 10 : rvol >= 2.5 ? 8 : rvol >= 2 ? 6 : rvol >= 1.5 ? 4 : 2;
   const ema9 = calculateEMA(closes, 9);
   const ema21 = calculateEMA(closes, 21);
   const rsi = calculateRSI(closes, 14);
   const vwap = calculateVWAP(highs.slice(-20), lows.slice(-20), closes.slice(-20), volumes.slice(-20));
-  let confirms = 0;
-  const reasons: string[] = [];
-  if (closes[n] > vwap) { confirms += 0.5; reasons.push('VWAP 상단'); }
-  if (ema9[n] > ema21[n] && closes[n] > ema9[n]) { confirms++; reasons.push('EMA 정배열'); }
-  const currentRSI = rsi[n];
-  if (currentRSI > 40 && currentRSI < 70 && rsi[n] > rsi[n - 1]) { confirms++; reasons.push(`RSI ${currentRSI.toFixed(0)}`); }
-  const score = confirms >= 2.5 ? 10 : confirms >= 2 ? 7 : confirms >= 1 ? 4 : 1;
-  return { score, details: reasons.join(', ') || '조건 미충족' };
-}
-
-function scoreATR(highs: number[], lows: number[], closes: number[]): { score: number; details: string; trailingStop: number } {
-  if (closes.length < 20) return { score: 3, details: '데이터 제한적', trailingStop: 0 };
+  let candleConfirms = 0;
+  if (closes[n] > vwap) candleConfirms += 0.5;
+  if (ema9[n] > ema21[n] && closes[n] > ema9[n]) candleConfirms++;
+  if (rsi[n] > 40 && rsi[n] < 70 && rsi[n] > (rsi[n - 1] || 50)) candleConfirms++;
+  const candleScore = candleConfirms >= 2.5 ? 10 : candleConfirms >= 2 ? 7 : candleConfirms >= 1 ? 4 : 1;
   const atr = calculateATR(highs, lows, closes, 14);
   const currentATR = atr[atr.length - 1];
-  const n = closes.length - 1;
   const ema20 = calculateEMA(closes, 20);
   const keltnerUpper = ema20[n] + 2 * currentATR;
-  const priceAboveKeltner = closes[n] > keltnerUpper;
+  const atrScore = closes[n] > keltnerUpper ? 10 : closes[n] > ema20[n] + currentATR ? 7 : 4;
   const recentHigh = Math.max(...highs.slice(-10));
   const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
-  const score = priceAboveKeltner ? 10 : closes[n] > ema20[n] + currentATR ? 7 : 4;
-  return { score, details: `ATR: ${currentATR.toFixed(4)}, Keltner: ${priceAboveKeltner ? 'O' : 'X'}`, trailingStop };
-}
-
-function scoreGap(opens: number[], closes: number[], volumes: number[]): { score: number; details: string } {
-  if (closes.length < 5) return { score: 3, details: '데이터 제한적' };
-  const n = closes.length - 1;
-  const gapPct = ((opens[n] - closes[n - 1]) / closes[n - 1]) * 100;
-  if (gapPct >= 4 && gapPct <= 15) {
-    const bonus = (closes[n] > opens[n] && volumes[n] > volumes[n - 1]) ? 5 : 0;
-    return { score: Math.min(10, 5 + bonus), details: `갭 ${gapPct.toFixed(1)}%` };
-  }
-  if (gapPct > 15) return { score: 2, details: `갭 과다 ${gapPct.toFixed(1)}%` };
-  if (gapPct > 0) return { score: 3, details: `소폭 갭 ${gapPct.toFixed(1)}%` };
-  return { score: 1, details: `갭 하락 ${gapPct.toFixed(1)}%` };
-}
-
-function scoreShortSqueeze(closes: number[], volumes: number[]): { score: number; details: string } {
-  if (closes.length < 21) return { score: 3, details: '데이터 제한적' };
-  const n = closes.length - 1;
+  const gapPct = n > 0 ? ((opens[n] - closes[n - 1]) / closes[n - 1]) * 100 : 0;
+  const gapScore = (gapPct >= 4 && gapPct <= 15) ? (closes[n] > opens[n] ? 10 : 5) : gapPct > 15 ? 2 : gapPct > 0 ? 3 : 1;
   const high20 = Math.max(...closes.slice(-20));
-  let score = 0;
-  const reasons: string[] = [];
-  if (closes[n] >= high20) { score += 6; reasons.push('20일 최고가'); }
-  const avgVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
-  if (avgVol > 0 && volumes[n] / avgVol > 2) { score += 4; reasons.push('거래량 급증'); }
-  return { score: Math.min(10, score), details: reasons.join(', ') || 'Squeeze 없음' };
-}
-
-function scorePricePosition(closes: number[], highs: number[]): { score: number; details: string } {
-  if (closes.length < 30) return { score: 3, details: '데이터 제한적' };
-  const n = closes.length - 1;
+  let squeezeScore = 0;
+  if (closes[n] >= high20) squeezeScore += 6;
+  if (avgVol > 0 && currentVol / avgVol > 2) squeezeScore += 4;
+  squeezeScore = Math.min(10, squeezeScore);
   const allTimeHigh = Math.max(...highs);
   const distToATH = ((allTimeHigh - closes[n]) / allTimeHigh) * 100;
-  const score = distToATH <= 5 ? 10 : distToATH <= 10 ? 7 : distToATH <= 20 ? 4 : 2;
-  return { score, details: `ATH 대비 ${distToATH.toFixed(1)}%` };
-}
-
-function scoreSectorSynergy(changePct: number): { score: number; details: string } {
-  if (changePct >= 5) return { score: 10, details: `강한 상대강도` };
-  if (changePct >= 3) return { score: 7, details: `양호한 상대강도` };
-  if (changePct >= 1) return { score: 5, details: `보통` };
-  return { score: 2, details: `약세` };
-}
-
-function scoreTradeAggression(volumes: number[], closes: number[], opens: number[]): { score: number; details: string } {
-  if (closes.length < 5) return { score: 3, details: '데이터 제한적' };
-  const n = closes.length - 1;
-  let bullishCount = 0, volIncreasing = 0;
+  const positionScore = distToATH <= 5 ? 10 : distToATH <= 10 ? 7 : distToATH <= 20 ? 4 : 2;
+  const sectorScore = changePct >= 5 ? 10 : changePct >= 3 ? 7 : changePct >= 1 ? 5 : 2;
+  let bullCount = 0, volInc = 0;
   for (let i = Math.max(0, n - 4); i <= n; i++) {
-    if (closes[i] > opens[i]) bullishCount++;
-    if (i > 0 && volumes[i] > volumes[i - 1]) volIncreasing++;
+    if (closes[i] > opens[i]) bullCount++;
+    if (i > 0 && volumes[i] > volumes[i - 1]) volInc++;
   }
-  const aggression = (bullishCount / 5) * 100;
-  const score = aggression >= 80 && volIncreasing >= 3 ? 10 : aggression >= 60 ? 7 : aggression >= 40 ? 4 : 2;
-  return { score, details: `매수강도: ${aggression.toFixed(0)}%` };
-}
-
-function scorePreMarket(volumes: number[], closes: number[], highs: number[]): { score: number; details: string } {
-  if (volumes.length < 5) return { score: 3, details: '데이터 제한적' };
-  const n = volumes.length - 1;
+  const aggression = (bullCount / 5) * 100;
+  const aggrScore = aggression >= 80 && volInc >= 3 ? 10 : aggression >= 60 ? 7 : aggression >= 40 ? 4 : 2;
   const breakingHigh = closes[n] > Math.max(...highs.slice(Math.max(0, n - 5), n));
-  return { score: breakingHigh ? 8 : 3, details: `고점돌파: ${breakingHigh ? 'O' : 'X'}` };
+  const preMarketScore = breakingHigh ? 8 : 3;
+  const totalScore = sentimentScore + rvolScore + candleScore + atrScore + gapScore + squeezeScore + positionScore + sectorScore + aggrScore + preMarketScore;
+
+  return {
+    totalScore, trailingStop, rvol,
+    indicators: {
+      sentiment: { score: sentimentScore, details: `모멘텀 ${changePct.toFixed(1)}%` },
+      rvol: { score: rvolScore, details: `RVOL: ${rvol.toFixed(1)}x`, rvol },
+      candle: { score: candleScore, details: `트리플컨펌`, vwapCross: closes[n] > vwap },
+      atr: { score: atrScore, details: `ATR: ${currentATR.toFixed(4)}`, atr: currentATR, trailingStop },
+      gap: { score: gapScore, details: `갭 ${gapPct.toFixed(1)}%` },
+      squeeze: { score: squeezeScore, details: squeezeScore >= 6 ? '스퀴즈 활성' : '스퀴즈 없음' },
+      position: { score: positionScore, details: `ATH대비 ${distToATH.toFixed(1)}%` },
+      sectorSynergy: { score: sectorScore, details: `상대강도` },
+      aggression: { score: aggrScore, details: `매수강도 ${aggression.toFixed(0)}%` },
+      preMarket: { score: preMarketScore, details: breakingHigh ? '고점돌파' : '돌파X' },
+      confluence: { score: candleScore, vwapCross: closes[n] > vwap },
+    }
+  };
 }
 
 function getTopReason(indicators: any): string {
-  const entries = Object.entries(indicators) as [string, { score: number; details: string }][];
+  const entries = Object.entries(indicators).filter(([k]) => k !== 'confluence') as [string, any][];
   entries.sort((a, b) => b[1].score - a[1].score);
   const labels: Record<string, string> = {
     sentiment: '호재', rvol: 'RVOL', candle: '캔들패턴', atr: 'ATR',
@@ -273,66 +205,106 @@ function getTopReason(indicators: any): string {
   return entries.slice(0, 2).map(([k, v]) => `${labels[k] || k}(${v.score})`).join(' + ');
 }
 
-// Result-level cache
-const resultCache = new Map<string, { data: any; ts: number }>();
-const RESULT_TTL = 60_000; // 60s for full analysis results
+// Result-level cache for super-scan persistence across calls
+const superScanCache = new Map<string, { data: any; ts: number }>();
+const SUPER_SCAN_TTL = 60_000; // 60s
 
 async function analyzeSymbol(sym: string) {
-  // Check result cache first
-  const cached = resultCache.get(sym);
-  if (cached && Date.now() - cached.ts < RESULT_TTL) return cached.data;
+  const cached = superScanCache.get(sym);
+  if (cached && Date.now() - cached.ts < SUPER_SCAN_TTL) return cached.data;
 
-  // Fetch quote and candles in PARALLEL (key optimization)
   const to = Math.floor(Date.now() / 1000);
   const from = to - 60 * 86400;
-  
   const [quote, candles] = await Promise.all([
     finnhubFetch(`/quote?symbol=${sym}`),
     finnhubFetch(`/stock/candle?symbol=${sym}&resolution=D&from=${from}&to=${to}`),
   ]);
-
   if (!quote || !quote.c || quote.c === 0) return null;
 
-  const changePct = quote.dp || 0;
   let closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[];
-
   if (candles && candles.s !== 'no_data' && candles.t) {
     closes = candles.c; highs = candles.h; lows = candles.l; opens = candles.o; volumes = candles.v;
   } else {
-    const synthetic = generateSyntheticCandles(quote);
-    closes = synthetic.closes; highs = synthetic.highs; lows = synthetic.lows; opens = synthetic.opens; volumes = synthetic.volumes;
+    const s = generateSyntheticCandles(quote);
+    closes = s.closes; highs = s.highs; lows = s.lows; opens = s.opens; volumes = s.volumes;
   }
 
-  const sentiment = scoreSentimentFromQuote(changePct);
-  const rvol = scoreRVOL(volumes);
-  const candle = scoreCandlePattern(closes, highs, lows, volumes);
-  const atr = scoreATR(highs, lows, closes);
-  const gap = scoreGap(opens, closes, volumes);
-  const squeeze = scoreShortSqueeze(closes, volumes);
-  const position = scorePricePosition(closes, highs);
-  const sectorSynergy = scoreSectorSynergy(changePct);
-  const aggression = scoreTradeAggression(volumes, closes, opens);
-  const preMarket = scorePreMarket(volumes, closes, highs);
-
-  const indicators = { sentiment, rvol, candle, atr, gap, squeeze, position, sectorSynergy, aggression, preMarket };
-  const totalScore = sentiment.score + rvol.score + candle.score + atr.score +
-    gap.score + squeeze.score + position.score + sectorSynergy.score +
-    aggression.score + preMarket.score;
+  const scoring = score10Indicators(quote, closes, highs, lows, opens, volumes);
+  if (!scoring) return null;
 
   const result = {
     symbol: sym,
     price: quote.c,
     change: quote.d,
-    changePct,
-    totalScore,
-    indicators,
-    trailingStop: atr.trailingStop,
-    reason: getTopReason(indicators),
+    changePct: quote.dp || 0,
+    totalScore: scoring.totalScore,
+    indicators: scoring.indicators,
+    trailingStop: scoring.trailingStop,
+    reason: getTopReason(scoring.indicators),
   };
 
-  resultCache.set(sym, { data: result, ts: Date.now() });
+  superScanCache.set(sym, { data: result, ts: Date.now() });
   return result;
 }
+
+// ===== SUPER SCAN: Full Market Universe =====
+// Rotate through ~300 symbols in groups of 30 per call
+const FULL_UNIVERSE = [
+  // Big Tech & Mega Caps
+  'AAPL','MSFT','NVDA','TSLA','GOOGL','AMZN','META','AMD',
+  'PLTR','COIN','SOFI','HOOD','RIVN','NIO','MARA',
+  'INTC','QCOM','AVGO','CRM','NFLX','UBER','SQ','PYPL',
+  'BA','DIS','SNAP','SHOP','CRWD','NET','ABNB',
+  // Semiconductors
+  'MU','AMAT','LRCX','KLAC','MRVL','ASML','TSM','ADI','NXPI','TXN','ON','ARM',
+  // Finance
+  'JPM','BAC','WFC','GS','V','MA','BLK','SCHW',
+  // Healthcare
+  'JNJ','PFE','MRNA','ABBV','LLY','UNH','TMO','ABT','ISRG','VRTX','NVO',
+  // Consumer
+  'WMT','COST','HD','NKE','SBUX','MCD','KO','PEP','PG','CMG','LULU',
+  // Energy
+  'XOM','CVX','COP','SLB','OXY','ENPH','FSLR',
+  // Cloud/SaaS
+  'NOW','SNOW','DDOG','ORCL','ADBE','INTU','PANW','FTNT','ZS','MDB',
+  // EV & Auto
+  'LCID','F','GM','XPEV','LI',
+  // AI / Quantum
+  'AI','UPST','SOUN','PATH','IONQ','RGTI',
+  // Streaming/Entertainment
+  'SPOT','RBLX','EA','TTWO','ROKU',
+  // Crypto
+  'MSTR','RIOT','CLSK',
+  // Fintech
+  'AFRM','NU','BILL',
+  // Mobility/Travel
+  'LYFT','BKNG','EXPE','DAL','UAL','DASH',
+  // Industrial
+  'CAT','DE','HON','GE','UNP','UPS','FDX',
+  // Materials
+  'LIN','FCX','NEM','ALB',
+  // Defense
+  'LMT','RTX','NOC','GD',
+  // China/Intl
+  'BABA','JD','PDD','SE','CPNG','GRAB',
+  // REITs
+  'PLD','AMT','EQIX','O',
+  // Tech extras
+  'IBM','CSCO','ACN','DELL','ANET','SNPS','CDNS',
+  // Social/Commerce
+  'PINS','RDDT','W','ETSY','CHWY',
+  // Penny Stocks (sub $10)
+  'GOEV','FFIE','MULN','WKHS','NKLA','CHPT','FCEL','PLUG',
+  'SNDL','TLRY','ACB','CGC','MNMD','SENS','GNUS','BNGO','DNA','ME','SDC',
+  'WISH','SKLZ','OPEN','LMND','BYND','QS','SIRI','NOK','BB',
+  'TELL','CLOV','ASTS','RKLB','LUNR','RGTI','QUBT','BTG','FSM',
+  'HUT','CLSK','BKKT','EVGO','GSAT','HIMS','JOBY',
+  'KULR','MVIS','NNDM','ORGN','QBTS','STEM','UEC','WULF','YEXT',
+  'ZETA','BLNK','DM','EOSE','LAZR','OUST','UPST','ENVX','ARQQ',
+];
+
+// Track rotation index across calls
+let superScanRotationIdx = 0;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -344,34 +316,23 @@ Deno.serve(async (req) => {
 
     if (action === 'analyze') {
       const defaultSymbols = [
-        'AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN', 'META', 'AMD',
-        'PLTR', 'COIN', 'SOFI', 'HOOD', 'RIVN', 'NIO', 'MARA',
-        'INTC', 'QCOM', 'AVGO', 'CRM', 'NFLX', 'UBER', 'SQ', 'PYPL',
-        'BA', 'DIS', 'SNAP', 'SHOP', 'CRWD', 'NET', 'ABNB',
+        'AAPL','MSFT','NVDA','TSLA','GOOGL','AMZN','META','AMD',
+        'PLTR','COIN','SOFI','HOOD','RIVN','NIO','MARA',
+        'INTC','QCOM','AVGO','CRM','NFLX','UBER','SQ','PYPL',
+        'BA','DIS','SNAP','SHOP','CRWD','NET','ABNB',
       ];
-
       const targetSymbols: string[] = (symbols || defaultSymbols).slice(0, 35);
       const results: any[] = [];
 
       if (targetSymbols.length <= 5) {
-        // Small batch: fully parallel — no delays
-        const batchResults = await Promise.all(
-          targetSymbols.map(sym => analyzeSymbol(sym).catch(() => null))
-        );
-        for (const r of batchResults) {
-          if (r) results.push(r);
-        }
+        const batchResults = await Promise.all(targetSymbols.map(sym => analyzeSymbol(sym).catch(() => null)));
+        for (const r of batchResults) { if (r) results.push(r); }
       } else {
-        // Large batch: parallel batches of 5 with minimal delay
         for (let i = 0; i < targetSymbols.length; i += 5) {
           const batch = targetSymbols.slice(i, i + 5);
           const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
-          for (const r of batchResults) {
-            if (r) results.push(r);
-          }
-          if (i + 5 < targetSymbols.length) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
+          for (const r of batchResults) { if (r) results.push(r); }
+          if (i + 5 < targetSymbols.length) await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
 
@@ -380,25 +341,66 @@ Deno.serve(async (req) => {
       const allSorted = [...premium, ...penny].sort((a, b) => b.totalScore - a.totalScore);
 
       return new Response(JSON.stringify({
-        premium, penny,
-        allScanned: targetSymbols.length,
-        recommendations: allSorted,
-        results: allSorted,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+        premium, penny, allScanned: targetSymbols.length,
+        recommendations: allSorted, results: allSorted,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ===== SUPER SCAN: Full market rotation =====
+    if (action === 'super-scan') {
+      const BATCH_SIZE = 30;
+      const universe = FULL_UNIVERSE;
+      const startIdx = superScanRotationIdx % universe.length;
+      const currentBatch: string[] = [];
+      for (let i = 0; i < BATCH_SIZE; i++) {
+        currentBatch.push(universe[(startIdx + i) % universe.length]);
+      }
+      superScanRotationIdx = (startIdx + BATCH_SIZE) % universe.length;
+
+      // Analyze current batch (new data)
+      for (let i = 0; i < currentBatch.length; i += 5) {
+        const batch = currentBatch.slice(i, i + 5);
+        await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
+        if (i + 5 < currentBatch.length) await new Promise(r => setTimeout(r, 400));
+      }
+
+      // Gather ALL cached results (from this and previous calls)
+      const allResults: any[] = [];
+      const now = Date.now();
+      for (const [sym, entry] of superScanCache) {
+        // Include results up to 5 min old for broader coverage
+        if (now - entry.ts < 5 * 60_000 && entry.data) {
+          allResults.push(entry.data);
+        }
+      }
+
+      // Sort by score descending, take top 30 with score >= 60
+      allResults.sort((a, b) => b.totalScore - a.totalScore);
+      const top30 = allResults.filter(r => r.totalScore >= 60).slice(0, 30);
+
+      // Detect NEW entries (not in previous top 30)
+      const previousTop = (globalThis as any).__prevTop30 || new Set<string>();
+      const newEntries = top30.filter(r => !previousTop.has(r.symbol)).map(r => r.symbol);
+      (globalThis as any).__prevTop30 = new Set(top30.map(r => r.symbol));
+
+      return new Response(JSON.stringify({
+        top30,
+        newEntries,
+        scannedBatch: currentBatch,
+        totalCached: allResults.length,
+        rotationIndex: superScanRotationIdx,
+        universeSize: universe.length,
+        timestamp: new Date().toISOString(),
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     return new Response(JSON.stringify({ error: 'Invalid action' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
-
   } catch (error) {
     console.error('Quant signals error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
