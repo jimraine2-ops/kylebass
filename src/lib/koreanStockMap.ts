@@ -518,8 +518,51 @@ export function formatStockName(symbol: string): string {
   return name ? `${name} (${symbol})` : symbol;
 }
 
+// ===== 초성 매핑 테이블 =====
+const CHOSUNG_MAP: Record<string, string> = {
+  'ㄱ': '가', 'ㄲ': '까', 'ㄴ': '나', 'ㄷ': '다', 'ㄸ': '따',
+  'ㄹ': '라', 'ㅁ': '마', 'ㅂ': '바', 'ㅃ': '빠', 'ㅅ': '사',
+  'ㅆ': '싸', 'ㅇ': '아', 'ㅈ': '자', 'ㅉ': '짜', 'ㅊ': '차',
+  'ㅋ': '카', 'ㅌ': '타', 'ㅍ': '파', 'ㅎ': '하',
+};
+const CHOSUNG_LIST = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+
+function getChosung(char: string): string | null {
+  const code = char.charCodeAt(0);
+  if (code < 0xAC00 || code > 0xD7A3) return null;
+  const idx = Math.floor((code - 0xAC00) / (21 * 28));
+  return CHOSUNG_LIST[idx] || null;
+}
+
+function extractChosung(str: string): string {
+  return str.split('').map(c => getChosung(c) || c).join('');
+}
+
+function isChosungOnly(str: string): boolean {
+  return str.split('').every(c => CHOSUNG_LIST.includes(c));
+}
+
+// ===== 퍼지 매칭 (유사 키워드) =====
+const FUZZY_ALIASES: Record<string, string[]> = {
+  'NVDA': ['엔비듸아', '엔디비아', '엔비디야', '엔비듀아'],
+  'TSLA': ['테슬러', '텟슬라', '테스라'],
+  'AAPL': ['애플주식', '에플', '아이폰주식'],
+  'MSFT': ['마소', '마이크로소프트주식'],
+  'AMZN': ['아마존주식', '아마죤'],
+  'META': ['메타주식', '페북', '인스타주식'],
+  'GOOGL': ['구글주식', '구굴'],
+};
+
+// Build fuzzy index
+const _fuzzyIndex = new Map<string, string>();
+Object.entries(FUZZY_ALIASES).forEach(([symbol, aliases]) => {
+  aliases.forEach(alias => _fuzzyIndex.set(alias.toLowerCase(), symbol));
+});
+
 /**
  * 한글 또는 영어 입력으로 종목 검색
+ * - 초성 검색 (ㅌㅅㄹ → 테슬라)
+ * - 퍼지 매칭 (엔비듸아 → NVDA)
  * - 한글 종목명 (부분 일치)
  * - 동의어/별칭 매칭
  * - 티커 (대소문자 무관)
@@ -529,6 +572,16 @@ export function formatStockName(symbol: string): string {
 export function searchKoreanStocks(query: string): KoreanStockEntry[] {
   if (!query || query.trim().length === 0) return [];
   const q = query.trim().toLowerCase();
+
+  // 0) 퍼지 매칭 체크
+  const fuzzySymbol = _fuzzyIndex.get(q);
+  if (fuzzySymbol) {
+    const entry = _symbolIndex.get(fuzzySymbol);
+    if (entry) return [entry];
+  }
+
+  // 0b) 초성 검색
+  const isChosung = isChosungOnly(q);
 
   // 1) 동의어 매칭 결과 수집
   const aliasMatches = new Set<string>();
@@ -549,6 +602,18 @@ export function searchKoreanStocks(query: string): KoreanStockEntry[] {
       seen.add(entry.symbol);
     }
   });
+
+  // 초성 매칭
+  if (isChosung && q.length >= 2) {
+    KOREAN_STOCK_MAP.forEach(entry => {
+      if (seen.has(entry.symbol)) return;
+      const nameChosung = extractChosung(entry.koreanName);
+      if (nameChosung.startsWith(q)) {
+        results.push(entry);
+        seen.add(entry.symbol);
+      }
+    });
+  }
 
   // 한글 이름 매칭
   KOREAN_STOCK_MAP.forEach(entry => {
@@ -596,5 +661,5 @@ export function searchKoreanStocks(query: string): KoreanStockEntry[] {
     }
   });
 
-  return results.slice(0, 15);
+  return results.slice(0, 20);
 }
