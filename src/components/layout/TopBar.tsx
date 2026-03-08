@@ -1,13 +1,32 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
-import { Search, Loader2, Clock, X, TrendingUp } from "lucide-react";
+import { Search, Loader2, Clock, TrendingUp } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useStockSearch } from "@/hooks/useStockData";
+import { useStockSearch, useStockQuotes, useQuantSignals } from "@/hooks/useStockData";
 import { useRecentSearches } from "@/hooks/useRecentSearches";
+import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { searchKoreanStocks, getKoreanName, type KoreanStockEntry } from "@/lib/koreanStockMap";
+
+function ScoreBadge({ score }: { score: number }) {
+  const color = score >= 60 ? "text-stock-up" : score >= 45 ? "text-warning" : "text-stock-down";
+  const bg = score >= 60 ? "bg-stock-up/15 border-stock-up/30" : score >= 45 ? "bg-warning/15 border-warning/30" : "bg-stock-down/15 border-stock-down/30";
+  return (
+    <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded border ${bg} ${color}`}>
+      {score}점
+    </span>
+  );
+}
+
+function PriceBadge({ price, toKRW }: { price: number; toKRW: (n: number) => number }) {
+  return (
+    <span className="text-[10px] font-mono text-foreground/80">
+      ₩{toKRW(price).toLocaleString('ko-KR')}
+    </span>
+  );
+}
 
 export function TopBar() {
   const [query, setQuery] = useState("");
@@ -17,6 +36,7 @@ export function TopBar() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { recents, addRecent, clearRecents } = useRecentSearches();
+  const { toKRW } = useExchangeRate();
 
   const koreanResults = useMemo(() => searchKoreanStocks(debouncedQuery), [debouncedQuery]);
   const hasKoreanResults = koreanResults.length > 0;
@@ -24,46 +44,57 @@ export function TopBar() {
   const enableApiSearch = debouncedQuery.length >= 1 && !hasKoreanResults;
   const { data: apiResults, isLoading } = useStockSearch(enableApiSearch ? debouncedQuery : "");
 
+  // Collect symbols for price & score lookup (max 10 for perf)
+  const visibleSymbols = useMemo(() => {
+    if (hasKoreanResults) return koreanResults.slice(0, 10).map(e => e.symbol);
+    if (apiResults?.length) return apiResults.slice(0, 10).map((r: any) => r.symbol);
+    if (!debouncedQuery && recents.length) return recents.slice(0, 8).map(r => r.symbol);
+    return [];
+  }, [hasKoreanResults, koreanResults, apiResults, debouncedQuery, recents]);
+
+  const hasVisibleSymbols = visibleSymbols.length > 0 && open;
+  const { data: quotes } = useStockQuotes(visibleSymbols, hasVisibleSymbols);
+  const { data: quantData } = useQuantSignals(hasVisibleSymbols ? visibleSymbols.slice(0, 5) : undefined);
+
+  // Build lookup maps
+  const priceMap = useMemo(() => {
+    const m = new Map<string, number>();
+    if (quotes) for (const q of quotes) { if (q?.symbol && q?.c) m.set(q.symbol, q.c); }
+    return m;
+  }, [quotes]);
+
+  const scoreMap = useMemo(() => {
+    const m = new Map<string, number>();
+    if (quantData?.results) for (const r of quantData.results) m.set(r.symbol, r.totalScore);
+    return m;
+  }, [quantData]);
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Ctrl+K shortcut
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        inputRef.current?.focus();
-        setOpen(true);
-      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); inputRef.current?.focus(); setOpen(true); }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
   const handleSelect = (symbol: string, label?: string) => {
-    const displayLabel = label || getKoreanName(symbol) || symbol;
-    addRecent(symbol, displayLabel);
-    setQuery("");
-    setOpen(false);
+    addRecent(symbol, label || getKoreanName(symbol) || symbol);
+    setQuery(""); setOpen(false);
     navigate(`/stock/${symbol}`);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (koreanResults.length > 0) {
-      handleSelect(koreanResults[0].symbol, koreanResults[0].koreanName);
-      return;
-    }
-    if (query.trim()) {
-      handleSelect(query.trim().toUpperCase());
-    }
+    if (koreanResults.length > 0) { handleSelect(koreanResults[0].symbol, koreanResults[0].koreanName); return; }
+    if (query.trim()) handleSelect(query.trim().toUpperCase());
   };
 
   const showDropdown = open;
@@ -71,6 +102,17 @@ export function TopBar() {
   const showLoading = isLoading && !hasKoreanResults;
   const showRecents = !hasQuery && recents.length > 0;
   const showResults = hasQuery;
+
+  const renderInlineData = (symbol: string) => {
+    const price = priceMap.get(symbol);
+    const score = scoreMap.get(symbol);
+    return (
+      <div className="flex items-center gap-1.5 shrink-0">
+        {price != null && <PriceBadge price={price} toKRW={toKRW} />}
+        {score != null && <ScoreBadge score={score} />}
+      </div>
+    );
+  };
 
   return (
     <header className="h-14 border-b border-border flex items-center gap-4 px-4 bg-card/50 backdrop-blur-sm">
@@ -86,10 +128,7 @@ export function TopBar() {
             <Input
               ref={inputRef}
               value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setOpen(true);
-              }}
+              onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
               onFocus={() => setOpen(true)}
               placeholder="종목명(한글/초성) 또는 티커 검색 · Ctrl+K"
               className="pl-9 pr-20 h-9 bg-muted/50 border-border text-sm"
@@ -103,39 +142,32 @@ export function TopBar() {
         {showDropdown && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-xl z-50 max-h-[420px] overflow-y-auto">
             
-            {/* 최근 검색어 */}
             {showRecents && (
               <>
                 <div className="px-3 py-1.5 flex items-center justify-between border-b border-border bg-muted/30">
                   <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
                     <Clock className="w-3 h-3" /> 최근 검색
                   </span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); clearRecents(); }}
-                    className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                  >
+                  <button onClick={(e) => { e.stopPropagation(); clearRecents(); }} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
                     전체 삭제
                   </button>
                 </div>
                 <ul>
                   {recents.map((r) => (
-                    <li
-                      key={r.symbol}
-                      className="px-4 py-2 hover:bg-accent cursor-pointer flex items-center justify-between gap-2 text-sm"
-                      onClick={() => handleSelect(r.symbol, r.label)}
-                    >
+                    <li key={r.symbol} className="px-4 py-2 hover:bg-accent cursor-pointer flex items-center justify-between gap-2 text-sm"
+                      onClick={() => handleSelect(r.symbol, r.label)}>
                       <div className="flex items-center gap-2.5 min-w-0">
                         <Clock className="w-3 h-3 text-muted-foreground shrink-0" />
                         <span className="font-mono font-bold text-primary text-xs shrink-0">{r.symbol}</span>
                         <span className="text-foreground truncate text-xs">{r.label}</span>
                       </div>
+                      {renderInlineData(r.symbol)}
                     </li>
                   ))}
                 </ul>
               </>
             )}
 
-            {/* 검색 결과가 없고 최근 검색도 없을 때 */}
             {!hasQuery && !showRecents && (
               <div className="px-4 py-6 text-center text-sm text-muted-foreground">
                 <Search className="w-5 h-5 mx-auto mb-2 opacity-40" />
@@ -144,7 +176,6 @@ export function TopBar() {
               </div>
             )}
 
-            {/* 한글 매핑 결과 */}
             {showResults && hasKoreanResults && (
               <>
                 <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border bg-muted/30 flex items-center gap-1">
@@ -152,29 +183,19 @@ export function TopBar() {
                 </div>
                 <ul>
                   {koreanResults.map((entry: KoreanStockEntry) => (
-                    <li
-                      key={entry.symbol}
-                      className="px-4 py-2.5 hover:bg-accent cursor-pointer flex items-center justify-between gap-2 text-sm group"
-                      onClick={() => handleSelect(entry.symbol, entry.koreanName)}
-                    >
+                    <li key={entry.symbol} className="px-4 py-2.5 hover:bg-accent cursor-pointer flex items-center justify-between gap-2 text-sm"
+                      onClick={() => handleSelect(entry.symbol, entry.koreanName)}>
                       <div className="flex items-center gap-3 min-w-0">
-                        <span className="font-mono font-bold text-primary shrink-0 text-sm">
-                          {entry.symbol}
-                        </span>
+                        <span className="font-mono font-bold text-primary shrink-0 text-sm">{entry.symbol}</span>
                         <div className="min-w-0">
-                          <p className="text-foreground font-medium truncate text-xs leading-tight">
-                            {entry.koreanName}
-                          </p>
-                          <p className="text-muted-foreground truncate text-[10px] leading-tight">
-                            {entry.englishName}
-                          </p>
+                          <p className="text-foreground font-medium truncate text-xs leading-tight">{entry.koreanName}</p>
+                          <p className="text-muted-foreground truncate text-[10px] leading-tight">{entry.englishName}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        {renderInlineData(entry.symbol)}
                         {entry.category && (
-                          <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                            {entry.category}
-                          </span>
+                          <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{entry.category}</span>
                         )}
                       </div>
                     </li>
@@ -183,7 +204,6 @@ export function TopBar() {
               </>
             )}
 
-            {/* API 검색 결과 (한글 매핑에 없는 전체 종목) */}
             {showResults && !hasKoreanResults && (
               <>
                 {showLoading && (
@@ -204,22 +224,16 @@ export function TopBar() {
                     </div>
                     <ul>
                       {apiResults.map((r: any) => (
-                        <li
-                          key={r.symbol}
-                          className="px-4 py-2.5 hover:bg-accent cursor-pointer flex items-center justify-between gap-2 text-sm"
-                          onClick={() => handleSelect(r.symbol, r.shortname || r.description)}
-                        >
+                        <li key={r.symbol} className="px-4 py-2.5 hover:bg-accent cursor-pointer flex items-center justify-between gap-2 text-sm"
+                          onClick={() => handleSelect(r.symbol, r.shortname || r.description)}>
                           <div className="flex items-center gap-3 min-w-0">
-                            <span className="font-mono font-semibold text-primary shrink-0">
-                              {r.symbol}
-                            </span>
-                            <span className="text-foreground truncate text-xs">
-                              {r.shortname || r.description || "—"}
-                            </span>
+                            <span className="font-mono font-semibold text-primary shrink-0">{r.symbol}</span>
+                            <span className="text-foreground truncate text-xs">{r.shortname || r.description || "—"}</span>
                           </div>
-                          <span className="text-[10px] text-muted-foreground shrink-0 bg-muted px-1.5 py-0.5 rounded">
-                            {r.type || r.exchange || ""}
-                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {renderInlineData(r.symbol)}
+                            <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{r.type || r.exchange || ""}</span>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -231,9 +245,7 @@ export function TopBar() {
         )}
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground font-mono">
-          {new Date().toLocaleDateString('ko-KR')}
-        </span>
+        <span className="text-xs text-muted-foreground font-mono">{new Date().toLocaleDateString('ko-KR')}</span>
         <ThemeToggle />
       </div>
     </header>
