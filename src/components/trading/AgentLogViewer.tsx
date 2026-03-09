@@ -12,6 +12,9 @@ export function AgentLogViewer() {
     switch (action) {
       case 'buy': return 'text-stock-up';
       case 'exit': case 'sell': return 'text-stock-down';
+      case 'exit_attempt': return 'text-warning';
+      case 'defense': return 'text-primary';
+      case 'replace': return 'text-chart-4';
       case 'error': return 'text-destructive';
       default: return 'text-muted-foreground';
     }
@@ -21,6 +24,9 @@ export function AgentLogViewer() {
     switch (action) {
       case 'buy': return 'default';
       case 'exit': case 'sell': return 'destructive' as const;
+      case 'exit_attempt': return 'secondary' as const;
+      case 'defense': return 'default' as const;
+      case 'replace': return 'secondary' as const;
       case 'error': return 'destructive' as const;
       default: return 'secondary' as const;
     }
