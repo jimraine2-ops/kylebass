@@ -441,6 +441,9 @@ Deno.serve(async (req) => {
         }
 
         if (shouldClose) {
+          // ★★★ [매도 시도 기록] DB 업데이트 전에 즉시 로그 남겨 데이터 유실 방지
+          await addLog('quant', 'exit_attempt', sym, `[매도시도] ${sym} ${newStatus} 조건 충족 — 매도 명령 발행 중... (${closeReason})`, { price, pnlPct: +pnlPct.toFixed(2), newStatus });
+
           const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
           const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
           const pnlKRW = saleProceeds - buyCost;
