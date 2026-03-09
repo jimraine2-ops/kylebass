@@ -43,7 +43,7 @@ interface Props {
   symbol: string;
 }
 
-export default function CompanyNewsSection({ symbol }: Props) {
+export default function CompanyNewsSection({ symbol }: Props): React.JSX.Element {
   const { data: news, isLoading } = useCompanyNews(symbol);
   const [originalPopup, setOriginalPopup] = useState<{ headline: string; summary: string } | null>(null);
 
