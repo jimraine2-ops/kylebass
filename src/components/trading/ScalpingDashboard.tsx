@@ -350,4 +350,4 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: Sc
       </Alert>
     </div>
   );
-});
+}
