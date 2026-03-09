@@ -1,3 +1,4 @@
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ interface ScalpingDashboardProps {
   fxRate?: number;
 }
 
-export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: ScalpingDashboardProps) {
+export const ScalpingDashboard = React.forwardRef<HTMLDivElement, ScalpingDashboardProps>(function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }, ref) {
   const { data, isLoading, refetch } = useScalpingPortfolio();
   const [resetting, setResetting] = useState(false);
 
@@ -345,9 +346,9 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: Sc
       <Alert className="border-muted-foreground/20">
         <Info className="h-4 w-4" />
         <AlertDescription className="text-xs text-muted-foreground">
-          최근 2일간의 매매 기록만 보존됩니다 (비용 최적화 모드). 미체결 포지션은 삭제되지 않습니다.
+          최근 30일간의 매매 기록이 보존됩니다. 미체결 포지션은 삭제되지 않습니다.
         </AlertDescription>
       </Alert>
     </div>
   );
-}
+});
