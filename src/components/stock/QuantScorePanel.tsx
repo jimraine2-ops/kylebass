@@ -90,8 +90,9 @@ function getIndicatorSummary(indicators: any): { text: string; positive: boolean
 
 const INDICATOR_NAMES: Record<string, string> = {
   sentiment: "호재·감성",
-  rvol: "거래량 폭증(RVOL)",
-  candle: "3중 컨펌(VWAP/EMA/RSI)",
+  rvol: "거래량 폭증(RVOL) ×2",
+  candle: "3중 컨펌(VWAP/EMA/RSI) ×2",
+  macd: "MACD 크로스오버 ×2",
   atr: "ATR 변동성",
   gap: "갭 분석",
   squeeze: "스퀴즈 돌파",
