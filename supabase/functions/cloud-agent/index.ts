@@ -654,6 +654,15 @@ Deno.serve(async (req) => {
 
         for (const pos of (scalpOpenPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
           const pnlPct = ((price - pos.price) / pos.price) * 100;
+
+          // ★★★ [철갑 방어] 수익률 3% 돌파 시 → 손절가를 본절가(+0.5%)로 즉시 상향
+          if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.005) {
+            const breakevenStop = +(pos.price * 1.005).toFixed(4);
+            await supabase.from('scalping_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
+            pos.stop_loss = breakevenStop;
+            await addLog('scalping', 'defense', sym, `[철갑방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 본절가 상향: ${fmtKRW(breakevenStop)}`, { pnlPct: +pnlPct.toFixed(2), newStopLoss: breakevenStop });
+          }
+
           let shouldClose = false;
           let closeReason = '';
           let newStatus = 'closed';
