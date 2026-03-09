@@ -395,6 +395,21 @@ Deno.serve(async (req) => {
 
       for (const pos of (mainOpenPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
+
+        // ★★★ [철갑 방어] 수익률 3% 돌파 시 → 손절가를 본절가(+0.5%)로 즉시 상향
+        if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.005) {
+          const breakevenStop = +(pos.price * 1.005).toFixed(4);
+          await supabase.from('ai_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
+          pos.stop_loss = breakevenStop;
+          await addLog('quant', 'defense', sym, `[철갑방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 본절가로 상향: ${fmtKRW(breakevenStop)} (절대 손해 없는 거래 전환)`, { pnlPct: +pnlPct.toFixed(2), newStopLoss: breakevenStop });
+        }
+
+        // ★★★ [추격익절 정밀화] 고점 대비 5% 하락 시 실시간 매도
+        const peakPrice = Math.max(pos.peak_price || pos.price, price);
+        if (price > (pos.peak_price || pos.price)) {
+          await supabase.from('ai_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
+        }
+
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
@@ -403,6 +418,14 @@ Deno.serve(async (req) => {
           shouldClose = true;
           closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
+        } else if (peakPrice >= pos.price * 1.10) {
+          const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
+          if (dropFromPeak >= 5) {
+            const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
+            shouldClose = true;
+            closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정)`;
+            newStatus = 'trailing_profit';
+          }
         } else if (quantScore < 40) {
           shouldClose = true;
           closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 40)`;
@@ -413,19 +436,17 @@ Deno.serve(async (req) => {
           newStatus = 'profit_taken';
         } else if (pos.stop_loss && price <= pos.stop_loss) {
           shouldClose = true;
-          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 추격 손절 터치`;
-          newStatus = 'trailing_stop';
+          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] ${pnlPct >= 0 ? '본절가 방어 매도' : '추격 손절 터치'}`;
+          newStatus = pnlPct >= 0 ? 'breakeven_exit' : 'trailing_stop';
         }
 
         if (shouldClose) {
-          // ★★★ [정밀 회계] 매도 대금 = 매도가 × 수량 × 환율 (직접 계산)
           const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
           const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
           const pnlKRW = saleProceeds - buyCost;
           const balanceBefore = mainBalance;
           const newBalance = mainBalance + saleProceeds;
-          // ★ [감사 검증] 매도 후 잔고 == 매수 전 잔고 + 손익
-          const expectedBalance = balanceBefore + buyCost + pnlKRW; // should equal balanceBefore + saleProceeds
+          const expectedBalance = balanceBefore + buyCost + pnlKRW;
           if (Math.abs(newBalance - expectedBalance) > 1) {
             await addLog('system', 'error', sym, `[회계오류] 잔고 불일치! expected=${expectedBalance} actual=${newBalance}`, { saleProceeds, buyCost, pnlKRW });
           }
