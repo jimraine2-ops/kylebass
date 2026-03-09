@@ -930,8 +930,8 @@ Deno.serve(async (req) => {
         if (scalpOpenCount >= 10) break;
         const { sym, price, changePct, quantScore, rvol } = r;
 
-        if (quantScore < 50) {
-          await addLog('scalping', 'skip', sym, `[Cloud-Scalp] ${sym} +${changePct.toFixed(1)}%/RVOL${rvol.toFixed(1)}x → 점수 ${quantScore} < 50 보류`, {});
+        if (quantScore < adaptedScalpScoreMin) {
+          await addLog('scalping', 'skip', sym, `[Cloud-Scalp] ${sym} +${changePct.toFixed(1)}%/RVOL${rvol.toFixed(1)}x → 점수 ${quantScore} < ${adaptedScalpScoreMin} 보류`, {});
           continue;
         }
 
