@@ -465,8 +465,30 @@ Deno.serve(async (req) => {
       await new Promise(r => setTimeout(r, 200));
     }
 
+    // --- QUANT: Market Trend Guard (SPY/QQQ) ---
+    // ★★★ 시장 동기화: 나스닥/스파이 하락세 시 보수적 진입
+    let marketBearish = false;
+    let entryThreshold = 50;
+    try {
+      const [spyQuote, qqqQuote] = await Promise.all([
+        finnhubFetch(`/quote?symbol=SPY`),
+        finnhubFetch(`/quote?symbol=QQQ`),
+      ]);
+      const spyChange = spyQuote?.dp || 0;
+      const qqqChange = qqqQuote?.dp || 0;
+      if (spyChange < -1 && qqqChange < -1) {
+        marketBearish = true;
+        entryThreshold = 65; // 시장 하락 시 진입 기준 상향
+        await addLog('system', 'warning', null, `[시장동기화] ⚠️ SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% — 시장 하락세 감지 → 진입 기준 65점으로 상향`, { spyChange, qqqChange });
+      } else if (spyChange < -0.5 || qqqChange < -0.5) {
+        entryThreshold = 55;
+        await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% — 약세 주의 → 진입 기준 55점`, { spyChange, qqqChange });
+      } else {
+        await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% — 정상 → 진입 기준 50점`, { spyChange, qqqChange });
+      }
+    } catch { /* fallback to default threshold */ }
+
     // --- QUANT: Scan for new entries ---
-    // ★ Collect all candidates first, then sort by score (highest first) for priority allocation
     const mainOpenCount = (mainOpenPos || []).filter(p => p.status === 'open').length;
     const quantCandidates: { sym: string; price: number; scoring: any }[] = [];
 
@@ -483,7 +505,7 @@ Deno.serve(async (req) => {
       }));
 
       for (const r of results) {
-        if (!r || r.scoring.totalScore < 50) continue;
+        if (!r || r.scoring.totalScore < entryThreshold) continue; // ★ 동적 진입 기준 적용
         const alreadyHolding = (mainOpenPos || []).some(p => p.symbol === r.sym && p.status === 'open');
         const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
         if (alreadyHolding && !isPyramiding) continue;
