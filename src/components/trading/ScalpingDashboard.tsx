@@ -13,7 +13,6 @@ import { useState, useEffect } from "react";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface ScalpingDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
