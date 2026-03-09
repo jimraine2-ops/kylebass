@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { quantAutoTrade, scalpingAnalyze } from "@/lib/api";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Activity, TrendingUp, BarChart3, Gauge, Zap, ShoppingCart,
+  Activity, TrendingUp, Zap, ShoppingCart,
   Loader2, AlertTriangle, CheckCircle2, XCircle,
 } from "lucide-react";
 import { formatStockName } from "@/lib/koreanStockMap";
@@ -92,7 +92,7 @@ const INDICATOR_NAMES: Record<string, string> = {
   preMarket: "프리마켓 모멘텀",
 };
 
-export function QuantScorePanel({ symbol, currentPrice, fxRate }: Props) {
+export function QuantScorePanel({ symbol, currentPrice, fxRate }: Props): React.JSX.Element {
   const { data: quantData, isLoading } = useQuantSignals([symbol]);
   const { data: mainPortfolio } = useAIPortfolio();
   const { data: scalpPortfolio } = useScalpingPortfolio();

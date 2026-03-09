@@ -1,9 +1,9 @@
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Newspaper, ExternalLink, Clock, FileText, Globe, Languages } from "lucide-react";
 import { useCompanyNews } from "@/hooks/useStockData";
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -43,7 +43,7 @@ interface Props {
   symbol: string;
 }
 
-export default function CompanyNewsSection({ symbol }: Props) {
+export default function CompanyNewsSection({ symbol }: Props): React.JSX.Element {
   const { data: news, isLoading } = useCompanyNews(symbol);
   const [originalPopup, setOriginalPopup] = useState<{ headline: string; summary: string } | null>(null);
 
