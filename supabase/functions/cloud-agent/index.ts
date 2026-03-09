@@ -603,9 +603,18 @@ Deno.serve(async (req) => {
       }
     } catch { /* fallback */ }
 
-    // --- QUANT: Scan for new entries (동적 스캔) ---
+    // --- QUANT: Scan for new entries (동적 스캔) — 세션 적응형 진입 ---
     const mainOpenCount = (mainOpenPos || []).filter(p => p.status === 'open').length;
     const quantCandidates: { sym: string; price: number; scoring: any }[] = [];
+
+    // ★ 비정규장: 진입 조건 완화 (entryRelax < 1.0)
+    const adaptedEntryThreshold = Math.round(entryThreshold * entryRelax);
+    const adaptedRvolMin = entryRelax < 1.0 ? 1.0 : 1.5; // 비정규장은 RVOL 1.0까지 허용
+    const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;      // 비정규장은 VWAP 점수 2까지 허용
+
+    if (entryRelax < 1.0) {
+      await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${entryThreshold}→${adaptedEntryThreshold}점 | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin}`, {});
+    }
 
     for (let i = 0; i < QUANT_SYMBOLS.length; i += 5) {
       const batch = QUANT_SYMBOLS.slice(i, i + 5);
@@ -622,15 +631,19 @@ Deno.serve(async (req) => {
       }));
 
       for (const r of results) {
-        if (!r || r.scoring.totalScore < entryThreshold) continue;
+        if (!r || r.scoring.totalScore < adaptedEntryThreshold) continue;
         const alreadyHolding = (mainOpenPos || []).some(p => p.symbol === r.sym && p.status === 'open');
         const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
         if (alreadyHolding && !isPyramiding) continue;
         if (mainOpenCount >= 10) continue;
+        // ★ 세션 적응형 필터: 비정규장에서는 완화된 조건 적용
         const sentimentOk = (r.scoring.indicators.sentiment.score || 0) > 0;
-        const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= 1.5;
-        const vwapOk = (r.scoring.indicators.candle.score || 0) >= 4;
-        if (!sentimentOk || !rvolOk || !vwapOk) continue;
+        const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= adaptedRvolMin;
+        const vwapOk = (r.scoring.indicators.candle.score || 0) >= adaptedVwapMin;
+        // 비정규장: 3개 중 2개만 충족해도 진입 허용
+        const filtersPassed = [sentimentOk, rvolOk, vwapOk].filter(Boolean).length;
+        const minFilters = entryRelax < 1.0 ? 2 : 3;
+        if (filtersPassed < minFilters) continue;
         quantCandidates.push(r);
       }
       if (i + 5 < QUANT_SYMBOLS.length) await new Promise(r => setTimeout(r, 300));
