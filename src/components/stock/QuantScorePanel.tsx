@@ -76,6 +76,15 @@ function getIndicatorSummary(indicators: any): { text: string; positive: boolean
     positive: aggrScore >= 7,
   });
 
+  // MACD indicator
+  const macdScore = indicators.macd?.score || 0;
+  if (macdScore > 0) {
+    items.push({
+      text: `MACD ${macdScore >= 7 ? "상승" : macdScore >= 4 ? "전환" : "하락"} (${macdScore}점)`,
+      positive: macdScore >= 7,
+    });
+  }
+
   return items;
 }
 
