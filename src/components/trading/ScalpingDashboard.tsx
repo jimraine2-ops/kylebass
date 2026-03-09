@@ -312,7 +312,8 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: Sc
                       const isProfit = (trade.pnl || 0) > 0;
                       const time = trade.closed_at ? new Date(trade.closed_at).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit', month: '2-digit', day: '2-digit' }) : '-';
                       const statusLabels: Record<string, string> = {
-                        profit_taken: '익절', stopped: '손절', score_exit: '점수청산', time_cut: '타임컷', trailing_profit: '추격익절', closed: '종료',
+                        profit_taken: '익절', stopped: '손절', score_exit: '점수청산', time_cut: '타임컷',
+                        trailing_profit: '추격익절', closed: '종료', breakeven_exit: '본절탈출', replaced: '교체매도', early_exit: '조기탈출',
                       };
                       return (
                         <tr key={trade.id} className="border-b border-border/50 hover:bg-muted/30">
