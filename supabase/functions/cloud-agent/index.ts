@@ -364,6 +364,7 @@ Deno.serve(async (req) => {
     const sessionInfo = getMarketSession();
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
+    const entryRelax = sessionInfo.entryRelax; // 비정규장 진입 완화 계수
 
     // ========== DYNAMIC UNIVERSE ROTATION ==========
     // ★★★ Phase 0: Build this cycle's scan list dynamically
