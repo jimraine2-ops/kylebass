@@ -19,7 +19,7 @@ function getToken(): string { return Deno.env.get('FINNHUB_API_KEY') || ''; }
 // ===== Session Detection (US Eastern Time) =====
 type SessionType = 'DAY' | 'PRE_MARKET' | 'REGULAR' | 'AFTER_HOURS';
 
-function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number } {
+function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number; entryRelax: number } {
   const now = new Date();
   const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
   const et = new Date(etStr);
@@ -28,19 +28,20 @@ function getMarketSession(): { session: SessionType; label: string; spreadMultip
   const day = et.getDay();
   const time = h * 60 + m;
 
+  // entryRelax: 진입 조건 완화 계수 (1.0=정규장, 낮을수록 완화)
   if (day === 0 || day === 6) {
-    return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5 };
+    return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6 };
   }
   if (time >= 240 && time < 570) {
-    return { session: 'PRE_MARKET', label: '프리마켓', spreadMultiplier: 2.0 };
+    return { session: 'PRE_MARKET', label: '프리마켓', spreadMultiplier: 2.0, entryRelax: 0.7 };
   }
   if (time >= 570 && time < 960) {
-    return { session: 'REGULAR', label: '정규장', spreadMultiplier: 1.0 };
+    return { session: 'REGULAR', label: '정규장', spreadMultiplier: 1.0, entryRelax: 1.0 };
   }
   if (time >= 960 && time < 1200) {
-    return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8 };
+    return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8, entryRelax: 0.75 };
   }
-  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5 };
+  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6 };
 }
 
 function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultiplier: number): number {
