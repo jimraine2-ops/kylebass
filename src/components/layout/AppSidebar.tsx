@@ -1,4 +1,4 @@
-import { BarChart3, TrendingUp, Building2, Bell, Search, Coins, Bot, Target } from "lucide-react";
+import { BarChart3, TrendingUp, Building2, Search, Coins, Bot, Target } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import {
   Sidebar,
