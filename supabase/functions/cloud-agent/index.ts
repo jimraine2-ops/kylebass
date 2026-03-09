@@ -563,7 +563,7 @@ Deno.serve(async (req) => {
       await addLog('quant', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, qty, costKRW });
     }
 
-    // ========== AUTO-REPLACEMENT: 보유 종목 중 40점 미만 → 더 높은 점수 종목으로 교체 검토 ==========
+    // ========== AUTO-REPLACEMENT: 보유 종목 점수 < 40 OR 슈퍼 스캐너에서 10점 이상 높은 종목 발견 시 교체 ==========
     {
       const refreshedOpenPos = (await supabase.from('ai_trades').select('*').eq('status', 'open')).data || [];
       for (const pos of refreshedOpenPos) {
@@ -571,21 +571,24 @@ Deno.serve(async (req) => {
         if (!data) continue;
         const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
         const currentScore = scoring?.totalScore || 0;
-        if (currentScore >= 40) continue; // Still viable, keep
 
-        // Find a better candidate from scanned results
+        // ★★★ 10점 이상 높은 종목이 있으면 교체 (기존 40점 미만 조건 + 10점 갭 조건)
         const betterCandidate = quantCandidates.find(c =>
           c.scoring.totalScore >= 60 &&
+          c.scoring.totalScore - currentScore >= 10 && // ★ 10점 갭 필수
           !refreshedOpenPos.some(p => p.symbol === c.sym)
         );
 
-        if (betterCandidate) {
-          // Close underperforming position
+        // 40점 미만이면 무조건 교체 시도, 아니면 10점 갭 있을 때만
+        if (currentScore >= 40 && !betterCandidate) continue;
+
+        if (betterCandidate || currentScore < 40) {
           const price = data.quote.c;
           const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
           const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
           const pnlKRW = saleProceeds - buyCost;
-          const closeReason = `[Auto-Replace] ${pos.symbol} 점수 ${currentScore} < 40 → ${betterCandidate.sym} ${betterCandidate.scoring.totalScore}점으로 교체`;
+          const targetLabel = betterCandidate ? `→ ${betterCandidate.sym} ${betterCandidate.scoring.totalScore}점으로 교체` : '→ 대기';
+          const closeReason = `[Auto-Replace] ${pos.symbol} 점수 ${currentScore}점 ${targetLabel} (10점 갭 교체 매매)`;
 
           await supabase.from('ai_trades').update({
             status: 'replaced', close_price: price, pnl: pnlKRW,
@@ -594,7 +597,7 @@ Deno.serve(async (req) => {
           }).eq('id', pos.id);
           mainBalance += saleProceeds;
           await supabase.from('ai_wallet').update({ balance: mainBalance, updated_at: now.toISOString() }).eq('id', mainWallet.id);
-          await addLog('quant', 'replace', pos.symbol, closeReason, { oldScore: currentScore, newSymbol: betterCandidate.sym, newScore: betterCandidate.scoring.totalScore, pnl: pnlKRW });
+          await addLog('quant', 'replace', pos.symbol, closeReason, { oldScore: currentScore, newSymbol: betterCandidate?.sym, newScore: betterCandidate?.scoring.totalScore, pnl: pnlKRW, scoreGap: betterCandidate ? betterCandidate.scoring.totalScore - currentScore : 0 });
         }
         await new Promise(r => setTimeout(r, 200));
       }
