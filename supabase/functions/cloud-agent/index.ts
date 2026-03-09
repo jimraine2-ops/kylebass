@@ -19,7 +19,7 @@ function getToken(): string { return Deno.env.get('FINNHUB_API_KEY') || ''; }
 // ===== Session Detection (US Eastern Time) =====
 type SessionType = 'DAY' | 'PRE_MARKET' | 'REGULAR' | 'AFTER_HOURS';
 
-function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number } {
+function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number; entryRelax: number } {
   const now = new Date();
   const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
   const et = new Date(etStr);
@@ -28,19 +28,20 @@ function getMarketSession(): { session: SessionType; label: string; spreadMultip
   const day = et.getDay();
   const time = h * 60 + m;
 
+  // entryRelax: 진입 조건 완화 계수 (1.0=정규장, 낮을수록 완화)
   if (day === 0 || day === 6) {
-    return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5 };
+    return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6 };
   }
   if (time >= 240 && time < 570) {
-    return { session: 'PRE_MARKET', label: '프리마켓', spreadMultiplier: 2.0 };
+    return { session: 'PRE_MARKET', label: '프리마켓', spreadMultiplier: 2.0, entryRelax: 0.7 };
   }
   if (time >= 570 && time < 960) {
-    return { session: 'REGULAR', label: '정규장', spreadMultiplier: 1.0 };
+    return { session: 'REGULAR', label: '정규장', spreadMultiplier: 1.0, entryRelax: 1.0 };
   }
   if (time >= 960 && time < 1200) {
-    return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8 };
+    return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8, entryRelax: 0.75 };
   }
-  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5 };
+  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6 };
 }
 
 function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultiplier: number): number {
@@ -363,6 +364,7 @@ Deno.serve(async (req) => {
     const sessionInfo = getMarketSession();
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
+    const entryRelax = sessionInfo.entryRelax; // 비정규장 진입 완화 계수
 
     // ========== DYNAMIC UNIVERSE ROTATION ==========
     // ★★★ Phase 0: Build this cycle's scan list dynamically
@@ -601,9 +603,18 @@ Deno.serve(async (req) => {
       }
     } catch { /* fallback */ }
 
-    // --- QUANT: Scan for new entries (동적 스캔) ---
+    // --- QUANT: Scan for new entries (동적 스캔) — 세션 적응형 진입 ---
     const mainOpenCount = (mainOpenPos || []).filter(p => p.status === 'open').length;
     const quantCandidates: { sym: string; price: number; scoring: any }[] = [];
+
+    // ★ 비정규장: 진입 조건 완화 (entryRelax < 1.0)
+    const adaptedEntryThreshold = Math.round(entryThreshold * entryRelax);
+    const adaptedRvolMin = entryRelax < 1.0 ? 1.0 : 1.5; // 비정규장은 RVOL 1.0까지 허용
+    const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;      // 비정규장은 VWAP 점수 2까지 허용
+
+    if (entryRelax < 1.0) {
+      await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${entryThreshold}→${adaptedEntryThreshold}점 | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin}`, {});
+    }
 
     for (let i = 0; i < QUANT_SYMBOLS.length; i += 5) {
       const batch = QUANT_SYMBOLS.slice(i, i + 5);
@@ -620,15 +631,19 @@ Deno.serve(async (req) => {
       }));
 
       for (const r of results) {
-        if (!r || r.scoring.totalScore < entryThreshold) continue;
+        if (!r || r.scoring.totalScore < adaptedEntryThreshold) continue;
         const alreadyHolding = (mainOpenPos || []).some(p => p.symbol === r.sym && p.status === 'open');
         const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
         if (alreadyHolding && !isPyramiding) continue;
         if (mainOpenCount >= 10) continue;
+        // ★ 세션 적응형 필터: 비정규장에서는 완화된 조건 적용
         const sentimentOk = (r.scoring.indicators.sentiment.score || 0) > 0;
-        const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= 1.5;
-        const vwapOk = (r.scoring.indicators.candle.score || 0) >= 4;
-        if (!sentimentOk || !rvolOk || !vwapOk) continue;
+        const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= adaptedRvolMin;
+        const vwapOk = (r.scoring.indicators.candle.score || 0) >= adaptedVwapMin;
+        // 비정규장: 3개 중 2개만 충족해도 진입 허용
+        const filtersPassed = [sentimentOk, rvolOk, vwapOk].filter(Boolean).length;
+        const minFilters = entryRelax < 1.0 ? 2 : 3;
+        if (filtersPassed < minFilters) continue;
         quantCandidates.push(r);
       }
       if (i + 5 < QUANT_SYMBOLS.length) await new Promise(r => setTimeout(r, 300));
@@ -746,7 +761,11 @@ Deno.serve(async (req) => {
       else if (recentWinRate < 50) dynamicEntryThreshold = 4;
       else if (recentWinRate > 65) dynamicEntryThreshold = 2;
 
-      await addLog('scalping', 'learn', null, `[AI-Learn] 최근 승률 ${recentWinRate.toFixed(1)}% → 동적 진입 기준: +${dynamicEntryThreshold}%`, {});
+      // ★ 비정규장 세션 적응형: 진입 기준 완화
+      const adaptedScalpThreshold = Math.max(1, Math.round(dynamicEntryThreshold * entryRelax));
+      const adaptedScalpScoreMin = entryRelax < 1.0 ? 40 : 50; // 비정규장: 점수 40까지 허용
+
+      await addLog('scalping', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 진입 기준: +${adaptedScalpThreshold}% (원래 +${dynamicEntryThreshold}%) | 점수 ≥${adaptedScalpScoreMin} | ${sessionLabel} 적응형`, {});
 
       // Exit checks
       const scalpSymbolsToCheck = [...new Set((scalpOpenPos || []).map((p: any) => p.symbol))];
@@ -867,7 +886,8 @@ Deno.serve(async (req) => {
             if (!data || !data.quote.c || data.quote.c >= 10) return null;
             if (data.quote.c < MIN_PRICE_USD) return { sym, filtered: true, reason: 'low_price' };
             const changePct = data.quote.dp || 0;
-            if (changePct < dynamicEntryThreshold) return null;
+            // ★ 비정규장 적응형: 완화된 상승률 기준 적용
+            if (changePct < adaptedScalpThreshold) return null;
             const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
             const qs = scoring?.totalScore || 0;
             const rv = scoring?.rvol || 1;
@@ -910,8 +930,8 @@ Deno.serve(async (req) => {
         if (scalpOpenCount >= 10) break;
         const { sym, price, changePct, quantScore, rvol } = r;
 
-        if (quantScore < 50) {
-          await addLog('scalping', 'skip', sym, `[Cloud-Scalp] ${sym} +${changePct.toFixed(1)}%/RVOL${rvol.toFixed(1)}x → 점수 ${quantScore} < 50 보류`, {});
+        if (quantScore < adaptedScalpScoreMin) {
+          await addLog('scalping', 'skip', sym, `[Cloud-Scalp] ${sym} +${changePct.toFixed(1)}%/RVOL${rvol.toFixed(1)}x → 점수 ${quantScore} < ${adaptedScalpScoreMin} 보류`, {});
           continue;
         }
 
