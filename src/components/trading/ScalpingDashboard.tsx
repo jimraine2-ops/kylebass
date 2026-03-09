@@ -9,8 +9,10 @@ import { resetScalpingWallet, updateWalletBalance } from "@/lib/api";
 import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap, ShieldAlert, Ban, DollarSign, Info } from "lucide-react";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatStockName } from "@/lib/koreanStockMap";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface ScalpingDashboardProps {
