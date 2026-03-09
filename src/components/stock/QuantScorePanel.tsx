@@ -92,7 +92,7 @@ const INDICATOR_NAMES: Record<string, string> = {
   preMarket: "프리마켓 모멘텀",
 };
 
-export function QuantScorePanel({ symbol, currentPrice, fxRate }: Props) {
+export function QuantScorePanel({ symbol, currentPrice, fxRate }: Props): React.JSX.Element {
   const { data: quantData, isLoading } = useQuantSignals([symbol]);
   const { data: mainPortfolio } = useAIPortfolio();
   const { data: scalpPortfolio } = useScalpingPortfolio();

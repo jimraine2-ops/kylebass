@@ -1,9 +1,9 @@
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Newspaper, ExternalLink, Clock, FileText, Globe, Languages } from "lucide-react";
 import { useCompanyNews } from "@/hooks/useStockData";
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
