@@ -9,9 +9,10 @@ import { resetScalpingWallet, updateWalletBalance } from "@/lib/api";
 import { Wallet, Trophy, Scale, Target, Activity, RotateCcw, Clock, Zap, ShieldAlert, Ban, DollarSign, Info } from "lucide-react";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ScalpingDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
@@ -22,6 +23,17 @@ interface ScalpingDashboardProps {
 export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: ScalpingDashboardProps) {
   const { data, isLoading, refetch } = useScalpingPortfolio();
   const [resetting, setResetting] = useState(false);
+
+  // ★ Realtime subscription for instant scalping trade updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('scalping-trades-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scalping_trades' }, () => {
+        refetch();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [refetch]);
 
   const wallet = data?.wallet;
   const openPositions = data?.openPositions || [];
@@ -299,7 +311,8 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: Sc
                       const isProfit = (trade.pnl || 0) > 0;
                       const time = trade.closed_at ? new Date(trade.closed_at).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit', month: '2-digit', day: '2-digit' }) : '-';
                       const statusLabels: Record<string, string> = {
-                        profit_taken: '익절', stopped: '손절', score_exit: '점수청산', time_cut: '타임컷', trailing_profit: '추격익절', closed: '종료',
+                        profit_taken: '익절', stopped: '손절', score_exit: '점수청산', time_cut: '타임컷',
+                        trailing_profit: '추격익절', closed: '종료', breakeven_exit: '본절탈출', replaced: '교체매도', early_exit: '조기탈출',
                       };
                       return (
                         <tr key={trade.id} className="border-b border-border/50 hover:bg-muted/30">

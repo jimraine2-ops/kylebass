@@ -32,6 +32,9 @@ function getStatusInfo(status: string): { label: string; variant: 'default' | 'd
     case 'stopped': return { label: '손절완료', variant: 'destructive', isExit: true };
     case 'score_exit': return { label: '점수청산', variant: 'secondary', isExit: true };
     case 'time_cut': return { label: '타임컷', variant: 'secondary', isExit: true };
+    case 'breakeven_exit': return { label: '본절탈출', variant: 'secondary', isExit: true };
+    case 'replaced': return { label: '교체매도', variant: 'secondary', isExit: true };
+    case 'early_exit': return { label: '조기탈출', variant: 'secondary', isExit: true };
     default: return { label: '종료', variant: 'secondary', isExit: true };
   }
 }
