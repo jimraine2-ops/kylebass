@@ -1,3 +1,4 @@
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ interface ScalpingDashboardProps {
   fxRate?: number;
 }
 
-export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: ScalpingDashboardProps) {
+export const ScalpingDashboard = React.forwardRef<HTMLDivElement, ScalpingDashboardProps>(function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }, ref) {
   const { data, isLoading, refetch } = useScalpingPortfolio();
   const [resetting, setResetting] = useState(false);
 
