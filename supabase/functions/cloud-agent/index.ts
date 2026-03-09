@@ -886,7 +886,8 @@ Deno.serve(async (req) => {
             if (!data || !data.quote.c || data.quote.c >= 10) return null;
             if (data.quote.c < MIN_PRICE_USD) return { sym, filtered: true, reason: 'low_price' };
             const changePct = data.quote.dp || 0;
-            if (changePct < dynamicEntryThreshold) return null;
+            // ★ 비정규장 적응형: 완화된 상승률 기준 적용
+            if (changePct < adaptedScalpThreshold) return null;
             const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
             const qs = scoring?.totalScore || 0;
             const rv = scoring?.rvol || 1;
