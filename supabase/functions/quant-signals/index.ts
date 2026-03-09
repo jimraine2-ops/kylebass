@@ -127,7 +127,7 @@ function generateSyntheticCandles(quote: any, days = 40) {
   return { closes, highs, lows, opens, volumes };
 }
 
-// ===== 10-Indicator Scoring =====
+// ===== 10-Indicator Scoring (Weighted: RVOL×2, MACD×2, VWAP/Candle×2) =====
 function score10Indicators(quote: any, closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[]) {
   const changePct = quote.dp || 0;
   const n = closes.length - 1;
@@ -174,14 +174,26 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const aggrScore = aggression >= 80 && volInc >= 3 ? 10 : aggression >= 60 ? 7 : aggression >= 40 ? 4 : 2;
   const breakingHigh = closes[n] > Math.max(...highs.slice(Math.max(0, n - 5), n));
   const preMarketScore = breakingHigh ? 8 : 3;
-  const totalScore = sentimentScore + rvolScore + candleScore + atrScore + gapScore + squeezeScore + positionScore + sectorScore + aggrScore + preMarketScore;
+
+  // ★ MACD Indicator (EMA12 - EMA26 crossover)
+  const ema12 = calculateEMA(closes, 12);
+  const ema26 = calculateEMA(closes, 26);
+  const macd = ema12[n] - ema26[n];
+  const macdPrev = n > 0 ? ema12[n-1] - ema26[n-1] : 0;
+  const macdScore = (macd > 0 && macd > macdPrev) ? 10 : (macd > 0) ? 7 : (macd > macdPrev) ? 4 : 2;
+
+  // ★★★ 가중치 최적화: RVOL×2, MACD×2, VWAP/Candle×2 (Max raw=140, normalized to 100)
+  const rawScore = sentimentScore + (rvolScore * 2) + (candleScore * 2) + atrScore + gapScore
+    + squeezeScore + positionScore + sectorScore + aggrScore + preMarketScore + (macdScore * 2);
+  const totalScore = Math.round((rawScore / 140) * 100);
 
   return {
     totalScore, trailingStop, rvol,
     indicators: {
       sentiment: { score: sentimentScore, details: `모멘텀 ${changePct.toFixed(1)}%` },
-      rvol: { score: rvolScore, details: `RVOL: ${rvol.toFixed(1)}x`, rvol },
-      candle: { score: candleScore, details: `트리플컨펌`, vwapCross: closes[n] > vwap },
+      rvol: { score: rvolScore, details: `RVOL: ${rvol.toFixed(1)}x`, rvol, weight: '×2' },
+      candle: { score: candleScore, details: `트리플컨펌`, vwapCross: closes[n] > vwap, weight: '×2' },
+      macd: { score: macdScore, details: `MACD: ${macd.toFixed(4)}`, macd: +macd.toFixed(4), weight: '×2' },
       atr: { score: atrScore, details: `ATR: ${currentATR.toFixed(4)}`, atr: currentATR, trailingStop },
       gap: { score: gapScore, details: `갭 ${gapPct.toFixed(1)}%` },
       squeeze: { score: squeezeScore, details: squeezeScore >= 6 ? '스퀴즈 활성' : '스퀴즈 없음' },

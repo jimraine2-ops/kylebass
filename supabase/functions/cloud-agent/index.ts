@@ -143,7 +143,7 @@ function generateSyntheticCandles(quote: any, days = 40) {
   return { closes, highs, lows, opens, volumes };
 }
 
-// ===== 10-Indicator Scoring =====
+// ===== 10-Indicator Scoring (Weighted: RVOL×2, MACD×2, VWAP/Candle×2) =====
 function score10Indicators(quote: any, closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[]) {
   const changePct = quote.dp || 0;
   const n = closes.length - 1;
@@ -190,14 +190,26 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const aggrScore = aggression >= 80 && volInc >= 3 ? 10 : aggression >= 60 ? 7 : aggression >= 40 ? 4 : 2;
   const breakingHigh = closes[n] > Math.max(...highs.slice(Math.max(0, n - 5), n));
   const preMarketScore = breakingHigh ? 8 : 3;
-  const totalScore = sentimentScore + rvolScore + candleScore + atrScore + gapScore + squeezeScore + positionScore + sectorScore + aggrScore + preMarketScore;
+
+  // ★ MACD Indicator (EMA12 - EMA26 crossover)
+  const ema12 = calculateEMA(closes, 12);
+  const ema26 = calculateEMA(closes, 26);
+  const macd = ema12[n] - ema26[n];
+  const macdPrev = n > 0 ? ema12[n-1] - ema26[n-1] : 0;
+  const macdScore = (macd > 0 && macd > macdPrev) ? 10 : (macd > 0) ? 7 : (macd > macdPrev) ? 4 : 2;
+
+  // ★★★ 가중치 최적화: RVOL×2, MACD×2, VWAP/Candle×2 (Max raw=140, normalized to 100)
+  const rawScore = sentimentScore + (rvolScore * 2) + (candleScore * 2) + atrScore + gapScore
+    + squeezeScore + positionScore + sectorScore + aggrScore + preMarketScore + (macdScore * 2);
+  const totalScore = Math.round((rawScore / 140) * 100);
 
   return {
     totalScore, trailingStop, rvol,
     indicators: {
       sentiment: { score: sentimentScore },
-      rvol: { score: rvolScore, rvol },
-      candle: { score: candleScore, vwapCross: closes[n] > vwap },
+      rvol: { score: rvolScore, rvol, weight: '×2' },
+      candle: { score: candleScore, vwapCross: closes[n] > vwap, weight: '×2' },
+      macd: { score: macdScore, macd: +macd.toFixed(4), weight: '×2' },
       atr: { score: atrScore, atr: currentATR },
       gap: { score: gapScore },
       squeeze: { score: squeezeScore },
@@ -383,6 +395,21 @@ Deno.serve(async (req) => {
 
       for (const pos of (mainOpenPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
+
+        // ★★★ [철갑 방어] 수익률 3% 돌파 시 → 손절가를 본절가(+0.5%)로 즉시 상향
+        if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.005) {
+          const breakevenStop = +(pos.price * 1.005).toFixed(4);
+          await supabase.from('ai_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
+          pos.stop_loss = breakevenStop;
+          await addLog('quant', 'defense', sym, `[철갑방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 본절가로 상향: ${fmtKRW(breakevenStop)} (절대 손해 없는 거래 전환)`, { pnlPct: +pnlPct.toFixed(2), newStopLoss: breakevenStop });
+        }
+
+        // ★★★ [추격익절 정밀화] 고점 대비 5% 하락 시 실시간 매도
+        const peakPrice = Math.max(pos.peak_price || pos.price, price);
+        if (price > (pos.peak_price || pos.price)) {
+          await supabase.from('ai_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
+        }
+
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
@@ -391,6 +418,14 @@ Deno.serve(async (req) => {
           shouldClose = true;
           closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
+        } else if (peakPrice >= pos.price * 1.10) {
+          const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
+          if (dropFromPeak >= 5) {
+            const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
+            shouldClose = true;
+            closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정)`;
+            newStatus = 'trailing_profit';
+          }
         } else if (quantScore < 40) {
           shouldClose = true;
           closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 40)`;
@@ -401,19 +436,17 @@ Deno.serve(async (req) => {
           newStatus = 'profit_taken';
         } else if (pos.stop_loss && price <= pos.stop_loss) {
           shouldClose = true;
-          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] 추격 손절 터치`;
-          newStatus = 'trailing_stop';
+          closeReason = `[Cloud] [${sessionLabel}] [${timeStr}] [${sym}] ${pnlPct >= 0 ? '본절가 방어 매도' : '추격 손절 터치'}`;
+          newStatus = pnlPct >= 0 ? 'breakeven_exit' : 'trailing_stop';
         }
 
         if (shouldClose) {
-          // ★★★ [정밀 회계] 매도 대금 = 매도가 × 수량 × 환율 (직접 계산)
           const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
           const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
           const pnlKRW = saleProceeds - buyCost;
           const balanceBefore = mainBalance;
           const newBalance = mainBalance + saleProceeds;
-          // ★ [감사 검증] 매도 후 잔고 == 매수 전 잔고 + 손익
-          const expectedBalance = balanceBefore + buyCost + pnlKRW; // should equal balanceBefore + saleProceeds
+          const expectedBalance = balanceBefore + buyCost + pnlKRW;
           if (Math.abs(newBalance - expectedBalance) > 1) {
             await addLog('system', 'error', sym, `[회계오류] 잔고 불일치! expected=${expectedBalance} actual=${newBalance}`, { saleProceeds, buyCost, pnlKRW });
           }
@@ -432,8 +465,30 @@ Deno.serve(async (req) => {
       await new Promise(r => setTimeout(r, 200));
     }
 
+    // --- QUANT: Market Trend Guard (SPY/QQQ) ---
+    // ★★★ 시장 동기화: 나스닥/스파이 하락세 시 보수적 진입
+    let marketBearish = false;
+    let entryThreshold = 50;
+    try {
+      const [spyQuote, qqqQuote] = await Promise.all([
+        finnhubFetch(`/quote?symbol=SPY`),
+        finnhubFetch(`/quote?symbol=QQQ`),
+      ]);
+      const spyChange = spyQuote?.dp || 0;
+      const qqqChange = qqqQuote?.dp || 0;
+      if (spyChange < -1 && qqqChange < -1) {
+        marketBearish = true;
+        entryThreshold = 65; // 시장 하락 시 진입 기준 상향
+        await addLog('system', 'warning', null, `[시장동기화] ⚠️ SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% — 시장 하락세 감지 → 진입 기준 65점으로 상향`, { spyChange, qqqChange });
+      } else if (spyChange < -0.5 || qqqChange < -0.5) {
+        entryThreshold = 55;
+        await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% — 약세 주의 → 진입 기준 55점`, { spyChange, qqqChange });
+      } else {
+        await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% — 정상 → 진입 기준 50점`, { spyChange, qqqChange });
+      }
+    } catch { /* fallback to default threshold */ }
+
     // --- QUANT: Scan for new entries ---
-    // ★ Collect all candidates first, then sort by score (highest first) for priority allocation
     const mainOpenCount = (mainOpenPos || []).filter(p => p.status === 'open').length;
     const quantCandidates: { sym: string; price: number; scoring: any }[] = [];
 
@@ -450,7 +505,7 @@ Deno.serve(async (req) => {
       }));
 
       for (const r of results) {
-        if (!r || r.scoring.totalScore < 50) continue;
+        if (!r || r.scoring.totalScore < entryThreshold) continue; // ★ 동적 진입 기준 적용
         const alreadyHolding = (mainOpenPos || []).some(p => p.symbol === r.sym && p.status === 'open');
         const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
         if (alreadyHolding && !isPyramiding) continue;
@@ -508,7 +563,7 @@ Deno.serve(async (req) => {
       await addLog('quant', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, qty, costKRW });
     }
 
-    // ========== AUTO-REPLACEMENT: 보유 종목 중 40점 미만 → 더 높은 점수 종목으로 교체 검토 ==========
+    // ========== AUTO-REPLACEMENT: 보유 종목 점수 < 40 OR 슈퍼 스캐너에서 10점 이상 높은 종목 발견 시 교체 ==========
     {
       const refreshedOpenPos = (await supabase.from('ai_trades').select('*').eq('status', 'open')).data || [];
       for (const pos of refreshedOpenPos) {
@@ -516,21 +571,24 @@ Deno.serve(async (req) => {
         if (!data) continue;
         const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
         const currentScore = scoring?.totalScore || 0;
-        if (currentScore >= 40) continue; // Still viable, keep
 
-        // Find a better candidate from scanned results
+        // ★★★ 10점 이상 높은 종목이 있으면 교체 (기존 40점 미만 조건 + 10점 갭 조건)
         const betterCandidate = quantCandidates.find(c =>
           c.scoring.totalScore >= 60 &&
+          c.scoring.totalScore - currentScore >= 10 && // ★ 10점 갭 필수
           !refreshedOpenPos.some(p => p.symbol === c.sym)
         );
 
-        if (betterCandidate) {
-          // Close underperforming position
+        // 40점 미만이면 무조건 교체 시도, 아니면 10점 갭 있을 때만
+        if (currentScore >= 40 && !betterCandidate) continue;
+
+        if (betterCandidate || currentScore < 40) {
           const price = data.quote.c;
           const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
           const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
           const pnlKRW = saleProceeds - buyCost;
-          const closeReason = `[Auto-Replace] ${pos.symbol} 점수 ${currentScore} < 40 → ${betterCandidate.sym} ${betterCandidate.scoring.totalScore}점으로 교체`;
+          const targetLabel = betterCandidate ? `→ ${betterCandidate.sym} ${betterCandidate.scoring.totalScore}점으로 교체` : '→ 대기';
+          const closeReason = `[Auto-Replace] ${pos.symbol} 점수 ${currentScore}점 ${targetLabel} (10점 갭 교체 매매)`;
 
           await supabase.from('ai_trades').update({
             status: 'replaced', close_price: price, pnl: pnlKRW,
@@ -539,7 +597,7 @@ Deno.serve(async (req) => {
           }).eq('id', pos.id);
           mainBalance += saleProceeds;
           await supabase.from('ai_wallet').update({ balance: mainBalance, updated_at: now.toISOString() }).eq('id', mainWallet.id);
-          await addLog('quant', 'replace', pos.symbol, closeReason, { oldScore: currentScore, newSymbol: betterCandidate.sym, newScore: betterCandidate.scoring.totalScore, pnl: pnlKRW });
+          await addLog('quant', 'replace', pos.symbol, closeReason, { oldScore: currentScore, newSymbol: betterCandidate?.sym, newScore: betterCandidate?.scoring.totalScore, pnl: pnlKRW, scoreGap: betterCandidate ? betterCandidate.scoring.totalScore - currentScore : 0 });
         }
         await new Promise(r => setTimeout(r, 200));
       }
@@ -596,6 +654,15 @@ Deno.serve(async (req) => {
 
         for (const pos of (scalpOpenPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
           const pnlPct = ((price - pos.price) / pos.price) * 100;
+
+          // ★★★ [철갑 방어] 수익률 3% 돌파 시 → 손절가를 본절가(+0.5%)로 즉시 상향
+          if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.005) {
+            const breakevenStop = +(pos.price * 1.005).toFixed(4);
+            await supabase.from('scalping_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
+            pos.stop_loss = breakevenStop;
+            await addLog('scalping', 'defense', sym, `[철갑방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 본절가 상향: ${fmtKRW(breakevenStop)}`, { pnlPct: +pnlPct.toFixed(2), newStopLoss: breakevenStop });
+          }
+
           let shouldClose = false;
           let closeReason = '';
           let newStatus = 'closed';
