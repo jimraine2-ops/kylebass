@@ -25,6 +25,17 @@ export function ScalpingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }: Sc
   const { data, isLoading, refetch } = useScalpingPortfolio();
   const [resetting, setResetting] = useState(false);
 
+  // ★ Realtime subscription for instant scalping trade updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('scalping-trades-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'scalping_trades' }, () => {
+        refetch();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [refetch]);
+
   const wallet = data?.wallet;
   const openPositions = data?.openPositions || [];
   const closedTrades = data?.closedTrades || [];
