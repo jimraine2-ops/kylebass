@@ -761,7 +761,11 @@ Deno.serve(async (req) => {
       else if (recentWinRate < 50) dynamicEntryThreshold = 4;
       else if (recentWinRate > 65) dynamicEntryThreshold = 2;
 
-      await addLog('scalping', 'learn', null, `[AI-Learn] 최근 승률 ${recentWinRate.toFixed(1)}% → 동적 진입 기준: +${dynamicEntryThreshold}%`, {});
+      // ★ 비정규장 세션 적응형: 진입 기준 완화
+      const adaptedScalpThreshold = Math.max(1, Math.round(dynamicEntryThreshold * entryRelax));
+      const adaptedScalpScoreMin = entryRelax < 1.0 ? 40 : 50; // 비정규장: 점수 40까지 허용
+
+      await addLog('scalping', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 진입 기준: +${adaptedScalpThreshold}% (원래 +${dynamicEntryThreshold}%) | 점수 ≥${adaptedScalpScoreMin} | ${sessionLabel} 적응형`, {});
 
       // Exit checks
       const scalpSymbolsToCheck = [...new Set((scalpOpenPos || []).map((p: any) => p.symbol))];
