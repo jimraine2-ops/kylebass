@@ -51,7 +51,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
     : null;
 
   const handleReset = async () => {
-    if (!confirm('통합 지갑을 ₩400,000,000으로 초기화하시겠습니까? 모든 거래 기록이 삭제됩니다.')) return;
+    if (!confirm('통합 지갑을 ₩1,000,000으로 초기화하시겠습니까? 모든 거래 기록이 삭제됩니다.')) return;
     setResetting(true);
     try {
       await resetUnifiedWallet();
