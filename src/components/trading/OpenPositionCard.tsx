@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Shield, ArrowUp, ArrowDown, Activity } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { TrendingUp, TrendingDown, Shield, ArrowUp, ArrowDown, Activity, Radar } from "lucide-react";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,7 @@ interface OpenPositionCardProps {
   fxRate?: number;
   liveScore?: number | null;
   prevScore?: number | null;
+  onOpenModal?: () => void;
 }
 
 function getStrategyTag(aiReason: string | null): { label: string; color: string } {
