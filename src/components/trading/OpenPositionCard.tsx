@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Shield, ArrowUp, ArrowDown, Activity } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { TrendingUp, TrendingDown, Shield, ArrowUp, ArrowDown, Activity, Radar } from "lucide-react";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +12,7 @@ interface OpenPositionCardProps {
   fxRate?: number;
   liveScore?: number | null;
   prevScore?: number | null;
+  onOpenModal?: () => void;
 }
 
 function getStrategyTag(aiReason: string | null): { label: string; color: string } {
@@ -41,7 +43,7 @@ function getScoreLabel(score: number): string {
   return '매도 검토';
 }
 
-export function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice, fxRate = 1350, liveScore, prevScore }: OpenPositionCardProps) {
+export function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice, fxRate = 1350, liveScore, prevScore, onOpenModal }: OpenPositionCardProps) {
   const displayPrice = livePrice ?? pos.currentPrice ?? pos.price;
   const investmentKRW = Math.round(pos.price * pos.quantity * fxRate);
   const currentValueKRW = Math.round(displayPrice * pos.quantity * fxRate);
@@ -129,11 +131,24 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
             ⚠️ 지표 악화 — 조기 매도 검토 중
           </span>
         )}
-        {onSelect && (
-          <span className="text-primary text-[9px] ml-auto">
-            {isSelected ? '▲ 레이더 차트 닫기' : '▼ 클릭하여 레이더 차트 보기'}
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {onOpenModal && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-5 px-2 text-[9px] gap-1 border-primary/30 text-primary hover:bg-primary/10"
+              onClick={(e) => { e.stopPropagation(); onOpenModal(); }}
+            >
+              <Radar className="w-3 h-3" />
+              레이더 차트
+            </Button>
+          )}
+          {onSelect && (
+            <span className="text-primary text-[9px] cursor-pointer">
+              {isSelected ? '▲ 닫기' : '▼ 상세'}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

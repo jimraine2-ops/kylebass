@@ -11,6 +11,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { OpenPositionCard } from "@/components/trading/OpenPositionCard";
+import { PositionAnalysisModal } from "@/components/trading/PositionAnalysisModal";
 import { TradeLogTable } from "@/components/trading/TradeLogTable";
 import { RadarChartCard } from "@/components/recommendation/RadarChartCard";
 import { useQuantSignals } from "@/hooks/useStockData";
@@ -28,6 +29,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
   const { data: quantData } = useQuantSignals();
   const [resetting, setResetting] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [modalSymbol, setModalSymbol] = useState<string | null>(null);
 
   // Realtime subscription
   useEffect(() => {
@@ -320,6 +322,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
                 prevScore={prevScoreMap.get(pos.symbol) ?? null}
                 onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
                 isSelected={pos.symbol === selectedSymbol}
+                onOpenModal={() => setModalSymbol(pos.symbol)}
               />
             ))}
           </CardContent>
@@ -339,6 +342,17 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           </CardContent>
         </Card>
       )}
+
+      {/* ★ 레이더 차트 & 수급 분석 모달 */}
+      <PositionAnalysisModal
+        open={!!modalSymbol}
+        onOpenChange={(open) => { if (!open) setModalSymbol(null); }}
+        position={openPositions.find((p: any) => p.symbol === modalSymbol) || null}
+        quantStock={modalSymbol ? allQuantStocks.find((s: any) => s.symbol === modalSymbol) : null}
+        livePrice={modalSymbol ? wsGetPrice?.(modalSymbol) : null}
+        liveScore={modalSymbol ? (liveScoreMap.get(modalSymbol) ?? null) : null}
+        fxRate={fxRate}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
