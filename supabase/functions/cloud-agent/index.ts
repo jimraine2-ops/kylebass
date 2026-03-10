@@ -755,7 +755,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul);
+      const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, sessionSlippage);
       const stopLoss = +(adjustedPrice * 0.975).toFixed(4);
       const takeProfit = r.capType === 'large' ? +(adjustedPrice * 1.06).toFixed(4) : +(adjustedPrice * 1.05).toFixed(4);
       const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
