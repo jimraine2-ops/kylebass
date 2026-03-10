@@ -7,12 +7,8 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import StockDetail from "@/pages/StockDetail";
-import NewsPage from "@/pages/NewsPage";
-import SectorsPage from "@/pages/SectorsPage";
-import AlertsPage from "@/pages/AlertsPage";
-import PennyStocksPage from "@/pages/PennyStocksPage";
 import AITradingPage from "@/pages/AITradingPage";
-import RecommendationPage from "@/pages/RecommendationPage";
+import UnifiedScanPage from "@/pages/UnifiedScanPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,13 +24,11 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/stock/:symbol" element={<StockDetail />} />
-              <Route path="/news" element={<NewsPage />} />
-              <Route path="/sectors" element={<SectorsPage />} />
-              <Route path="/alerts" element={<AlertsPage />} />
-              
-              <Route path="/penny-stocks" element={<PennyStocksPage />} />
+              <Route path="/unified-scan" element={<UnifiedScanPage />} />
               <Route path="/ai-trading" element={<AITradingPage />} />
-              <Route path="/recommendations" element={<RecommendationPage />} />
+              {/* Legacy redirects */}
+              <Route path="/recommendations" element={<UnifiedScanPage />} />
+              <Route path="/penny-stocks" element={<UnifiedScanPage />} />
               <Route path="/search" element={<StockDetail />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
