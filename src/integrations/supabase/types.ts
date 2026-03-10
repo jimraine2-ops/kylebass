@@ -323,6 +323,96 @@ export type Database = {
         }
         Relationships: []
       }
+      unified_trades: {
+        Row: {
+          ai_confidence: number | null
+          ai_reason: string | null
+          cap_type: string
+          close_price: number | null
+          closed_at: string | null
+          entry_score: number | null
+          id: string
+          opened_at: string
+          partial_exits: Json | null
+          peak_price: number | null
+          pnl: number | null
+          price: number
+          quantity: number
+          side: string
+          status: string
+          stop_loss: number | null
+          symbol: string
+          take_profit: number | null
+          trailing_stop: number | null
+        }
+        Insert: {
+          ai_confidence?: number | null
+          ai_reason?: string | null
+          cap_type?: string
+          close_price?: number | null
+          closed_at?: string | null
+          entry_score?: number | null
+          id?: string
+          opened_at?: string
+          partial_exits?: Json | null
+          peak_price?: number | null
+          pnl?: number | null
+          price: number
+          quantity: number
+          side?: string
+          status?: string
+          stop_loss?: number | null
+          symbol: string
+          take_profit?: number | null
+          trailing_stop?: number | null
+        }
+        Update: {
+          ai_confidence?: number | null
+          ai_reason?: string | null
+          cap_type?: string
+          close_price?: number | null
+          closed_at?: string | null
+          entry_score?: number | null
+          id?: string
+          opened_at?: string
+          partial_exits?: Json | null
+          peak_price?: number | null
+          pnl?: number | null
+          price?: number
+          quantity?: number
+          side?: string
+          status?: string
+          stop_loss?: number | null
+          symbol?: string
+          take_profit?: number | null
+          trailing_stop?: number | null
+        }
+        Relationships: []
+      }
+      unified_wallet: {
+        Row: {
+          balance: number
+          created_at: string
+          id: string
+          initial_balance: number
+          updated_at: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          id?: string
+          initial_balance?: number
+          updated_at?: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          id?: string
+          initial_balance?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
