@@ -51,12 +51,12 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
     : null;
 
   const handleReset = async () => {
-    if (!confirm('통합 지갑을 ₩400,000,000으로 초기화하시겠습니까? 모든 거래 기록이 삭제됩니다.')) return;
+    if (!confirm('통합 지갑을 ₩1,000,000으로 초기화하시겠습니까? 모든 거래 기록이 삭제됩니다.')) return;
     setResetting(true);
     try {
       await resetUnifiedWallet();
       await refetch();
-      toast.success('통합 지갑이 ₩400,000,000으로 초기화되었습니다.');
+      toast.success('통합 지갑이 ₩1,000,000으로 초기화되었습니다.');
     } catch {
       toast.error('초기화 실패');
     } finally {
@@ -115,7 +115,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
-          지갑 초기화 (₩4억)
+          지갑 초기화 (₩100만)
         </Button>
       </div>
 
@@ -126,7 +126,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           <p>📈 피라미딩: 80점 돌파 시 +5% 추가 매수</p>
           <p>🏷️ 종목 분류: 현재가 $10 이상 → 대형주 태그, $10 미만 → 소형주 태그 (자동)</p>
           <p>🛡️ 청산: -2.5% 손절 | +2% 50% 1차 익절 | +5~6% 고정 익절 | 고점+10%→-5% 추격익절 | 점수{'<'}40 근거소멸</p>
-          <p className="text-primary font-medium">☁️ ₩4억 통합 잔고 운용 — 점수 높은 순서대로 우선 배분</p>
+          <p className="text-primary font-medium">☁️ ₩100만 통합 잔고 운용 — 점수 높은 순서대로 우선 배분</p>
         </CardContent>
       </Card>
 
