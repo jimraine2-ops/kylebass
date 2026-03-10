@@ -19,7 +19,7 @@ function getToken(): string { return Deno.env.get('FINNHUB_API_KEY') || ''; }
 // ===== Session Detection (US Eastern Time) =====
 type SessionType = 'DAY' | 'PRE_MARKET' | 'REGULAR' | 'AFTER_HOURS';
 
-function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number; entryRelax: number } {
+function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number; entryRelax: number; rvolMin: number; aggressiveSlippage: number } {
   const now = new Date();
   const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
   const et = new Date(etStr);
@@ -28,19 +28,25 @@ function getMarketSession(): { session: SessionType; label: string; spreadMultip
   const day = et.getDay();
   const time = h * 60 + m;
 
+  // ★ 전 세션 24시간 무제한 자동매매 — 모든 시간대에서 매매 가동
   if (day === 0 || day === 6) {
-    return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6 };
+    // 주말: 데이장 (유동성 최저 → 공격적 슬리피지 최대)
+    return { session: 'DAY', label: '데이장(주말)', spreadMultiplier: 2.5, entryRelax: 0.6, rvolMin: 1.0, aggressiveSlippage: 0.003 };
   }
   if (time >= 240 && time < 570) {
-    return { session: 'PRE_MARKET', label: '프리마켓', spreadMultiplier: 2.0, entryRelax: 0.7 };
+    // 프리마켓 04:00~09:30 → 공격적 체결 0.25%
+    return { session: 'PRE_MARKET', label: '프리마켓', spreadMultiplier: 2.0, entryRelax: 0.7, rvolMin: 1.0, aggressiveSlippage: 0.0025 };
   }
   if (time >= 570 && time < 960) {
-    return { session: 'REGULAR', label: '정규장', spreadMultiplier: 1.0, entryRelax: 1.0 };
+    // 정규장 09:30~16:00 → 표준 슬리피지
+    return { session: 'REGULAR', label: '정규장', spreadMultiplier: 1.0, entryRelax: 1.0, rvolMin: 2.0, aggressiveSlippage: 0.0002 };
   }
   if (time >= 960 && time < 1200) {
-    return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8, entryRelax: 0.75 };
+    // 애프터마켓 16:00~20:00 → 공격적 체결 0.2%
+    return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8, entryRelax: 0.75, rvolMin: 1.0, aggressiveSlippage: 0.002 };
   }
-  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6 };
+  // 야간 20:00~04:00 → 데이장 모드 (공격적 체결 0.3%)
+  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6, rvolMin: 1.0, aggressiveSlippage: 0.003 };
 }
 
 function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultiplier: number): number {
