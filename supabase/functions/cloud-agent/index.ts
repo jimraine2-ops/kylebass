@@ -19,7 +19,7 @@ function getToken(): string { return Deno.env.get('FINNHUB_API_KEY') || ''; }
 // ===== Session Detection (US Eastern Time) =====
 type SessionType = 'DAY' | 'PRE_MARKET' | 'REGULAR' | 'AFTER_HOURS';
 
-function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number; entryRelax: number } {
+function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number; entryRelax: number; rvolMin: number; aggressiveSlippage: number } {
   const now = new Date();
   const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
   const et = new Date(etStr);
@@ -28,24 +28,30 @@ function getMarketSession(): { session: SessionType; label: string; spreadMultip
   const day = et.getDay();
   const time = h * 60 + m;
 
+  // ★ 전 세션 24시간 무제한 자동매매 — 모든 시간대에서 매매 가동
   if (day === 0 || day === 6) {
-    return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6 };
+    // 주말: 데이장 (유동성 최저 → 공격적 슬리피지 최대)
+    return { session: 'DAY', label: '데이장(주말)', spreadMultiplier: 2.5, entryRelax: 0.6, rvolMin: 1.0, aggressiveSlippage: 0.003 };
   }
   if (time >= 240 && time < 570) {
-    return { session: 'PRE_MARKET', label: '프리마켓', spreadMultiplier: 2.0, entryRelax: 0.7 };
+    // 프리마켓 04:00~09:30 → 공격적 체결 0.25%
+    return { session: 'PRE_MARKET', label: '프리마켓', spreadMultiplier: 2.0, entryRelax: 0.7, rvolMin: 1.0, aggressiveSlippage: 0.0025 };
   }
   if (time >= 570 && time < 960) {
-    return { session: 'REGULAR', label: '정규장', spreadMultiplier: 1.0, entryRelax: 1.0 };
+    // 정규장 09:30~16:00 → 표준 슬리피지
+    return { session: 'REGULAR', label: '정규장', spreadMultiplier: 1.0, entryRelax: 1.0, rvolMin: 2.0, aggressiveSlippage: 0.0002 };
   }
   if (time >= 960 && time < 1200) {
-    return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8, entryRelax: 0.75 };
+    // 애프터마켓 16:00~20:00 → 공격적 체결 0.2%
+    return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8, entryRelax: 0.75, rvolMin: 1.0, aggressiveSlippage: 0.002 };
   }
-  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6 };
+  // 야간 20:00~04:00 → 데이장 모드 (공격적 체결 0.3%)
+  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6, rvolMin: 1.0, aggressiveSlippage: 0.003 };
 }
 
-function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultiplier: number): number {
-  const BASE_SLIPPAGE = 0.0002;
-  const slippage = BASE_SLIPPAGE * spreadMultiplier;
+function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultiplier: number, aggressiveSlippage: number = 0.0002): number {
+  // ★ 장외 시간대: 공격적 지정가 체결 (0.2~0.3% 상단까지 제시하여 즉시 체결률 향상)
+  const slippage = Math.max(0.0002 * spreadMultiplier, aggressiveSlippage);
   if (side === 'buy') return +(price * (1 + slippage)).toFixed(4);
   return +(price * (1 - slippage)).toFixed(4);
 }
@@ -341,6 +347,8 @@ Deno.serve(async (req) => {
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
     const entryRelax = sessionInfo.entryRelax;
+    const sessionRvolMin = sessionInfo.rvolMin; // ★ 세션별 RVOL 최소값
+    const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
 
     // ========== UNIFIED DYNAMIC UNIVERSE ROTATION ==========
     const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
@@ -441,7 +449,7 @@ Deno.serve(async (req) => {
     const invested = (openPos || []).reduce((sum: number, p: any) => sum + Math.round(toKRW(p.price * p.quantity)), 0);
     const utilization = initialBalance > 0 ? ((initialBalance - balance) / initialBalance) * 100 : 0;
 
-    await addLog('system', 'scan', null, `[${timeStr}] [${sessionLabel}] 통합 엔진 사이클 시작 — ${SCAN_SYMBOLS.length}개 스캔 (대형 ${currentLarge.length}+소형 ${currentSmall.length}, 풀 ${LARGE_SET.size}+${SMALL_SET.size}) | 퇴출: ${evicted.length}개 | 세션: ${sessionLabel} (×${spreadMul}) | [통합 잔고] ${fmtKRWRaw(Math.round(balance))} (운용률 ${utilization.toFixed(1)}%)`);
+    await addLog('system', 'scan', null, `[${timeStr}] [${sessionLabel}] 통합 엔진 사이클 시작 — ${SCAN_SYMBOLS.length}개 스캔 (대형 ${currentLarge.length}+소형 ${currentSmall.length}, 풀 ${LARGE_SET.size}+${SMALL_SET.size}) | 퇴출: ${evicted.length}개 | 세션: ${sessionLabel} (×${spreadMul}|슬리피지${(sessionSlippage*100).toFixed(2)}%) | RVOL≥${sessionRvolMin} | [통합 잔고] ${fmtKRWRaw(Math.round(balance))} (운용률 ${utilization.toFixed(1)}%)`);
 
     if (evicted.length > 0) {
       await addLog('unified', 'evict', null, `[동적스캔] 퇴출 종목 (점수 <40): ${evicted.join(', ')} → 신규 후보로 교체`, { evicted });
@@ -704,10 +712,10 @@ Deno.serve(async (req) => {
           const minFilters = entryRelax < 1.0 ? 2 : 3;
           if (filtersPassed < minFilters) continue;
 
-          // ★ MIH Phase 1: 거래대금 200% 수급 필터
+          // ★ MIH Phase 1 + 전세션 적응: 세션별 RVOL 필터 (정규장 200%, 장외 100% — 상대적 거래량 폭증 기준)
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
-          if (rvol < 2.0) {
-            // 거래대금이 직전 평균 대비 200% 미만이면 진입 거부
+          if (rvol < sessionRvolMin) {
+            // 세션별 RVOL 기준 미달 시 진입 거부
             continue;
           }
 
@@ -747,7 +755,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul);
+      const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, sessionSlippage);
       const stopLoss = +(adjustedPrice * 0.975).toFixed(4);
       const takeProfit = r.capType === 'large' ? +(adjustedPrice * 1.06).toFixed(4) : +(adjustedPrice * 1.05).toFixed(4);
       const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
