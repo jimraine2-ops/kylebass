@@ -56,7 +56,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
     try {
       await resetUnifiedWallet();
       await refetch();
-      toast.success('통합 지갑이 ₩400,000,000으로 초기화되었습니다.');
+      toast.success('통합 지갑이 ₩1,000,000으로 초기화되었습니다.');
     } catch {
       toast.error('초기화 실패');
     } finally {
