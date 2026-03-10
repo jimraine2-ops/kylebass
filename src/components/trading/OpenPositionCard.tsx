@@ -131,11 +131,24 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
             ⚠️ 지표 악화 — 조기 매도 검토 중
           </span>
         )}
-        {onSelect && (
-          <span className="text-primary text-[9px] ml-auto">
-            {isSelected ? '▲ 레이더 차트 닫기' : '▼ 클릭하여 레이더 차트 보기'}
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {onOpenModal && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-5 px-2 text-[9px] gap-1 border-primary/30 text-primary hover:bg-primary/10"
+              onClick={(e) => { e.stopPropagation(); onOpenModal(); }}
+            >
+              <Radar className="w-3 h-3" />
+              레이더 차트
+            </Button>
+          )}
+          {onSelect && (
+            <span className="text-primary text-[9px] cursor-pointer">
+              {isSelected ? '▲ 닫기' : '▼ 상세'}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
