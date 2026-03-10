@@ -29,6 +29,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
   const { data: quantData } = useQuantSignals();
   const [resetting, setResetting] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [modalSymbol, setModalSymbol] = useState<string | null>(null);
 
   // Realtime subscription
   useEffect(() => {
