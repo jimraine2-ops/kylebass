@@ -470,9 +470,11 @@ Deno.serve(async (req) => {
       await addLog('unified', 'learn', null, `[AI-Learn] 진입 금지 블랙리스트: ${[...blacklistSymbols].join(', ')}`, {});
     }
 
-    // --- Market Trend Guard ---
+    // --- Market Trend Guard (★ MIH Phase 3: QQQ 하락 추세 시 매수 중단) ---
     let marketBearish = false;
-    let baseEntryThreshold = 60; // 통합 진입 기준: 60점
+    let marketBuyHalt = false;
+    let baseEntryThreshold = 60; // ★ MIH Phase 1: 최소 60점 고정
+    let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
         finnhubFetch(`/quote?symbol=SPY`),
@@ -480,10 +482,21 @@ Deno.serve(async (req) => {
       ]);
       const spyChange = spyQuote?.dp || 0;
       const qqqChange = qqqQuote?.dp || 0;
+      const qqqPrice = qqqQuote?.c || 0;
+      const qqqPrevClose = qqqQuote?.pc || qqqPrice;
+
+      // ★ MIH Phase 3: QQQ 1분봉 하락 추세 감지 (현재가 < 전일종가 AND 변동률 < -0.3%)
+      if (qqqPrice < qqqPrevClose && qqqChange < -0.3) {
+        qqqTrendDown = true;
+        marketBuyHalt = true;
+        await addLog('system', 'warning', null, `[MIH-3 시장필터] 🚫 QQQ 하락 추세 감지 (${qqqChange.toFixed(2)}%) → 모든 매수 진입 일시 중단`, { qqqChange, qqqPrice, qqqPrevClose });
+      }
+
       if (spyChange < -1 && qqqChange < -1) {
         marketBearish = true;
+        marketBuyHalt = true;
         baseEntryThreshold = 75;
-        await addLog('system', 'warning', null, `[시장동기화] ⚠️ SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 75점 상향`, { spyChange, qqqChange });
+        await addLog('system', 'warning', null, `[시장동기화] ⚠️ SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 75점 상향 + 매수 중단`, { spyChange, qqqChange });
       } else if (spyChange < -0.5 || qqqChange < -0.5) {
         baseEntryThreshold = 65;
         await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 65점`, { spyChange, qqqChange });
@@ -516,7 +529,7 @@ Deno.serve(async (req) => {
       await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점 | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin}`, {});
     }
 
-    await addLog('unified', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 통합 진입 문턱: ${adaptedEntryThreshold}점 | ${sessionLabel}`, {});
+    await addLog('unified', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 통합 진입 문턱: ${adaptedEntryThreshold}점 | ${sessionLabel} | 매수중단: ${marketBuyHalt ? 'YES' : 'NO'}`, {});
 
     // ========== EXIT CHECKS (통합) ==========
     const symbolsToCheck = [...new Set((openPos || []).map((p: any) => p.symbol))];
