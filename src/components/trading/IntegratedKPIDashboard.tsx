@@ -126,7 +126,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           <p>📈 피라미딩: 80점 돌파 시 +5% 추가 매수</p>
           <p>🏷️ 종목 분류: 현재가 $10 이상 → 대형주 태그, $10 미만 → 소형주 태그 (자동)</p>
           <p>🛡️ 청산: -2.5% 손절 | +2% 50% 1차 익절 | +5~6% 고정 익절 | 고점+10%→-5% 추격익절 | 점수{'<'}40 근거소멸</p>
-          <p className="text-primary font-medium">☁️ ₩4억 통합 잔고 운용 — 점수 높은 순서대로 우선 배분</p>
+          <p className="text-primary font-medium">☁️ ₩100만 통합 잔고 운용 — 점수 높은 순서대로 우선 배분</p>
         </CardContent>
       </Card>
 
