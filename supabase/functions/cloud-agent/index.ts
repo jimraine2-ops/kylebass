@@ -548,12 +548,20 @@ Deno.serve(async (req) => {
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
 
-        // Breakeven defense at +3%
-        if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.005) {
-          const breakevenStop = +(pos.price * 1.005).toFixed(4);
+        // ★ MIH Phase 2: 본절가 보호 (+1.5%에서 즉시 본절가+수수료 상향)
+        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
+          const breakevenStop = +(pos.price * 1.002).toFixed(4); // +0.2% 수수료 포함
           await supabase.from('unified_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
           pos.stop_loss = breakevenStop;
-          await addLog('unified', 'defense', sym, `[철갑방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 본절가 상향: ${fmtKRW(breakevenStop)}`, {});
+          await addLog('unified', 'defense', sym, `[MIH-2 본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.5% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | 무승부 이상 확보`, {});
+        }
+
+        // ★ 기존 철갑방어 (+3%에서 추가 상향)
+        if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.015) {
+          const reinforcedStop = +(pos.price * 1.015).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: reinforcedStop }).eq('id', pos.id);
+          pos.stop_loss = reinforcedStop;
+          await addLog('unified', 'defense', sym, `[철갑방어+] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +1.5% 상향: ${fmtKRW(reinforcedStop)}`, {});
         }
 
         const peakPrice = Math.max(pos.peak_price || pos.price, price);
@@ -561,13 +569,29 @@ Deno.serve(async (req) => {
           await supabase.from('unified_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
         }
 
+        // ★ MIH Phase 4: 동적 손절 (VWAP/볼린저 하단 이탈 감지)
+        const n = data.closes.length - 1;
+        const vwap = calculateVWAP(data.highs.slice(-20), data.lows.slice(-20), data.closes.slice(-20), data.volumes.slice(-20));
+        const ema20 = calculateEMA(data.closes, 20);
+        const atr = calculateATR(data.highs, data.lows, data.closes, 14);
+        const currentATR = atr[atr.length - 1] || 0;
+        const bbLower = (ema20[n] || price) - 2 * currentATR; // 볼린저 하단 근사
+        const dynamicFloor = Math.max(vwap, bbLower); // VWAP와 BB 하단 중 높은 값
+
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
 
-        if (pnlPct <= -2.5) {
+        // ★ Phase 4: VWAP/BB 이탈 동적 손절 (고정 -2.5% 대신)
+        if (price < dynamicFloor && pnlPct < 0) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
+          const dynamicLossPct = pnlPct.toFixed(2);
+          closeReason = `[MIH-4 동적손절] [${sessionLabel}] [${timeStr}] [${sym}] VWAP(${fmtKRW(vwap)})/BB하단(${fmtKRW(bbLower)}) 이탈 → 손실 ${dynamicLossPct}%에서 조기 탈출`;
+          newStatus = 'dynamic_stop';
+        } else if (pnlPct <= -2.5) {
+          // 기존 고정 손절 (백스톱 역할)
+          shouldClose = true;
+          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
         } else if (peakPrice >= pos.price * 1.10) {
           const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
@@ -587,7 +611,7 @@ Deno.serve(async (req) => {
           newStatus = 'profit_taken';
         } else if (pos.stop_loss && price <= pos.stop_loss) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] ${pnlPct >= 0 ? '본절가 방어 매도' : '추격 손절 터치'}`;
+          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] ${pnlPct >= 0 ? '본절가 방어 매도 (MIH-2)' : '추격 손절 터치'}`;
           newStatus = pnlPct >= 0 ? 'breakeven_exit' : 'trailing_stop';
         } else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0) {
           shouldClose = true;
