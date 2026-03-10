@@ -712,10 +712,10 @@ Deno.serve(async (req) => {
           const minFilters = entryRelax < 1.0 ? 2 : 3;
           if (filtersPassed < minFilters) continue;
 
-          // ★ MIH Phase 1: 거래대금 200% 수급 필터
+          // ★ MIH Phase 1 + 전세션 적응: 세션별 RVOL 필터 (정규장 200%, 장외 100% — 상대적 거래량 폭증 기준)
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
-          if (rvol < 2.0) {
-            // 거래대금이 직전 평균 대비 200% 미만이면 진입 거부
+          if (rvol < sessionRvolMin) {
+            // 세션별 RVOL 기준 미달 시 진입 거부
             continue;
           }
 
