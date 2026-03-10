@@ -49,9 +49,9 @@ function getMarketSession(): { session: SessionType; label: string; spreadMultip
   return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6, rvolMin: 1.0, aggressiveSlippage: 0.003 };
 }
 
-function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultiplier: number): number {
-  const BASE_SLIPPAGE = 0.0002;
-  const slippage = BASE_SLIPPAGE * spreadMultiplier;
+function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultiplier: number, aggressiveSlippage: number = 0.0002): number {
+  // ★ 장외 시간대: 공격적 지정가 체결 (0.2~0.3% 상단까지 제시하여 즉시 체결률 향상)
+  const slippage = Math.max(0.0002 * spreadMultiplier, aggressiveSlippage);
   if (side === 'buy') return +(price * (1 + slippage)).toFixed(4);
   return +(price * (1 - slippage)).toFixed(4);
 }
