@@ -662,46 +662,59 @@ Deno.serve(async (req) => {
     }
 
     // ========== UNIFIED ENTRY SCAN ==========
+    // ★ MIH Phase 3: 시장 하락 추세 시 매수 완전 중단
+    if (marketBuyHalt) {
+      await addLog('unified', 'hold', null, `[MIH-3] 🚫 시장 하락 감지로 전체 매수 중단 — 기존 포지션 관리만 수행`, { qqqTrendDown, marketBearish });
+    }
+
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
     const MAX_POSITIONS = 15;
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
-    for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
-      const batch = SCAN_SYMBOLS.slice(i, i + 5);
-      const results = await Promise.all(batch.map(async (sym) => {
-        try {
-          if (blacklistSymbols.has(sym)) return null;
-          const data = await getQuoteAndCandles(sym);
-          if (!data) return null;
-          const price = data.quote.c;
-          // Filter: small-cap must be above MIN_PRICE
-          const capType = getCapType(price, sym);
-          if (capType === 'small' && price < MIN_PRICE_USD) return null;
-          const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
-          if (!scoring) return null;
-          lastScores.set(sym, scoring.totalScore);
-          return { sym, price, scoring, capType };
-        } catch { return null; }
-      }));
+    if (!marketBuyHalt) {
+      for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
+        const batch = SCAN_SYMBOLS.slice(i, i + 5);
+        const results = await Promise.all(batch.map(async (sym) => {
+          try {
+            if (blacklistSymbols.has(sym)) return null;
+            const data = await getQuoteAndCandles(sym);
+            if (!data) return null;
+            const price = data.quote.c;
+            const capType = getCapType(price, sym);
+            if (capType === 'small' && price < MIN_PRICE_USD) return null;
+            const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
+            if (!scoring) return null;
+            lastScores.set(sym, scoring.totalScore);
+            return { sym, price, scoring, capType, data };
+          } catch { return null; }
+        }));
 
-      for (const r of results) {
-        if (!r || r.scoring.totalScore < adaptedEntryThreshold) continue;
-        const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
-        const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
-        if (alreadyHolding && !isPyramiding) continue;
-        if (openCount >= MAX_POSITIONS) continue;
+        for (const r of results) {
+          if (!r || r.scoring.totalScore < adaptedEntryThreshold) continue;
+          const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
+          const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
+          if (alreadyHolding && !isPyramiding) continue;
+          if (openCount >= MAX_POSITIONS) continue;
 
-        // Session-adaptive filters
-        const sentimentOk = (r.scoring.indicators.sentiment.score || 0) > 0;
-        const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= adaptedRvolMin;
-        const vwapOk = (r.scoring.indicators.candle.score || 0) >= adaptedVwapMin;
-        const filtersPassed = [sentimentOk, rvolOk, vwapOk].filter(Boolean).length;
-        const minFilters = entryRelax < 1.0 ? 2 : 3;
-        if (filtersPassed < minFilters) continue;
+          // Session-adaptive filters
+          const sentimentOk = (r.scoring.indicators.sentiment.score || 0) > 0;
+          const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= adaptedRvolMin;
+          const vwapOk = (r.scoring.indicators.candle.score || 0) >= adaptedVwapMin;
+          const filtersPassed = [sentimentOk, rvolOk, vwapOk].filter(Boolean).length;
+          const minFilters = entryRelax < 1.0 ? 2 : 3;
+          if (filtersPassed < minFilters) continue;
 
-        candidates.push(r);
+          // ★ MIH Phase 1: 거래대금 200% 수급 필터
+          const rvol = r.scoring.indicators.rvol?.rvol || 0;
+          if (rvol < 2.0) {
+            // 거래대금이 직전 평균 대비 200% 미만이면 진입 거부
+            continue;
+          }
+
+          candidates.push(r);
+        }
+        if (i + 5 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 300));
       }
-      if (i + 5 < SCAN_SYMBOLS.length) await new Promise(r => setTimeout(r, 300));
     }
 
     // Sort by score descending (highest score gets priority for ₩400M allocation)
