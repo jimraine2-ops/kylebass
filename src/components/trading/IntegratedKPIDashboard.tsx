@@ -7,7 +7,7 @@ import { useUnifiedPortfolio } from "@/hooks/useStockData";
 import { resetUnifiedWallet, updateUnifiedBalance } from "@/lib/api";
 import { Wallet, Trophy, BarChart3, RotateCcw, Target, Scale, Activity, Landmark, TrendingUp, DollarSign, ShieldAlert, Clock } from "lucide-react";
 import { toast } from "sonner";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { OpenPositionCard } from "@/components/trading/OpenPositionCard";
@@ -49,6 +49,29 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
   const selectedQuantStock = selectedSymbol
     ? allQuantStocks.find((s: any) => s.symbol === selectedSymbol)
     : null;
+
+  // ★ Live score tracking: map symbol → current score
+  const liveScoreMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of allQuantStocks) {
+      if (s.symbol && s.totalScore != null) {
+        map.set(s.symbol, s.totalScore);
+      }
+    }
+    return map;
+  }, [allQuantStocks]);
+
+  // ★ Previous score tracking for change arrows
+  const prevScoreMapRef = useRef<Map<string, number>>(new Map());
+  const prevScoreMap = prevScoreMapRef.current;
+
+  useEffect(() => {
+    // After render, save current scores as previous for next cycle
+    const timeout = setTimeout(() => {
+      prevScoreMapRef.current = new Map(liveScoreMap);
+    }, 2000);
+    return () => clearTimeout(timeout);
+  }, [liveScoreMap]);
 
   const handleReset = async () => {
     if (!confirm('통합 지갑을 ₩1,000,000으로 초기화하시겠습니까? 모든 거래 기록이 삭제됩니다.')) return;
@@ -293,6 +316,8 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
                 position={pos}
                 livePrice={wsGetPrice?.(pos.symbol)}
                 fxRate={fxRate}
+                liveScore={liveScoreMap.get(pos.symbol) ?? null}
+                prevScore={prevScoreMap.get(pos.symbol) ?? null}
                 onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
                 isSelected={pos.symbol === selectedSymbol}
               />
