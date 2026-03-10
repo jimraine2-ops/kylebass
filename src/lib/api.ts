@@ -31,7 +31,6 @@ export async function fetchCompanyNews(symbol: string) {
   if (error) throw error;
   const news = data?.news || [];
   
-  // Translate news to Korean
   if (news.length > 0) {
     try {
       const { data: translated, error: transErr } = await supabase.functions.invoke('translate-news', {
@@ -65,63 +64,50 @@ export async function fetchQuantSignals(symbols?: string[]) {
   return data;
 }
 
-// AI Trading
-export async function aiAnalyzeAndTrade(symbol: string, price: number, chartData?: any[], quantScore?: number, indicators?: any) {
+// ==================== UNIFIED PORTFOLIO ====================
+export async function getUnifiedPortfolio() {
   const { data, error } = await supabase.functions.invoke('ai-trading', {
-    body: { action: 'analyze-and-trade', symbol, price, chartData, quantScore, indicators },
+    body: { action: 'get-unified-portfolio' },
   });
   if (error) throw error;
   return data;
 }
 
-export async function getAIPortfolio() {
+export async function resetUnifiedWallet() {
   const { data, error } = await supabase.functions.invoke('ai-trading', {
-    body: { action: 'get-portfolio' },
+    body: { action: 'reset-unified-wallet' },
   });
   if (error) throw error;
   return data;
+}
+
+export async function updateUnifiedBalance(newBalance: number) {
+  const { data, error } = await supabase.functions.invoke('ai-trading', {
+    body: { action: 'update-balance', newBalance },
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Legacy - redirect to unified
+export async function getAIPortfolio() {
+  return getUnifiedPortfolio();
+}
+
+export async function getScalpingPortfolio() {
+  return getUnifiedPortfolio();
 }
 
 export async function resetAIWallet() {
-  const { data, error } = await supabase.functions.invoke('ai-trading', {
-    body: { action: 'reset-wallet' },
-  });
-  if (error) throw error;
-  return data;
-}
-
-// Scalping
-export async function getScalpingPortfolio() {
-  const { data, error } = await supabase.functions.invoke('ai-trading', {
-    body: { action: 'get-scalping-portfolio' },
-  });
-  if (error) throw error;
-  return data;
+  return resetUnifiedWallet();
 }
 
 export async function resetScalpingWallet() {
-  const { data, error } = await supabase.functions.invoke('ai-trading', {
-    body: { action: 'reset-scalping-wallet' },
-  });
-  if (error) throw error;
-  return data;
+  return resetUnifiedWallet();
 }
 
-export async function scalpingAnalyze(symbol: string, price: number, quantScore?: number, indicators?: any) {
-  const { data, error } = await supabase.functions.invoke('ai-trading', {
-    body: { action: 'scalping-analyze', symbol, price, quantScore, indicators },
-  });
-  if (error) throw error;
-  return data;
-}
-
-// Quant 10-Indicator Auto Trading (uses Main wallet)
-export async function quantAutoTrade(symbol: string, price: number, quantScore: number, indicators: any) {
-  const { data, error } = await supabase.functions.invoke('ai-trading', {
-    body: { action: 'quant-auto-trade', symbol, price, quantScore, indicators },
-  });
-  if (error) throw error;
-  return data;
+export async function updateWalletBalance(_walletType: 'main' | 'scalping', newBalance: number) {
+  return updateUnifiedBalance(newBalance);
 }
 
 // Super Scanner - Full market 10-indicator scan
@@ -133,12 +119,15 @@ export async function fetchSuperScan() {
   return data;
 }
 
-// Update wallet balance
-export async function updateWalletBalance(walletType: 'main' | 'scalping', newBalance: number) {
-  const { data, error } = await supabase.functions.invoke('ai-trading', {
-    body: { action: 'update-balance', walletType, newBalance },
-  });
-  if (error) throw error;
-  return data;
+// Legacy no-ops
+export async function aiAnalyzeAndTrade(symbol: string, price: number, chartData?: any[], quantScore?: number, indicators?: any):Promise<any> {
+  return { decision: { action: 'HOLD', reason: '통합 엔진으로 이관됨' }, trade: null };
 }
 
+export async function scalpingAnalyze(symbol: string, price: number, quantScore?: number, indicators?: any):Promise<any> {
+  return { decision: { action: 'HOLD', reason: '통합 엔진으로 이관됨' }, trade: null };
+}
+
+export async function quantAutoTrade(symbol: string, price: number, quantScore: number, indicators: any):Promise<any> {
+  return { decision: { action: 'HOLD', reason: '통합 엔진으로 이관됨' }, trade: null };
+}
