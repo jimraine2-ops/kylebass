@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAIPortfolio, useScalpingPortfolio } from "@/hooks/useStockData";
+import { useUnifiedPortfolio } from "@/hooks/useStockData";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { Briefcase, TrendingUp, TrendingDown } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -12,27 +12,7 @@ interface UnifiedPortfolioProps {
 }
 
 export function UnifiedPortfolio({ wsGetPrice, fxRate = 1350 }: UnifiedPortfolioProps) {
-  const { data: mainData, isLoading: mainLoading } = useAIPortfolio();
-  const { data: scalpData, isLoading: scalpLoading } = useScalpingPortfolio();
-
-  const isLoading = mainLoading || scalpLoading;
-
-  const mainPositions = (mainData?.openPositions || []).map((p: any) => ({
-    ...p, strategy: '대형주' as const,
-  }));
-  const scalpPositions = (scalpData?.openPositions || []).map((p: any) => ({
-    ...p, strategy: '소형주' as const,
-  }));
-  const allPositions = [...mainPositions, ...scalpPositions];
-
-  // Summary stats
-  const mainWallet = mainData?.wallet;
-  const scalpWallet = scalpData?.wallet;
-  const mainStats = mainData?.stats || {};
-  const scalpStats = scalpData?.stats || {};
-  const totalBalance = (mainWallet?.balance || 0) + (scalpWallet?.balance || 0);
-  const totalInitial = (mainWallet?.initial_balance || 0) + (scalpWallet?.initial_balance || 0);
-  const totalReturn = totalInitial > 0 ? ((totalBalance - totalInitial) / totalInitial * 100) : 0;
+  const { data, isLoading } = useUnifiedPortfolio();
 
   if (isLoading) {
     return (
@@ -46,6 +26,12 @@ export function UnifiedPortfolio({ wsGetPrice, fxRate = 1350 }: UnifiedPortfolio
       </Card>
     );
   }
+
+  const allPositions = data?.openPositions || [];
+  const wallet = data?.wallet;
+  const totalBalance = wallet?.balance || 0;
+  const totalInitial = wallet?.initial_balance || totalBalance;
+  const totalReturn = totalInitial > 0 ? ((totalBalance - totalInitial) / totalInitial * 100) : 0;
 
   return (
     <Card>
@@ -75,12 +61,13 @@ export function UnifiedPortfolio({ wsGetPrice, fxRate = 1350 }: UnifiedPortfolio
           <p className="text-sm text-muted-foreground text-center py-6">현재 보유 중인 종목이 없습니다</p>
         ) : (
           allPositions.map((pos: any) => {
-            const livePrice = wsGetPrice?.(pos.symbol) || pos.price;
+            const livePrice = wsGetPrice?.(pos.symbol) || pos.currentPrice || pos.price;
             const pnlPct = ((livePrice - pos.price) / pos.price) * 100;
             const pnlKRW = Math.round((livePrice - pos.price) * pos.quantity * fxRate);
             const isUp = pnlPct >= 0;
             const entryKRW = Math.round(pos.price * fxRate);
             const currentKRW = Math.round(livePrice * fxRate);
+            const capLabel = pos.cap_type === 'large' ? '대형' : '소형';
 
             return (
               <Link
@@ -96,9 +83,7 @@ export function UnifiedPortfolio({ wsGetPrice, fxRate = 1350 }: UnifiedPortfolio
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="font-semibold text-sm truncate">{formatStockName(pos.symbol)}</span>
-                      <Badge variant="secondary" className="text-[9px] shrink-0">
-                        {pos.strategy}
-                      </Badge>
+                      <Badge variant="secondary" className="text-[9px] shrink-0">{capLabel}</Badge>
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
                       <span>진입 ₩{entryKRW.toLocaleString('ko-KR')}</span>
@@ -121,13 +106,9 @@ export function UnifiedPortfolio({ wsGetPrice, fxRate = 1350 }: UnifiedPortfolio
                   <div className={`text-right ${isUp ? 'text-[hsl(var(--stock-up))]' : 'text-[hsl(var(--stock-down))]'}`}>
                     <div className="flex items-center gap-1 justify-end">
                       {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                      <span className="font-bold font-mono text-sm">
-                        {isUp ? '+' : ''}{pnlPct.toFixed(2)}%
-                      </span>
+                      <span className="font-bold font-mono text-sm">{isUp ? '+' : ''}{pnlPct.toFixed(2)}%</span>
                     </div>
-                    <p className="text-[10px] font-mono">
-                      {isUp ? '+' : ''}₩{pnlKRW.toLocaleString('ko-KR')}
-                    </p>
+                    <p className="text-[10px] font-mono">{isUp ? '+' : ''}₩{pnlKRW.toLocaleString('ko-KR')}</p>
                   </div>
                 </div>
               </Link>
