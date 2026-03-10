@@ -347,6 +347,8 @@ Deno.serve(async (req) => {
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
     const entryRelax = sessionInfo.entryRelax;
+    const sessionRvolMin = sessionInfo.rvolMin; // ★ 세션별 RVOL 최소값
+    const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
 
     // ========== UNIFIED DYNAMIC UNIVERSE ROTATION ==========
     const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
