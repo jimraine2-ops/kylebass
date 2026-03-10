@@ -115,7 +115,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
-          지갑 초기화 (₩4억)
+          지갑 초기화 (₩100만)
         </Button>
       </div>
 
