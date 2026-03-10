@@ -43,7 +43,7 @@ function getScoreLabel(score: number): string {
   return '매도 검토';
 }
 
-export function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice, fxRate = 1350, liveScore, prevScore }: OpenPositionCardProps) {
+export function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice, fxRate = 1350, liveScore, prevScore, onOpenModal }: OpenPositionCardProps) {
   const displayPrice = livePrice ?? pos.currentPrice ?? pos.price;
   const investmentKRW = Math.round(pos.price * pos.quantity * fxRate);
   const currentValueKRW = Math.round(displayPrice * pos.quantity * fxRate);
