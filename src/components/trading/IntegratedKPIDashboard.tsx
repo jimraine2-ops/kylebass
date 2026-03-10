@@ -50,6 +50,29 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
     ? allQuantStocks.find((s: any) => s.symbol === selectedSymbol)
     : null;
 
+  // ★ Live score tracking: map symbol → current score
+  const liveScoreMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of allQuantStocks) {
+      if (s.symbol && s.totalScore != null) {
+        map.set(s.symbol, s.totalScore);
+      }
+    }
+    return map;
+  }, [allQuantStocks]);
+
+  // ★ Previous score tracking for change arrows
+  const prevScoreMapRef = useRef<Map<string, number>>(new Map());
+  const prevScoreMap = prevScoreMapRef.current;
+
+  useEffect(() => {
+    // After render, save current scores as previous for next cycle
+    const timeout = setTimeout(() => {
+      prevScoreMapRef.current = new Map(liveScoreMap);
+    }, 2000);
+    return () => clearTimeout(timeout);
+  }, [liveScoreMap]);
+
   const handleReset = async () => {
     if (!confirm('통합 지갑을 ₩1,000,000으로 초기화하시겠습니까? 모든 거래 기록이 삭제됩니다.')) return;
     setResetting(true);
