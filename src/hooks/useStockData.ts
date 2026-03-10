@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchStockQuote, fetchChartData, searchStocks, scanPennyStocks, getAIPortfolio, fetchQuantSignals, fetchCompanyNews, getScalpingPortfolio, fetchSuperScan } from "@/lib/api";
+import { fetchStockQuote, fetchChartData, searchStocks, scanPennyStocks, getUnifiedPortfolio, fetchQuantSignals, fetchCompanyNews, fetchSuperScan } from "@/lib/api";
 
 export function useStockQuotes(symbols: string[], enabled = true) {
   return useQuery({
@@ -31,7 +31,6 @@ export function useChartData(symbol: string, enabled = true) {
   });
 }
 
-
 export function useStockSearch(query: string) {
   return useQuery({
     queryKey: ['stock-search', query],
@@ -45,29 +44,30 @@ export function usePennyStocks() {
   return useQuery({
     queryKey: ['penny-stocks-top50'],
     queryFn: () => scanPennyStocks(),
-    refetchInterval: 10000, // 10초 갱신
+    refetchInterval: 10000,
     retry: 3,
     staleTime: 8000,
     refetchOnWindowFocus: false,
   });
 }
 
-export function useAIPortfolio() {
+// ★ 통합 포트폴리오 (기존 대형주/소형주 통합)
+export function useUnifiedPortfolio() {
   return useQuery({
-    queryKey: ['ai-portfolio'],
-    queryFn: () => getAIPortfolio(),
-    refetchInterval: 10000,
+    queryKey: ['unified-portfolio'],
+    queryFn: () => getUnifiedPortfolio(),
+    refetchInterval: 8000,
     retry: 2,
   });
 }
 
+// Legacy aliases → unified
+export function useAIPortfolio() {
+  return useUnifiedPortfolio();
+}
+
 export function useScalpingPortfolio() {
-  return useQuery({
-    queryKey: ['scalping-portfolio'],
-    queryFn: () => getScalpingPortfolio(),
-    refetchInterval: 5000,
-    retry: 2,
-  });
+  return useUnifiedPortfolio();
 }
 
 export function useQuantSignals(symbols?: string[]) {
@@ -80,8 +80,8 @@ export function useQuantSignals(symbols?: string[]) {
       }
       return data;
     },
-    staleTime: 60000,       // 60s — server caches too
-    gcTime: 5 * 60 * 1000,  // keep in GC for 5 min
+    staleTime: 60000,
+    gcTime: 5 * 60 * 1000,
     refetchInterval: 60000,
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(2000 * (attemptIndex + 1), 8000),
@@ -102,7 +102,7 @@ export function useSuperScan() {
   return useQuery({
     queryKey: ['super-scan'],
     queryFn: () => fetchSuperScan(),
-    refetchInterval: 60000, // 1분 갱신
+    refetchInterval: 60000,
     staleTime: 50000,
     retry: 2,
   });
