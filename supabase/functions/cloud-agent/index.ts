@@ -470,9 +470,11 @@ Deno.serve(async (req) => {
       await addLog('unified', 'learn', null, `[AI-Learn] 진입 금지 블랙리스트: ${[...blacklistSymbols].join(', ')}`, {});
     }
 
-    // --- Market Trend Guard ---
+    // --- Market Trend Guard (★ MIH Phase 3: QQQ 하락 추세 시 매수 중단) ---
     let marketBearish = false;
-    let baseEntryThreshold = 60; // 통합 진입 기준: 60점
+    let marketBuyHalt = false;
+    let baseEntryThreshold = 60; // ★ MIH Phase 1: 최소 60점 고정
+    let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
         finnhubFetch(`/quote?symbol=SPY`),
@@ -480,10 +482,21 @@ Deno.serve(async (req) => {
       ]);
       const spyChange = spyQuote?.dp || 0;
       const qqqChange = qqqQuote?.dp || 0;
+      const qqqPrice = qqqQuote?.c || 0;
+      const qqqPrevClose = qqqQuote?.pc || qqqPrice;
+
+      // ★ MIH Phase 3: QQQ 1분봉 하락 추세 감지 (현재가 < 전일종가 AND 변동률 < -0.3%)
+      if (qqqPrice < qqqPrevClose && qqqChange < -0.3) {
+        qqqTrendDown = true;
+        marketBuyHalt = true;
+        await addLog('system', 'warning', null, `[MIH-3 시장필터] 🚫 QQQ 하락 추세 감지 (${qqqChange.toFixed(2)}%) → 모든 매수 진입 일시 중단`, { qqqChange, qqqPrice, qqqPrevClose });
+      }
+
       if (spyChange < -1 && qqqChange < -1) {
         marketBearish = true;
+        marketBuyHalt = true;
         baseEntryThreshold = 75;
-        await addLog('system', 'warning', null, `[시장동기화] ⚠️ SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 75점 상향`, { spyChange, qqqChange });
+        await addLog('system', 'warning', null, `[시장동기화] ⚠️ SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 75점 상향 + 매수 중단`, { spyChange, qqqChange });
       } else if (spyChange < -0.5 || qqqChange < -0.5) {
         baseEntryThreshold = 65;
         await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 65점`, { spyChange, qqqChange });
@@ -516,7 +529,7 @@ Deno.serve(async (req) => {
       await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점 | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin}`, {});
     }
 
-    await addLog('unified', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 통합 진입 문턱: ${adaptedEntryThreshold}점 | ${sessionLabel}`, {});
+    await addLog('unified', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 통합 진입 문턱: ${adaptedEntryThreshold}점 | ${sessionLabel} | 매수중단: ${marketBuyHalt ? 'YES' : 'NO'}`, {});
 
     // ========== EXIT CHECKS (통합) ==========
     const symbolsToCheck = [...new Set((openPos || []).map((p: any) => p.symbol))];
@@ -535,12 +548,20 @@ Deno.serve(async (req) => {
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
 
-        // Breakeven defense at +3%
-        if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.005) {
-          const breakevenStop = +(pos.price * 1.005).toFixed(4);
+        // ★ MIH Phase 2: 본절가 보호 (+1.5%에서 즉시 본절가+수수료 상향)
+        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
+          const breakevenStop = +(pos.price * 1.002).toFixed(4); // +0.2% 수수료 포함
           await supabase.from('unified_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
           pos.stop_loss = breakevenStop;
-          await addLog('unified', 'defense', sym, `[철갑방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 본절가 상향: ${fmtKRW(breakevenStop)}`, {});
+          await addLog('unified', 'defense', sym, `[MIH-2 본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.5% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | 무승부 이상 확보`, {});
+        }
+
+        // ★ 기존 철갑방어 (+3%에서 추가 상향)
+        if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.015) {
+          const reinforcedStop = +(pos.price * 1.015).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: reinforcedStop }).eq('id', pos.id);
+          pos.stop_loss = reinforcedStop;
+          await addLog('unified', 'defense', sym, `[철갑방어+] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +1.5% 상향: ${fmtKRW(reinforcedStop)}`, {});
         }
 
         const peakPrice = Math.max(pos.peak_price || pos.price, price);
@@ -548,13 +569,29 @@ Deno.serve(async (req) => {
           await supabase.from('unified_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
         }
 
+        // ★ MIH Phase 4: 동적 손절 (VWAP/볼린저 하단 이탈 감지)
+        const n = data.closes.length - 1;
+        const vwap = calculateVWAP(data.highs.slice(-20), data.lows.slice(-20), data.closes.slice(-20), data.volumes.slice(-20));
+        const ema20 = calculateEMA(data.closes, 20);
+        const atr = calculateATR(data.highs, data.lows, data.closes, 14);
+        const currentATR = atr[atr.length - 1] || 0;
+        const bbLower = (ema20[n] || price) - 2 * currentATR; // 볼린저 하단 근사
+        const dynamicFloor = Math.max(vwap, bbLower); // VWAP와 BB 하단 중 높은 값
+
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
 
-        if (pnlPct <= -2.5) {
+        // ★ Phase 4: VWAP/BB 이탈 동적 손절 (고정 -2.5% 대신)
+        if (price < dynamicFloor && pnlPct < 0) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
+          const dynamicLossPct = pnlPct.toFixed(2);
+          closeReason = `[MIH-4 동적손절] [${sessionLabel}] [${timeStr}] [${sym}] VWAP(${fmtKRW(vwap)})/BB하단(${fmtKRW(bbLower)}) 이탈 → 손실 ${dynamicLossPct}%에서 조기 탈출`;
+          newStatus = 'dynamic_stop';
+        } else if (pnlPct <= -2.5) {
+          // 기존 고정 손절 (백스톱 역할)
+          shouldClose = true;
+          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
         } else if (peakPrice >= pos.price * 1.10) {
           const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
@@ -574,7 +611,7 @@ Deno.serve(async (req) => {
           newStatus = 'profit_taken';
         } else if (pos.stop_loss && price <= pos.stop_loss) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] ${pnlPct >= 0 ? '본절가 방어 매도' : '추격 손절 터치'}`;
+          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] ${pnlPct >= 0 ? '본절가 방어 매도 (MIH-2)' : '추격 손절 터치'}`;
           newStatus = pnlPct >= 0 ? 'breakeven_exit' : 'trailing_stop';
         } else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0) {
           shouldClose = true;
@@ -625,46 +662,59 @@ Deno.serve(async (req) => {
     }
 
     // ========== UNIFIED ENTRY SCAN ==========
+    // ★ MIH Phase 3: 시장 하락 추세 시 매수 완전 중단
+    if (marketBuyHalt) {
+      await addLog('unified', 'hold', null, `[MIH-3] 🚫 시장 하락 감지로 전체 매수 중단 — 기존 포지션 관리만 수행`, { qqqTrendDown, marketBearish });
+    }
+
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
     const MAX_POSITIONS = 15;
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
-    for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
-      const batch = SCAN_SYMBOLS.slice(i, i + 5);
-      const results = await Promise.all(batch.map(async (sym) => {
-        try {
-          if (blacklistSymbols.has(sym)) return null;
-          const data = await getQuoteAndCandles(sym);
-          if (!data) return null;
-          const price = data.quote.c;
-          // Filter: small-cap must be above MIN_PRICE
-          const capType = getCapType(price, sym);
-          if (capType === 'small' && price < MIN_PRICE_USD) return null;
-          const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
-          if (!scoring) return null;
-          lastScores.set(sym, scoring.totalScore);
-          return { sym, price, scoring, capType };
-        } catch { return null; }
-      }));
+    if (!marketBuyHalt) {
+      for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
+        const batch = SCAN_SYMBOLS.slice(i, i + 5);
+        const results = await Promise.all(batch.map(async (sym) => {
+          try {
+            if (blacklistSymbols.has(sym)) return null;
+            const data = await getQuoteAndCandles(sym);
+            if (!data) return null;
+            const price = data.quote.c;
+            const capType = getCapType(price, sym);
+            if (capType === 'small' && price < MIN_PRICE_USD) return null;
+            const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
+            if (!scoring) return null;
+            lastScores.set(sym, scoring.totalScore);
+            return { sym, price, scoring, capType, data };
+          } catch { return null; }
+        }));
 
-      for (const r of results) {
-        if (!r || r.scoring.totalScore < adaptedEntryThreshold) continue;
-        const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
-        const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
-        if (alreadyHolding && !isPyramiding) continue;
-        if (openCount >= MAX_POSITIONS) continue;
+        for (const r of results) {
+          if (!r || r.scoring.totalScore < adaptedEntryThreshold) continue;
+          const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
+          const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
+          if (alreadyHolding && !isPyramiding) continue;
+          if (openCount >= MAX_POSITIONS) continue;
 
-        // Session-adaptive filters
-        const sentimentOk = (r.scoring.indicators.sentiment.score || 0) > 0;
-        const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= adaptedRvolMin;
-        const vwapOk = (r.scoring.indicators.candle.score || 0) >= adaptedVwapMin;
-        const filtersPassed = [sentimentOk, rvolOk, vwapOk].filter(Boolean).length;
-        const minFilters = entryRelax < 1.0 ? 2 : 3;
-        if (filtersPassed < minFilters) continue;
+          // Session-adaptive filters
+          const sentimentOk = (r.scoring.indicators.sentiment.score || 0) > 0;
+          const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= adaptedRvolMin;
+          const vwapOk = (r.scoring.indicators.candle.score || 0) >= adaptedVwapMin;
+          const filtersPassed = [sentimentOk, rvolOk, vwapOk].filter(Boolean).length;
+          const minFilters = entryRelax < 1.0 ? 2 : 3;
+          if (filtersPassed < minFilters) continue;
 
-        candidates.push(r);
+          // ★ MIH Phase 1: 거래대금 200% 수급 필터
+          const rvol = r.scoring.indicators.rvol?.rvol || 0;
+          if (rvol < 2.0) {
+            // 거래대금이 직전 평균 대비 200% 미만이면 진입 거부
+            continue;
+          }
+
+          candidates.push(r);
+        }
+        if (i + 5 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 300));
       }
-      if (i + 5 < SCAN_SYMBOLS.length) await new Promise(r => setTimeout(r, 300));
     }
 
     // Sort by score descending (highest score gets priority for ₩400M allocation)

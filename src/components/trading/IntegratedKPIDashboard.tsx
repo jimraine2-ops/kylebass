@@ -146,12 +146,13 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
       <Card className="border-primary/20">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📋 통합 트레이딩 엔진: 10대 지표 기반 자율 매매</p>
-          <p>✅ 진입: [합산 점수 ≥ 60] AND [호재 {'>'} 0] AND [RVOL {'>'} 1.5] AND [현재가 {'>'} VWAP] → 10% 자동 매수</p>
-          <p>📈 피라미딩: 80점 돌파 시 +5% 추가 매수</p>
-          <p>🏷️ 종목 분류: 현재가 $10 이상 → 대형주 태그, $10 미만 → 소형주 태그 (자동)</p>
-          <p>🛡️ 청산: -2.5% 손절 | +2% 50% 1차 익절 | +5~6% 고정 익절 | 고점+10%→-5% 추격익절 | 점수{'<'}40 근거소멸</p>
-          <p className="text-primary font-medium">☁️ ₩100만 통합 잔고 운용 — 점수 높은 순서대로 우선 배분</p>
+          <p className="font-medium text-foreground">📋 MIH(마켓 인사이트 허브) 승률 극대화 엔진 v2</p>
+          <p>✅ 진입: [합산 점수 ≥ 60] AND [RVOL ≥ 200%] AND [호재 {'>'} 0] AND [현재가 {'>'} VWAP] → 수급 확인 후 매수</p>
+          <p>🛡️ 본절보호: +1.5% 도달 시 손절가 → 매수가+0.2%(수수료) 자동 상향 | +3% 시 +1.5% 확보</p>
+          <p>🚫 시장필터: QQQ 하락 추세 감지 시 모든 매수 진입 일시 중단</p>
+          <p>📉 동적손절: VWAP 또는 볼린저 하단 이탈 시 즉시 매도 (고정 -2.5% 백스톱 유지)</p>
+          <p>📈 피라미딩: 80점 돌파 시 +5% 추가 매수 | +2% 시 50% 1차 익절</p>
+          <p className="text-primary font-medium">☁️ ₩100만 통합 잔고 운용 — 고품질 진입만 허용</p>
         </CardContent>
       </Card>
 
