@@ -316,6 +316,8 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
                 position={pos}
                 livePrice={wsGetPrice?.(pos.symbol)}
                 fxRate={fxRate}
+                liveScore={liveScoreMap.get(pos.symbol) ?? null}
+                prevScore={prevScoreMap.get(pos.symbol) ?? null}
                 onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
                 isSelected={pos.symbol === selectedSymbol}
               />
