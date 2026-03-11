@@ -13,18 +13,80 @@ import {
 } from "recharts";
 
 const INDICATOR_LABELS: Record<string, { label: string; unit: string }> = {
-  sentiment: { label: '호재 감성', unit: '건' },
+  sentiment: { label: '호재 감성', unit: '%' },
   rvol: { label: '상대 거래량(RVOL)', unit: 'x' },
   candle: { label: 'VWAP/캔들 패턴', unit: '' },
   macd: { label: 'MACD 모멘텀', unit: '' },
-  atr: { label: '변동성(ATR)', unit: '%' },
+  atr: { label: '변동성(ATR)', unit: '' },
   gap: { label: '갭 분석', unit: '%' },
-  squeeze: { label: '숏 스퀴즈', unit: '%' },
-  position: { label: '가격 위치', unit: '' },
+  squeeze: { label: '숏 스퀴즈', unit: '' },
+  position: { label: '가격 위치', unit: '%' },
   sectorSynergy: { label: '섹터 동조화', unit: '' },
-  aggression: { label: '체결 강도', unit: '' },
-  preMarket: { label: '프리마켓 강도', unit: '%' },
+  aggression: { label: '체결 강도', unit: '%' },
+  preMarket: { label: '프리마켓 강도', unit: '' },
 };
+
+/** 지표별 상태 라벨 */
+function getIndicatorStatusLabel(key: string, score: number, ind: any): { text: string; color: string } {
+  switch (key) {
+    case 'sentiment':
+      if (score >= 8) return { text: '강한 호재', color: 'text-stock-up' };
+      if (score >= 5) return { text: '약한 호재', color: 'text-primary' };
+      if (score >= 3) return { text: '중립', color: 'text-muted-foreground' };
+      return { text: '약세 감성', color: 'text-destructive' };
+    case 'rvol': {
+      const r = ind?.rvol || ind?.rawValue || 1;
+      if (r >= 3) return { text: '거래 폭발', color: 'text-stock-up' };
+      if (r >= 2) return { text: '거래 급증', color: 'text-stock-up' };
+      if (r >= 1.5) return { text: '거래 증가', color: 'text-primary' };
+      return { text: '거래 보통', color: 'text-muted-foreground' };
+    }
+    case 'candle':
+      if (ind?.vwapCross && score >= 7) return { text: 'VWAP 돌파 + 패턴확인', color: 'text-stock-up' };
+      if (ind?.vwapCross) return { text: 'VWAP 돌파', color: 'text-primary' };
+      if (score >= 7) return { text: '강한 캔들패턴', color: 'text-stock-up' };
+      return { text: '패턴 미확인', color: 'text-muted-foreground' };
+    case 'macd': {
+      const m = ind?.macd || 0;
+      if (score >= 8) return { text: '골든크로스 강화', color: 'text-stock-up' };
+      if (score >= 7) return { text: '골든크로스', color: 'text-stock-up' };
+      if (m > 0) return { text: 'MACD 양전환', color: 'text-primary' };
+      if (score >= 4) return { text: '데드크로스 접근', color: 'text-warning' };
+      return { text: '데드크로스', color: 'text-destructive' };
+    }
+    case 'atr':
+      if (score >= 8) return { text: '변동성 극대', color: 'text-stock-up' };
+      if (score >= 5) return { text: '변동성 적정', color: 'text-primary' };
+      return { text: '변동성 저조', color: 'text-muted-foreground' };
+    case 'gap':
+      if (score >= 8) return { text: '갭 상승 확인', color: 'text-stock-up' };
+      if (score >= 5) return { text: '약갭 발생', color: 'text-primary' };
+      return { text: '갭 없음', color: 'text-muted-foreground' };
+    case 'squeeze':
+      if (score >= 6) return { text: '스퀴즈 활성', color: 'text-stock-up' };
+      if (score >= 3) return { text: '스퀴즈 대기', color: 'text-warning' };
+      return { text: '스퀴즈 없음', color: 'text-muted-foreground' };
+    case 'position':
+      if (score >= 8) return { text: 'ATH 근접', color: 'text-stock-up' };
+      if (score >= 5) return { text: '고점 접근', color: 'text-primary' };
+      return { text: '저점 구간', color: 'text-warning' };
+    case 'sectorSynergy':
+      if (score >= 8) return { text: '섹터 초강세', color: 'text-stock-up' };
+      if (score >= 5) return { text: '섹터 동조', color: 'text-primary' };
+      return { text: '섹터 약세', color: 'text-destructive' };
+    case 'aggression': {
+      if (score >= 8) return { text: '매수 집중', color: 'text-stock-up' };
+      if (score >= 5) return { text: '매수 우위', color: 'text-primary' };
+      if (score >= 3) return { text: '매도 우위', color: 'text-warning' };
+      return { text: '매도 집중', color: 'text-destructive' };
+    }
+    case 'preMarket':
+      if (score >= 7) return { text: '고점돌파', color: 'text-stock-up' };
+      return { text: '돌파 미달', color: 'text-muted-foreground' };
+    default:
+      return { text: '', color: 'text-muted-foreground' };
+  }
+}
 
 function getScoreColor(score: number): string {
   if (score >= 60) return 'text-stock-up';
@@ -38,6 +100,19 @@ function getScoreLabel(score: number): string {
   if (score >= 50) return '보유 유지';
   if (score >= 40) return '주의';
   return '매도 검토';
+}
+
+/** 한국식 억/만 원 표기: "1,234억 5,678만 원" */
+function formatTurnoverKRW(krw: number): string {
+  if (!krw || !isFinite(krw) || krw <= 0) return '-';
+  const eok = Math.floor(krw / 1_0000_0000);
+  const remainder = krw % 1_0000_0000;
+  const man = Math.floor(remainder / 10000);
+
+  if (eok > 0 && man > 0) return `${eok.toLocaleString('ko-KR')}억 ${man.toLocaleString('ko-KR')}만 원`;
+  if (eok > 0) return `${eok.toLocaleString('ko-KR')}억 원`;
+  if (man > 0) return `${man.toLocaleString('ko-KR')}만 원`;
+  return `${Math.round(krw).toLocaleString('ko-KR')} 원`;
 }
 
 function formatLargeNumber(n: number): string {
@@ -60,14 +135,12 @@ interface PositionAnalysisModalProps {
 export function PositionAnalysisModal({
   open, onOpenChange, position: pos, quantStock: externalQuantStock, livePrice, liveScore, fxRate = 1350,
 }: PositionAnalysisModalProps) {
-  // ★ Self-fetch quant data when modal is open
   const { data: fetchedQuant, isLoading: quantLoading, isFetching } = usePositionQuant(
     open && pos ? pos.symbol : null
   );
 
   if (!pos) return null;
 
-  // Prefer freshly fetched data, fallback to external
   const quantStock = fetchedQuant || externalQuantStock;
   const displayPrice = livePrice ?? pos.currentPrice ?? pos.price;
   const score = liveScore ?? quantStock?.totalScore ?? pos.entry_score ?? 0;
@@ -77,14 +150,16 @@ export function PositionAnalysisModal({
   // Radar data
   const radarData = Object.entries(INDICATOR_LABELS).map(([key, meta]) => ({
     indicator: meta.label,
+    key,
     score: indicators[key]?.score || 0,
-    rawValue: indicators[key]?.rawValue ?? indicators[key]?.rvol ?? null,
+    rawValue: indicators[key]?.rawValue ?? indicators[key]?.rvol ?? indicators[key]?.macd ?? indicators[key]?.atr ?? null,
     details: indicators[key]?.details || '',
     unit: meta.unit,
     fullMark: 10,
+    statusLabel: getIndicatorStatusLabel(key, indicators[key]?.score || 0, indicators[key]),
   }));
 
-  // Volume analysis from indicators — use real data from edge function
+  // Volume analysis
   const rvolData = indicators.rvol || {};
   const rvol = rvolData.rvol || rvolData.rawValue || 1;
   const realCurrentVol = quantStock?.currentVol || rvolData.currentVol || 0;
@@ -93,12 +168,12 @@ export function PositionAnalysisModal({
   const buyPressure = Math.min(100, Math.round(aggressionScore * 10 + 5));
   const sellPressure = 100 - buyPressure;
 
-  // Turnover — use real volume if available, else estimate
+  // Turnover — real volume × price × FX
   const estimatedVolume = realCurrentVol > 0 ? realCurrentVol : Math.round(rvol * (realAvgVol > 0 ? realAvgVol : 2500000));
   const turnoverUSD = displayPrice > 0 && estimatedVolume > 0 ? displayPrice * estimatedVolume : 0;
   const turnoverKRW = turnoverUSD * fxRate;
 
-  // Volume comparison bar data — use real avg if available
+  // Volume comparison bar
   const avgVolume = realAvgVol > 0 ? Math.round(realAvgVol) : Math.round(estimatedVolume / Math.max(rvol, 0.01));
   const volumeBarData = [
     { name: '전일 평균', volume: avgVolume, fill: 'hsl(var(--muted-foreground))' },
@@ -112,12 +187,14 @@ export function PositionAnalysisModal({
   const unrealizedPnlPct = investmentKRW > 0 ? ((currentValueKRW / investmentKRW) - 1) * 100 : 0;
   const isProfit = unrealizedPnl >= 0;
 
-  // Indicator detail bars
+  // Indicator detail bars with status labels
   const indicatorBars = Object.entries(INDICATOR_LABELS).map(([key, meta]) => {
     const ind = indicators[key];
     const s = ind?.score || 0;
     const isWeighted = key === 'rvol' || key === 'macd' || key === 'candle';
-    return { key, label: meta.label, score: s, isWeighted, details: ind?.details || '', rawValue: ind?.rawValue ?? ind?.rvol ?? null, unit: meta.unit };
+    const status = getIndicatorStatusLabel(key, s, ind);
+    const rawVal = ind?.rawValue ?? ind?.rvol ?? ind?.macd ?? ind?.atr ?? null;
+    return { key, label: meta.label, score: s, isWeighted, details: ind?.details || '', rawValue: rawVal, unit: meta.unit, status };
   });
 
   // Custom tooltip for radar chart
@@ -126,13 +203,24 @@ export function PositionAnalysisModal({
     const data = payload[0]?.payload;
     if (!data) return null;
     return (
-      <div className="bg-card border border-border rounded-lg p-2.5 shadow-lg text-xs space-y-1">
+      <div className="bg-card border border-border rounded-lg p-3 shadow-lg text-xs space-y-1.5 min-w-[180px]">
         <p className="font-bold text-foreground">{data.indicator}</p>
-        <p className="text-primary font-mono">점수: <span className="font-bold">{data.score}/10</span> (100점 환산: {data.score * 10}점)</p>
-        {data.details && <p className="text-muted-foreground text-[10px]">{data.details}</p>}
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">AI 점수</span>
+          <span className="font-mono font-bold text-primary">{data.score}/10 ({data.score * 10}점)</span>
+        </div>
         {data.rawValue != null && (
-          <p className="text-muted-foreground text-[10px]">원시값: {typeof data.rawValue === 'number' ? data.rawValue.toFixed(2) : data.rawValue}{data.unit}</p>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">원시값</span>
+            <span className="font-mono">{typeof data.rawValue === 'number' ? data.rawValue.toFixed(3) : data.rawValue}{data.unit}</span>
+          </div>
         )}
+        {data.statusLabel && (
+          <Badge variant="outline" className={cn("text-[9px] mt-1", data.statusLabel.color)}>
+            {data.statusLabel.text}
+          </Badge>
+        )}
+        {data.details && <p className="text-muted-foreground text-[10px] pt-0.5 border-t border-border">{data.details}</p>}
       </div>
     );
   };
@@ -190,7 +278,7 @@ export function PositionAnalysisModal({
               <Activity className="w-4 h-4 text-primary" />
               <span className="text-sm font-semibold">10대 지표 레이더 차트</span>
               <span className="text-[10px] text-muted-foreground ml-auto">
-                {hasIndicators ? '면적이 넓을수록 매수 조건 완벽' : '데이터 로딩 중...'}
+                {hasIndicators ? '면적이 넓을수록 매수 조건 완벽 · 30초 자동갱신' : '데이터 로딩 중...'}
               </span>
             </div>
             {quantLoading && !hasIndicators ? (
@@ -214,7 +302,9 @@ export function PositionAnalysisModal({
                     fill={score >= 60 ? 'hsl(var(--stock-up))' : score >= 40 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))'}
                     fillOpacity={0.25}
                     strokeWidth={2}
+                    isAnimationActive={true}
                     animationDuration={800}
+                    animationEasing="ease-in-out"
                   />
                   <RechartsTooltip content={<CustomRadarTooltip />} />
                 </RadarChart>
@@ -223,40 +313,53 @@ export function PositionAnalysisModal({
           </CardContent>
         </Card>
 
-        {/* Indicator Detail Bars */}
+        {/* Indicator Detail Table with Status Labels */}
         <Card className="border-border">
           <CardContent className="p-4 space-y-2">
-            <span className="text-sm font-semibold">지표 상세</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">지표 상세 분석</span>
+              <span className="text-[10px] text-muted-foreground ml-auto">×2 = 가중치 2배 적용</span>
+            </div>
             {quantLoading && !hasIndicators ? (
               <div className="space-y-2">
-                {Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-4" />)}
+                {Array.from({ length: 11 }).map((_, i) => <Skeleton key={i} className="h-5" />)}
               </div>
             ) : (
-              indicatorBars.map(({ key, label, score: s, isWeighted, details, rawValue, unit }) => (
-                <div key={key} className="space-y-0.5">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="w-28 shrink-0 truncate">{label}</span>
-                    {isWeighted && <Badge variant="outline" className="text-[8px] px-1 py-0 border-warning/40 text-warning">×2</Badge>}
-                    <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all duration-500",
-                          s >= 8 ? 'bg-stock-up' : s >= 5 ? 'bg-primary' : s >= 3 ? 'bg-warning' : 'bg-destructive'
-                        )}
-                        style={{ width: `${(s / 10) * 100}%` }}
-                      />
+              <div className="space-y-1.5">
+                {indicatorBars.map(({ key, label, score: s, isWeighted, details, rawValue, unit, status }) => (
+                  <div key={key} className="rounded-md bg-muted/30 px-2 py-1.5">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="w-32 shrink-0 truncate font-medium">{label}</span>
+                      {isWeighted && <Badge variant="outline" className="text-[8px] px-1 py-0 border-warning/40 text-warning">×2</Badge>}
+                      <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all duration-700 ease-in-out",
+                            s >= 8 ? 'bg-stock-up' : s >= 5 ? 'bg-primary' : s >= 3 ? 'bg-warning' : 'bg-destructive'
+                          )}
+                          style={{ width: `${(s / 10) * 100}%` }}
+                        />
+                      </div>
+                      <span className={cn("w-8 text-right font-mono font-bold text-[11px]",
+                        s >= 8 ? 'text-stock-up' : s >= 5 ? 'text-primary' : s >= 3 ? 'text-warning' : 'text-destructive'
+                      )}>
+                        {s}/10
+                      </span>
                     </div>
-                    <span className={cn("w-8 text-right font-mono font-bold",
-                      s >= 8 ? 'text-stock-up' : s >= 5 ? 'text-primary' : s >= 3 ? 'text-warning' : 'text-destructive'
-                    )}>
-                      {s}/10
-                    </span>
+                    <div className="flex items-center gap-2 mt-0.5 pl-[8.5rem]">
+                      <Badge variant="outline" className={cn("text-[8px] px-1.5 py-0", status.color)}>
+                        {status.text}
+                      </Badge>
+                      {rawValue != null && (
+                        <span className="text-[9px] font-mono text-muted-foreground">
+                          {typeof rawValue === 'number' ? rawValue.toFixed(3) : rawValue}{unit}
+                        </span>
+                      )}
+                      {details && <span className="text-[9px] text-muted-foreground">{details}</span>}
+                    </div>
                   </div>
-                  {details && (
-                    <p className="text-[10px] text-muted-foreground pl-[7.5rem]">{details}</p>
-                  )}
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -306,14 +409,15 @@ export function PositionAnalysisModal({
                 <span className="text-sm font-semibold">수급 분석</span>
               </div>
 
-              {/* Turnover */}
+              {/* Turnover — 억/만 원 정밀 표기 */}
               <div className="text-center mb-4">
                 <p className="text-[10px] text-muted-foreground">실시간 거래대금</p>
-                <p className="text-2xl font-bold font-mono text-primary">
-                  ₩{turnoverKRW > 0 ? formatLargeNumber(turnoverKRW) : '-'}
+                <p className="text-xl font-bold font-mono text-primary leading-tight">
+                  {turnoverKRW > 0 ? formatTurnoverKRW(turnoverKRW) : '-'}
                 </p>
-                <p className="text-[10px] text-muted-foreground">
-                  ${turnoverUSD > 0 ? `${(turnoverUSD / 1000000).toFixed(1)}M` : '-'}
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  ${turnoverUSD > 0 ? `${(turnoverUSD / 1000000).toFixed(2)}M` : '-'}
+                  {realCurrentVol > 0 && <span className="ml-1">· 거래량 {formatLargeNumber(realCurrentVol)}주</span>}
                 </p>
               </div>
 
