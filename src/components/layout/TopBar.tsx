@@ -9,24 +9,7 @@ import { useRecentSearches } from "@/hooks/useRecentSearches";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { searchKoreanStocks, getKoreanName, type KoreanStockEntry } from "@/lib/koreanStockMap";
-
-function ScoreBadge({ score }: { score: number }) {
-  const color = score >= 60 ? "text-stock-up" : score >= 45 ? "text-warning" : "text-stock-down";
-  const bg = score >= 60 ? "bg-stock-up/15 border-stock-up/30" : score >= 45 ? "bg-warning/15 border-warning/30" : "bg-stock-down/15 border-stock-down/30";
-  return (
-    <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded border ${bg} ${color}`}>
-      {score}점
-    </span>
-  );
-}
-
-function PriceBadge({ price, toKRW }: { price: number; toKRW: (n: number) => number }) {
-  return (
-    <span className="text-[10px] font-mono text-foreground/80">
-      ₩{toKRW(price).toLocaleString('ko-KR')}
-    </span>
-  );
-}
+import { SearchResultItem, InlinePriceBadge, InlineScoreBadge } from "@/components/search/SearchResultCard";
 
 export function TopBar() {
   const [query, setQuery] = useState("");
@@ -54,7 +37,7 @@ export function TopBar() {
 
   const hasVisibleSymbols = visibleSymbols.length > 0 && open;
   const { data: quotes } = useStockQuotes(visibleSymbols, hasVisibleSymbols);
-  const { data: quantData } = useQuantSignals(hasVisibleSymbols ? visibleSymbols.slice(0, 5) : undefined);
+  const { data: quantData } = useQuantSignals(hasVisibleSymbols ? visibleSymbols.slice(0, 8) : undefined);
 
   // Build lookup maps
   const priceMap = useMemo(() => {
@@ -108,8 +91,8 @@ export function TopBar() {
     const score = scoreMap.get(symbol);
     return (
       <div className="flex items-center gap-1.5 shrink-0">
-        {price != null && <PriceBadge price={price} toKRW={toKRW} />}
-        {score != null && <ScoreBadge score={score} />}
+        {price != null && <InlinePriceBadge price={price} toKRW={toKRW} />}
+        {score != null && <InlineScoreBadge score={score} />}
       </div>
     );
   };
@@ -183,22 +166,17 @@ export function TopBar() {
                 </div>
                 <ul>
                   {koreanResults.map((entry: KoreanStockEntry) => (
-                    <li key={entry.symbol} className="px-4 py-2.5 hover:bg-accent cursor-pointer flex items-center justify-between gap-2 text-sm"
-                      onClick={() => handleSelect(entry.symbol, entry.koreanName)}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="font-mono font-bold text-primary shrink-0 text-sm">{entry.symbol}</span>
-                        <div className="min-w-0">
-                          <p className="text-foreground font-medium truncate text-xs leading-tight">{entry.koreanName}</p>
-                          <p className="text-muted-foreground truncate text-[10px] leading-tight">{entry.englishName}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {renderInlineData(entry.symbol)}
-                        {entry.category && (
-                          <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{entry.category}</span>
-                        )}
-                      </div>
-                    </li>
+                    <SearchResultItem
+                      key={entry.symbol}
+                      symbol={entry.symbol}
+                      koreanName={entry.koreanName}
+                      englishName={entry.englishName}
+                      category={entry.category}
+                      price={priceMap.get(entry.symbol)}
+                      score={scoreMap.get(entry.symbol)}
+                      toKRW={toKRW}
+                      onSelect={handleSelect}
+                    />
                   ))}
                 </ul>
               </>
@@ -224,17 +202,17 @@ export function TopBar() {
                     </div>
                     <ul>
                       {apiResults.map((r: any) => (
-                        <li key={r.symbol} className="px-4 py-2.5 hover:bg-accent cursor-pointer flex items-center justify-between gap-2 text-sm"
-                          onClick={() => handleSelect(r.symbol, r.shortname || r.description)}>
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className="font-mono font-semibold text-primary shrink-0">{r.symbol}</span>
-                            <span className="text-foreground truncate text-xs">{r.shortname || r.description || "—"}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {renderInlineData(r.symbol)}
-                            <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{r.type || r.exchange || ""}</span>
-                          </div>
-                        </li>
+                        <SearchResultItem
+                          key={r.symbol}
+                          symbol={r.symbol}
+                          englishName={r.shortname || r.description}
+                          type={r.type}
+                          exchange={r.exchange}
+                          price={priceMap.get(r.symbol)}
+                          score={scoreMap.get(r.symbol)}
+                          toKRW={toKRW}
+                          onSelect={handleSelect}
+                        />
                       ))}
                     </ul>
                   </>
