@@ -91,8 +91,8 @@ export function TopBar() {
     const score = scoreMap.get(symbol);
     return (
       <div className="flex items-center gap-1.5 shrink-0">
-        {price != null && <PriceBadge price={price} toKRW={toKRW} />}
-        {score != null && <ScoreBadge score={score} />}
+        {price != null && <InlinePriceBadge price={price} toKRW={toKRW} />}
+        {score != null && <InlineScoreBadge score={score} />}
       </div>
     );
   };
