@@ -347,8 +347,14 @@ Deno.serve(async (req) => {
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
     const entryRelax = sessionInfo.entryRelax;
-    const sessionRvolMin = sessionInfo.rvolMin; // ★ 세션별 RVOL 최소값
+    const sessionRvolMin = 3.0; // ★★★ 필승 로직: 모든 세션에서 RVOL ≥ 3배 (20분 평균 대비 3배 이상만 진입)
     const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
+
+    // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
+    const etStr2 = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const et2 = new Date(etStr2);
+    const etTime = et2.getHours() * 60 + et2.getMinutes();
+    const isOpeningRush = etTime >= 570 && etTime < 585; // 09:30~09:45 ET
 
     // ========== UNIFIED DYNAMIC UNIVERSE ROTATION ==========
     const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
