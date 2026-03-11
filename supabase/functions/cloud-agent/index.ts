@@ -536,8 +536,9 @@ Deno.serve(async (req) => {
     if (recentWinRate < 40) baseEntryThreshold = Math.max(baseEntryThreshold, 70);
     else if (recentWinRate < 50) baseEntryThreshold = Math.max(baseEntryThreshold, 65);
 
-    // Session adaptation
-    const adaptedEntryThreshold = Math.round(baseEntryThreshold * entryRelax);
+    // Session adaptation — ★★★ 필승: 최소 60점 강제 하한선 (어떤 세션이든 60점 미만 진입 불가)
+    const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
+    const adaptedEntryThreshold = Math.max(rawAdapted, 60); // 절대 하한 60점
     const adaptedRvolMin = entryRelax < 1.0 ? 1.0 : 1.5;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
 
