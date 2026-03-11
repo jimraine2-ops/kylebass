@@ -779,7 +779,7 @@ Deno.serve(async (req) => {
 
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, sessionSlippage);
       const stopLoss = +(adjustedPrice * 0.975).toFixed(4);
-      const takeProfit = r.capType === 'large' ? +(adjustedPrice * 1.06).toFixed(4) : +(adjustedPrice * 1.05).toFixed(4);
+      const takeProfit = +(adjustedPrice * 1.03).toFixed(4); // ★ 필승: 3% 목표 (추격익절과 연동)
       const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
