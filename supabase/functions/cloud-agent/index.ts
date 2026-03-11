@@ -605,10 +605,10 @@ Deno.serve(async (req) => {
           const dynamicLossPct = pnlPct.toFixed(2);
           closeReason = `[MIH-4 동적손절] [${sessionLabel}] [${timeStr}] [${sym}] VWAP(${fmtKRW(vwap)})/BB하단(${fmtKRW(bbLower)}) 이탈 → 손실 ${dynamicLossPct}%에서 조기 탈출`;
           newStatus = 'dynamic_stop';
-        } else if (pnlPct <= -2.5) {
-          // 기존 고정 손절 (백스톱 역할)
+        } else if (pnlPct <= -1.8) {
+          // ★ 승률 강화: 고정 손절 -2.5% → -1.8% (큰 손실 방지, 작은 패배만 허용)
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 실행 (-1.8% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
         } else if (pnlPct >= 3.0) {
           // ★★★ 필승 로직 #3: 3% 수익 달성 후 고점 대비 0.5% 하락 시 즉시 익절
