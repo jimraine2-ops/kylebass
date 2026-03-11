@@ -166,22 +166,17 @@ export function TopBar() {
                 </div>
                 <ul>
                   {koreanResults.map((entry: KoreanStockEntry) => (
-                    <li key={entry.symbol} className="px-4 py-2.5 hover:bg-accent cursor-pointer flex items-center justify-between gap-2 text-sm"
-                      onClick={() => handleSelect(entry.symbol, entry.koreanName)}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="font-mono font-bold text-primary shrink-0 text-sm">{entry.symbol}</span>
-                        <div className="min-w-0">
-                          <p className="text-foreground font-medium truncate text-xs leading-tight">{entry.koreanName}</p>
-                          <p className="text-muted-foreground truncate text-[10px] leading-tight">{entry.englishName}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {renderInlineData(entry.symbol)}
-                        {entry.category && (
-                          <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{entry.category}</span>
-                        )}
-                      </div>
-                    </li>
+                    <SearchResultItem
+                      key={entry.symbol}
+                      symbol={entry.symbol}
+                      koreanName={entry.koreanName}
+                      englishName={entry.englishName}
+                      category={entry.category}
+                      price={priceMap.get(entry.symbol)}
+                      score={scoreMap.get(entry.symbol)}
+                      toKRW={toKRW}
+                      onSelect={handleSelect}
+                    />
                   ))}
                 </ul>
               </>
