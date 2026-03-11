@@ -9,24 +9,7 @@ import { useRecentSearches } from "@/hooks/useRecentSearches";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { searchKoreanStocks, getKoreanName, type KoreanStockEntry } from "@/lib/koreanStockMap";
-
-function ScoreBadge({ score }: { score: number }) {
-  const color = score >= 60 ? "text-stock-up" : score >= 45 ? "text-warning" : "text-stock-down";
-  const bg = score >= 60 ? "bg-stock-up/15 border-stock-up/30" : score >= 45 ? "bg-warning/15 border-warning/30" : "bg-stock-down/15 border-stock-down/30";
-  return (
-    <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded border ${bg} ${color}`}>
-      {score}점
-    </span>
-  );
-}
-
-function PriceBadge({ price, toKRW }: { price: number; toKRW: (n: number) => number }) {
-  return (
-    <span className="text-[10px] font-mono text-foreground/80">
-      ₩{toKRW(price).toLocaleString('ko-KR')}
-    </span>
-  );
-}
+import { SearchResultItem, InlinePriceBadge, InlineScoreBadge } from "@/components/search/SearchResultCard";
 
 export function TopBar() {
   const [query, setQuery] = useState("");
