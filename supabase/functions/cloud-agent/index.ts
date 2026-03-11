@@ -687,9 +687,12 @@ Deno.serve(async (req) => {
     }
 
     // ========== UNIFIED ENTRY SCAN ==========
-    // ★ MIH Phase 3: 시장 하락 추세 시 매수 완전 중단
+    // ★ 필승 로직: 시장 하락 또는 개장 직후 15분 뇌동매매 방지
     if (marketBuyHalt) {
-      await addLog('unified', 'hold', null, `[MIH-3] 🚫 시장 하락 감지로 전체 매수 중단 — 기존 포지션 관리만 수행`, { qqqTrendDown, marketBearish });
+      await addLog('unified', 'hold', null, `[필승-시장잠금] 🚫 시장 하락 감지로 전체 매수 잠금 — 기존 포지션 관리만 수행`, { qqqTrendDown, marketBearish });
+    }
+    if (isOpeningRush) {
+      await addLog('unified', 'hold', null, `[필승-뇌동방지] 🚫 정규장 개장 직후 15분(09:30~09:45 ET) — 매수 잠금`, {});
     }
 
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
