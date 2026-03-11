@@ -83,15 +83,18 @@ export function PositionAnalysisModal({
     fullMark: 10,
   }));
 
-  // Volume analysis from indicators
-  const rvol = indicators.rvol?.rvol || indicators.rvol?.rawValue || 1;
+  // Volume analysis from indicators — use real data from edge function
+  const rvolData = indicators.rvol || {};
+  const rvol = rvolData.rvol || rvolData.rawValue || 1;
+  const realCurrentVol = quantStock?.currentVol || rvolData.currentVol || 0;
+  const realAvgVol = quantStock?.avgVol || rvolData.avgVol || 0;
   const aggressionScore = indicators.aggression?.score || 5;
   const buyPressure = Math.min(100, Math.round(aggressionScore * 10 + 5));
   const sellPressure = 100 - buyPressure;
 
-  // Turnover estimate
-  const estimatedVolume = Math.round(rvol * 2500000);
-  const turnoverUSD = displayPrice * estimatedVolume;
+  // Turnover — use real volume if available, else estimate
+  const estimatedVolume = realCurrentVol > 0 ? realCurrentVol : Math.round(rvol * (realAvgVol > 0 ? realAvgVol : 2500000));
+  const turnoverUSD = displayPrice > 0 && estimatedVolume > 0 ? displayPrice * estimatedVolume : 0;
   const turnoverKRW = turnoverUSD * fxRate;
 
   // Volume comparison bar data
