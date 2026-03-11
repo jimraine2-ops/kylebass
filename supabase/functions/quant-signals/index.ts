@@ -231,7 +231,20 @@ async function analyzeSymbol(sym: string) {
     finnhubFetch(`/quote?symbol=${sym}`),
     finnhubFetch(`/stock/candle?symbol=${sym}&resolution=D&from=${from}&to=${to}`),
   ]);
-  if (!quote || !quote.c || quote.c === 0) return null;
+  if (!quote) return null;
+  // ★ 장외 시간: c=0이면 전일 종가(pc) 폴백
+  if (!quote.c || quote.c === 0) {
+    if (quote.pc && quote.pc > 0) {
+      quote.c = quote.pc;
+      quote.d = 0;
+      quote.dp = 0;
+      if (!quote.h || quote.h === 0) quote.h = quote.pc * 1.005;
+      if (!quote.l || quote.l === 0) quote.l = quote.pc * 0.995;
+      if (!quote.o || quote.o === 0) quote.o = quote.pc;
+    } else {
+      return null;
+    }
+  }
 
   let closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[];
   if (candles && candles.s !== 'no_data' && candles.t) {
