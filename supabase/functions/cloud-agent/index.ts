@@ -627,9 +627,9 @@ Deno.serve(async (req) => {
             closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 대형 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정)`;
             newStatus = 'trailing_profit';
           }
-        } else if (quantScore < 40) {
+        } else if (quantScore < 35) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 40)`;
+          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 35)`;
           newStatus = 'score_exit';
         } else if (pos.take_profit && price >= pos.take_profit) {
           shouldClose = true;
