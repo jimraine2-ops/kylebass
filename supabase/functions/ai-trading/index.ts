@@ -139,6 +139,67 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ==================== MANUAL BUY (즉시매수) ====================
+    if (action === 'manual-buy') {
+      const { symbol, price, quantity, capType, reason } = body;
+      if (!symbol || !price || !quantity || price <= 0 || quantity <= 0) {
+        return new Response(JSON.stringify({ error: '잘못된 매수 요청입니다' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Get wallet
+      const { data: wallet } = await supabase.from('unified_wallet').select('*').limit(1).single();
+      if (!wallet) {
+        return new Response(JSON.stringify({ error: '지갑 정보를 찾을 수 없습니다' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const costKRW = Math.round(toKRW(price) * quantity);
+      if (costKRW > wallet.balance) {
+        return new Response(JSON.stringify({ error: `잔고 부족: 필요 ${fmtKRWRaw(costKRW)} > 잔고 ${fmtKRWRaw(wallet.balance)}` }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check for duplicate open position
+      const { data: existing } = await supabase.from('unified_trades').select('id').eq('symbol', symbol).eq('status', 'open').limit(1);
+      if (existing && existing.length > 0) {
+        return new Response(JSON.stringify({ error: `${symbol}은 이미 보유 중입니다` }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      const ct = capType || (price >= 10 ? 'large' : 'small');
+      const stopLoss = +(price * 0.975).toFixed(4);
+      const takeProfit = +(price * 1.05).toFixed(4);
+
+      const { error: insertErr } = await supabase.from('unified_trades').insert({
+        symbol, side: 'buy', quantity, price,
+        stop_loss: stopLoss, take_profit: takeProfit,
+        ai_confidence: 0, ai_reason: reason || `[즉시매수] ${symbol} ${quantity}주@${fmtKRW(price)}`,
+        entry_score: 0, cap_type: ct, status: 'open',
+      });
+      if (insertErr) throw insertErr;
+
+      const newBalance = wallet.balance - costKRW;
+      await supabase.from('unified_wallet').update({
+        balance: newBalance, updated_at: new Date().toISOString()
+      }).eq('id', wallet.id);
+
+      // Log
+      await supabase.from('agent_logs').insert({
+        strategy: 'manual', action: 'buy', symbol,
+        message: `[즉시매수] ${symbol} ${quantity}주@${fmtKRW(price)} | 총 ${fmtKRWRaw(costKRW)} | 잔고: ${fmtKRWRaw(newBalance)}`,
+        details: { price, quantity, costKRW, newBalance, capType: ct },
+      });
+
+      return new Response(JSON.stringify({ success: true, symbol, quantity, costKRW, newBalance }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // ==================== LEGACY: get-portfolio (redirect to unified) ====================
     if (action === 'get-portfolio' || action === 'get-scalping-portfolio') {
       // Redirect to unified
