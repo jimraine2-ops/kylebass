@@ -607,12 +607,21 @@ Deno.serve(async (req) => {
           shouldClose = true;
           closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
-        } else if (peakPrice >= pos.price * 1.10) {
+        } else if (pnlPct >= 3.0) {
+          // ★★★ 필승 로직 #3: 3% 수익 달성 후 고점 대비 0.5% 하락 시 즉시 익절
           const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
-          if (dropFromPeak >= 5) {
+          if (dropFromPeak >= 0.5) {
             const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
             shouldClose = true;
-            closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정)`;
+            closeReason = `[필승-추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +3% 달성 후 고점 대비 -${dropFromPeak.toFixed(2)}% 하락 → 수익 ${lockedPnl}% 확정`;
+            newStatus = 'trailing_profit';
+          }
+        } else if (peakPrice >= pos.price * 1.10) {
+          const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
+          if (dropFromPeak >= 3) {
+            const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
+            shouldClose = true;
+            closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 대형 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정)`;
             newStatus = 'trailing_profit';
           }
         } else if (quantScore < 40) {
