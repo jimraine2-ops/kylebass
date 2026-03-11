@@ -813,13 +813,14 @@ Deno.serve(async (req) => {
         const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
         const currentScore = scoring?.totalScore || 0;
 
+        // ★ 승률 강화: 교체매매 점수 차이 10→20점 (잦은 교체 = 잦은 패 → 차단)
         const betterCandidate = candidates.find(c =>
-          c.scoring.totalScore >= 60 &&
-          c.scoring.totalScore - currentScore >= 10 &&
+          c.scoring.totalScore >= 70 &&
+          c.scoring.totalScore - currentScore >= 20 &&
           !refreshedOpenPos.some(p => p.symbol === c.sym)
         );
 
-        if (currentScore >= 40 && !betterCandidate) continue;
+        if (currentScore >= 50 && !betterCandidate) continue;
 
         if (betterCandidate || currentScore < 40) {
           const price = data.quote.c;
