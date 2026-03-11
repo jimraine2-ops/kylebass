@@ -202,17 +202,17 @@ export function TopBar() {
                     </div>
                     <ul>
                       {apiResults.map((r: any) => (
-                        <li key={r.symbol} className="px-4 py-2.5 hover:bg-accent cursor-pointer flex items-center justify-between gap-2 text-sm"
-                          onClick={() => handleSelect(r.symbol, r.shortname || r.description)}>
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className="font-mono font-semibold text-primary shrink-0">{r.symbol}</span>
-                            <span className="text-foreground truncate text-xs">{r.shortname || r.description || "—"}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {renderInlineData(r.symbol)}
-                            <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{r.type || r.exchange || ""}</span>
-                          </div>
-                        </li>
+                        <SearchResultItem
+                          key={r.symbol}
+                          symbol={r.symbol}
+                          englishName={r.shortname || r.description}
+                          type={r.type}
+                          exchange={r.exchange}
+                          price={priceMap.get(r.symbol)}
+                          score={scoreMap.get(r.symbol)}
+                          toKRW={toKRW}
+                          onSelect={handleSelect}
+                        />
                       ))}
                     </ul>
                   </>
