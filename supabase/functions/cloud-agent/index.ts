@@ -347,8 +347,14 @@ Deno.serve(async (req) => {
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
     const entryRelax = sessionInfo.entryRelax;
-    const sessionRvolMin = sessionInfo.rvolMin; // ★ 세션별 RVOL 최소값
+    const sessionRvolMin = 3.0; // ★★★ 필승 로직: 모든 세션에서 RVOL ≥ 3배 (20분 평균 대비 3배 이상만 진입)
     const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
+
+    // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
+    const etStr2 = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const et2 = new Date(etStr2);
+    const etTime = et2.getHours() * 60 + et2.getMinutes();
+    const isOpeningRush = etTime >= 570 && etTime < 585; // 09:30~09:45 ET
 
     // ========== UNIFIED DYNAMIC UNIVERSE ROTATION ==========
     const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
@@ -493,11 +499,13 @@ Deno.serve(async (req) => {
       const qqqPrice = qqqQuote?.c || 0;
       const qqqPrevClose = qqqQuote?.pc || qqqPrice;
 
-      // ★ MIH Phase 3: QQQ 1분봉 하락 추세 감지 (현재가 < 전일종가 AND 변동률 < -0.3%)
-      if (qqqPrice < qqqPrevClose && qqqChange < -0.3) {
+      // ★★★ 필승 로직 #1-나스닥동기화: QQQ 5분봉 역배열/급락 감지 시 매수 완전 잠금
+      // 조건: 현재가 < 전일종가 AND (변동률 < -0.2% 또는 고가 대비 0.3% 이상 하락)
+      const qqqHighDrop = qqqQuote?.h ? ((qqqQuote.h - qqqPrice) / qqqQuote.h) * 100 : 0;
+      if (qqqPrice < qqqPrevClose && (qqqChange < -0.2 || qqqHighDrop >= 0.3)) {
         qqqTrendDown = true;
         marketBuyHalt = true;
-        await addLog('system', 'warning', null, `[MIH-3 시장필터] 🚫 QQQ 하락 추세 감지 (${qqqChange.toFixed(2)}%) → 모든 매수 진입 일시 중단`, { qqqChange, qqqPrice, qqqPrevClose });
+        await addLog('system', 'warning', null, `[필승-시장잠금] 🚫 QQQ 역배열/급락 감지 (변동 ${qqqChange.toFixed(2)}% | 고점 대비 -${qqqHighDrop.toFixed(2)}%) → 모든 매수 버튼 잠금(Lock)`, { qqqChange, qqqPrice, qqqPrevClose, qqqHighDrop });
       }
 
       if (spyChange < -1 && qqqChange < -1) {
@@ -556,12 +564,12 @@ Deno.serve(async (req) => {
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
 
-        // ★ MIH Phase 2: 본절가 보호 (+1.5%에서 즉시 본절가+수수료 상향)
-        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
+        // ★★★ 필승 로직 #2: 본절가 보호 (+1.2%에서 즉시 본절가+수수료 상향)
+        if (pnlPct >= 1.2 && pos.stop_loss < pos.price * 1.002) {
           const breakevenStop = +(pos.price * 1.002).toFixed(4); // +0.2% 수수료 포함
           await supabase.from('unified_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
           pos.stop_loss = breakevenStop;
-          await addLog('unified', 'defense', sym, `[MIH-2 본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.5% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | 무승부 이상 확보`, {});
+          await addLog('unified', 'defense', sym, `[필승-본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.2% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | '패' 방지 확보`, {});
         }
 
         // ★ 기존 철갑방어 (+3%에서 추가 상향)
@@ -601,12 +609,21 @@ Deno.serve(async (req) => {
           shouldClose = true;
           closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
-        } else if (peakPrice >= pos.price * 1.10) {
+        } else if (pnlPct >= 3.0) {
+          // ★★★ 필승 로직 #3: 3% 수익 달성 후 고점 대비 0.5% 하락 시 즉시 익절
           const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
-          if (dropFromPeak >= 5) {
+          if (dropFromPeak >= 0.5) {
             const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
             shouldClose = true;
-            closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정)`;
+            closeReason = `[필승-추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +3% 달성 후 고점 대비 -${dropFromPeak.toFixed(2)}% 하락 → 수익 ${lockedPnl}% 확정`;
+            newStatus = 'trailing_profit';
+          }
+        } else if (peakPrice >= pos.price * 1.10) {
+          const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
+          if (dropFromPeak >= 3) {
+            const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
+            shouldClose = true;
+            closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 대형 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정)`;
             newStatus = 'trailing_profit';
           }
         } else if (quantScore < 40) {
@@ -670,16 +687,19 @@ Deno.serve(async (req) => {
     }
 
     // ========== UNIFIED ENTRY SCAN ==========
-    // ★ MIH Phase 3: 시장 하락 추세 시 매수 완전 중단
+    // ★ 필승 로직: 시장 하락 또는 개장 직후 15분 뇌동매매 방지
     if (marketBuyHalt) {
-      await addLog('unified', 'hold', null, `[MIH-3] 🚫 시장 하락 감지로 전체 매수 중단 — 기존 포지션 관리만 수행`, { qqqTrendDown, marketBearish });
+      await addLog('unified', 'hold', null, `[필승-시장잠금] 🚫 시장 하락 감지로 전체 매수 잠금 — 기존 포지션 관리만 수행`, { qqqTrendDown, marketBearish });
+    }
+    if (isOpeningRush) {
+      await addLog('unified', 'hold', null, `[필승-뇌동방지] 🚫 정규장 개장 직후 15분(09:30~09:45 ET) — 매수 잠금`, {});
     }
 
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
     const MAX_POSITIONS = 15;
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
-    if (!marketBuyHalt) {
+    if (!marketBuyHalt && !isOpeningRush) {
       for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
         const batch = SCAN_SYMBOLS.slice(i, i + 5);
         const results = await Promise.all(batch.map(async (sym) => {
@@ -712,10 +732,15 @@ Deno.serve(async (req) => {
           const minFilters = entryRelax < 1.0 ? 2 : 3;
           if (filtersPassed < minFilters) continue;
 
-          // ★ MIH Phase 1 + 전세션 적응: 세션별 RVOL 필터 (정규장 200%, 장외 100% — 상대적 거래량 폭증 기준)
+          // ★★★ 필승 로직 #1-수급필터: 실시간 거래대금 20분 평균 대비 3배 이상만 진입 (돈이 들어온 종목만)
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
-          if (rvol < sessionRvolMin) {
-            // 세션별 RVOL 기준 미달 시 진입 거부
+          if (rvol < 3.0) {
+            // 3배 미만 거래량 = 수급 부족 → 절대 매수 금지
+            continue;
+          }
+
+          // ★★★ 필승 로직 #4: 장 시작 직후 15분 뇌동매매 방지
+          if (isOpeningRush) {
             continue;
           }
 
@@ -757,7 +782,7 @@ Deno.serve(async (req) => {
 
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, sessionSlippage);
       const stopLoss = +(adjustedPrice * 0.975).toFixed(4);
-      const takeProfit = r.capType === 'large' ? +(adjustedPrice * 1.06).toFixed(4) : +(adjustedPrice * 1.05).toFixed(4);
+      const takeProfit = +(adjustedPrice * 1.03).toFixed(4); // ★ 필승: 3% 목표 (추격익절과 연동)
       const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
