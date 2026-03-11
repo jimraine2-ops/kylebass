@@ -729,10 +729,15 @@ Deno.serve(async (req) => {
           const minFilters = entryRelax < 1.0 ? 2 : 3;
           if (filtersPassed < minFilters) continue;
 
-          // ★ MIH Phase 1 + 전세션 적응: 세션별 RVOL 필터 (정규장 200%, 장외 100% — 상대적 거래량 폭증 기준)
+          // ★★★ 필승 로직 #1-수급필터: 실시간 거래대금 20분 평균 대비 3배 이상만 진입 (돈이 들어온 종목만)
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
-          if (rvol < sessionRvolMin) {
-            // 세션별 RVOL 기준 미달 시 진입 거부
+          if (rvol < 3.0) {
+            // 3배 미만 거래량 = 수급 부족 → 절대 매수 금지
+            continue;
+          }
+
+          // ★★★ 필승 로직 #4: 장 시작 직후 15분 뇌동매매 방지
+          if (isOpeningRush) {
             continue;
           }
 
