@@ -37,7 +37,7 @@ export function TopBar() {
 
   const hasVisibleSymbols = visibleSymbols.length > 0 && open;
   const { data: quotes } = useStockQuotes(visibleSymbols, hasVisibleSymbols);
-  const { data: quantData } = useQuantSignals(hasVisibleSymbols ? visibleSymbols.slice(0, 5) : undefined);
+  const { data: quantData } = useQuantSignals(hasVisibleSymbols ? visibleSymbols.slice(0, 8) : undefined);
 
   // Build lookup maps
   const priceMap = useMemo(() => {
