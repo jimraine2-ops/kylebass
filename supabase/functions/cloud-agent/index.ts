@@ -562,12 +562,12 @@ Deno.serve(async (req) => {
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
 
-        // ★ MIH Phase 2: 본절가 보호 (+1.5%에서 즉시 본절가+수수료 상향)
-        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
+        // ★★★ 필승 로직 #2: 본절가 보호 (+1.2%에서 즉시 본절가+수수료 상향)
+        if (pnlPct >= 1.2 && pos.stop_loss < pos.price * 1.002) {
           const breakevenStop = +(pos.price * 1.002).toFixed(4); // +0.2% 수수료 포함
           await supabase.from('unified_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
           pos.stop_loss = breakevenStop;
-          await addLog('unified', 'defense', sym, `[MIH-2 본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.5% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | 무승부 이상 확보`, {});
+          await addLog('unified', 'defense', sym, `[필승-본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.2% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | '패' 방지 확보`, {});
         }
 
         // ★ 기존 철갑방어 (+3%에서 추가 상향)
