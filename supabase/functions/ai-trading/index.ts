@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
-    const ALLOWED_ACTIONS = ['get-unified-portfolio', 'reset-unified-wallet', 'update-balance',
+    const ALLOWED_ACTIONS = ['get-unified-portfolio', 'reset-unified-wallet', 'update-balance', 'manual-buy',
       // Legacy actions kept for backward compatibility during transition
       'get-portfolio', 'reset-wallet', 'get-scalping-portfolio', 'reset-scalping-wallet',
       'analyze-and-trade', 'scalping-analyze', 'quant-auto-trade'];
