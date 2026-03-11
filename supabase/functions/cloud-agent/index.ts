@@ -565,12 +565,12 @@ Deno.serve(async (req) => {
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
 
-        // ★★★ 필승 로직 #2: 본절가 보호 (+1.2%에서 즉시 본절가+수수료 상향)
-        if (pnlPct >= 1.2 && pos.stop_loss < pos.price * 1.002) {
+        // ★★★ 필승 로직 #2: 본절가 보호 (+1.0%에서 즉시 본절가+수수료 상향 → '패' 원천 차단)
+        if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.002) {
           const breakevenStop = +(pos.price * 1.002).toFixed(4); // +0.2% 수수료 포함
           await supabase.from('unified_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
           pos.stop_loss = breakevenStop;
-          await addLog('unified', 'defense', sym, `[필승-본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.2% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | '패' 방지 확보`, {});
+          await addLog('unified', 'defense', sym, `[필승-본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.0% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | '패' 원천 차단`, {});
         }
 
         // ★ 기존 철갑방어 (+3%에서 추가 상향)
@@ -605,10 +605,10 @@ Deno.serve(async (req) => {
           const dynamicLossPct = pnlPct.toFixed(2);
           closeReason = `[MIH-4 동적손절] [${sessionLabel}] [${timeStr}] [${sym}] VWAP(${fmtKRW(vwap)})/BB하단(${fmtKRW(bbLower)}) 이탈 → 손실 ${dynamicLossPct}%에서 조기 탈출`;
           newStatus = 'dynamic_stop';
-        } else if (pnlPct <= -2.5) {
-          // 기존 고정 손절 (백스톱 역할)
+        } else if (pnlPct <= -1.8) {
+          // ★ 승률 강화: 고정 손절 -2.5% → -1.8% (큰 손실 방지, 작은 패배만 허용)
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 실행 (-2.5% 도달: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 실행 (-1.8% 도달: ${pnlPct.toFixed(2)}%)`;
           newStatus = 'stopped';
         } else if (pnlPct >= 3.0) {
           // ★★★ 필승 로직 #3: 3% 수익 달성 후 고점 대비 0.5% 하락 시 즉시 익절
@@ -627,9 +627,9 @@ Deno.serve(async (req) => {
             closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 대형 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정)`;
             newStatus = 'trailing_profit';
           }
-        } else if (quantScore < 40) {
+        } else if (quantScore < 35) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 40)`;
+          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 35)`;
           newStatus = 'score_exit';
         } else if (pos.take_profit && price >= pos.take_profit) {
           shouldClose = true;
@@ -813,13 +813,14 @@ Deno.serve(async (req) => {
         const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
         const currentScore = scoring?.totalScore || 0;
 
+        // ★ 승률 강화: 교체매매 점수 차이 10→20점 (잦은 교체 = 잦은 패 → 차단)
         const betterCandidate = candidates.find(c =>
-          c.scoring.totalScore >= 60 &&
-          c.scoring.totalScore - currentScore >= 10 &&
+          c.scoring.totalScore >= 70 &&
+          c.scoring.totalScore - currentScore >= 20 &&
           !refreshedOpenPos.some(p => p.symbol === c.sym)
         );
 
-        if (currentScore >= 40 && !betterCandidate) continue;
+        if (currentScore >= 50 && !betterCandidate) continue;
 
         if (betterCandidate || currentScore < 40) {
           const price = data.quote.c;
