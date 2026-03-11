@@ -499,11 +499,13 @@ Deno.serve(async (req) => {
       const qqqPrice = qqqQuote?.c || 0;
       const qqqPrevClose = qqqQuote?.pc || qqqPrice;
 
-      // ★ MIH Phase 3: QQQ 1분봉 하락 추세 감지 (현재가 < 전일종가 AND 변동률 < -0.3%)
-      if (qqqPrice < qqqPrevClose && qqqChange < -0.3) {
+      // ★★★ 필승 로직 #1-나스닥동기화: QQQ 5분봉 역배열/급락 감지 시 매수 완전 잠금
+      // 조건: 현재가 < 전일종가 AND (변동률 < -0.2% 또는 고가 대비 0.3% 이상 하락)
+      const qqqHighDrop = qqqQuote?.h ? ((qqqQuote.h - qqqPrice) / qqqQuote.h) * 100 : 0;
+      if (qqqPrice < qqqPrevClose && (qqqChange < -0.2 || qqqHighDrop >= 0.3)) {
         qqqTrendDown = true;
         marketBuyHalt = true;
-        await addLog('system', 'warning', null, `[MIH-3 시장필터] 🚫 QQQ 하락 추세 감지 (${qqqChange.toFixed(2)}%) → 모든 매수 진입 일시 중단`, { qqqChange, qqqPrice, qqqPrevClose });
+        await addLog('system', 'warning', null, `[필승-시장잠금] 🚫 QQQ 역배열/급락 감지 (변동 ${qqqChange.toFixed(2)}% | 고점 대비 -${qqqHighDrop.toFixed(2)}%) → 모든 매수 버튼 잠금(Lock)`, { qqqChange, qqqPrice, qqqPrevClose, qqqHighDrop });
       }
 
       if (spyChange < -1 && qqqChange < -1) {
