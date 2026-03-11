@@ -41,7 +41,8 @@ function getScoreLabel(score: number): string {
 }
 
 function formatLargeNumber(n: number): string {
-  if (n >= 100000000) return `${(n / 100000000).toFixed(1)}억`;
+  if (!n || !isFinite(n) || n <= 0) return '-';
+  if (n >= 1_0000_0000) return `${(n / 1_0000_0000).toFixed(1)}억`;
   if (n >= 10000) return `${(n / 10000).toFixed(0)}만`;
   return n.toLocaleString('ko-KR');
 }
