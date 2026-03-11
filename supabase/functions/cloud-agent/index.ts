@@ -696,7 +696,7 @@ Deno.serve(async (req) => {
     const MAX_POSITIONS = 15;
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
-    if (!marketBuyHalt) {
+    if (!marketBuyHalt && !isOpeningRush) {
       for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
         const batch = SCAN_SYMBOLS.slice(i, i + 5);
         const results = await Promise.all(batch.map(async (sym) => {
