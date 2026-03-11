@@ -188,10 +188,10 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const totalScore = Math.round((rawScore / 140) * 100);
 
   return {
-    totalScore, trailingStop, rvol,
+    totalScore, trailingStop, rvol, currentVol, avgVol,
     indicators: {
       sentiment: { score: sentimentScore, details: `모멘텀 ${changePct.toFixed(1)}%` },
-      rvol: { score: rvolScore, details: `RVOL: ${rvol.toFixed(1)}x`, rvol, weight: '×2' },
+      rvol: { score: rvolScore, details: `RVOL: ${rvol.toFixed(1)}x`, rvol, rawValue: rvol, currentVol, avgVol, weight: '×2' },
       candle: { score: candleScore, details: `트리플컨펌`, vwapCross: closes[n] > vwap, weight: '×2' },
       macd: { score: macdScore, details: `MACD: ${macd.toFixed(4)}`, macd: +macd.toFixed(4), weight: '×2' },
       atr: { score: atrScore, details: `ATR: ${currentATR.toFixed(4)}`, atr: currentATR, trailingStop },

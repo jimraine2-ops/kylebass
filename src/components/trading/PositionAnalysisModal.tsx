@@ -97,8 +97,8 @@ export function PositionAnalysisModal({
   const turnoverUSD = displayPrice > 0 && estimatedVolume > 0 ? displayPrice * estimatedVolume : 0;
   const turnoverKRW = turnoverUSD * fxRate;
 
-  // Volume comparison bar data
-  const avgVolume = Math.round(estimatedVolume / Math.max(rvol, 0.01));
+  // Volume comparison bar data — use real avg if available
+  const avgVolume = realAvgVol > 0 ? Math.round(realAvgVol) : Math.round(estimatedVolume / Math.max(rvol, 0.01));
   const volumeBarData = [
     { name: '전일 평균', volume: avgVolume, fill: 'hsl(var(--muted-foreground))' },
     { name: '금일 누적', volume: estimatedVolume, fill: rvol >= 2 ? 'hsl(var(--stock-up))' : 'hsl(var(--primary))' },
