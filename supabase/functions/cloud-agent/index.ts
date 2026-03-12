@@ -488,10 +488,10 @@ Deno.serve(async (req) => {
       await addLog('unified', 'learn', null, `[AI-Learn] 블랙리스트 0개 (2일내 5패 기준 해당 없음)`, {});
     }
 
-    // --- Market Trend Guard (★ MIH Phase 3: QQQ 하락 추세 시 매수 중단) ---
+    // --- Market Trend Guard (비활성화: 시장잠금 OFF) ---
     let marketBearish = false;
     let marketBuyHalt = false;
-    let baseEntryThreshold = 50; // ★ 전략 수정: 50점으로 하향하여 거래 활성도 극대화
+    let baseEntryThreshold = 50;
     let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
@@ -500,29 +500,9 @@ Deno.serve(async (req) => {
       ]);
       const spyChange = spyQuote?.dp || 0;
       const qqqChange = qqqQuote?.dp || 0;
-      const qqqPrice = qqqQuote?.c || 0;
-      const qqqPrevClose = qqqQuote?.pc || qqqPrice;
 
-      // ★★★ 필승 로직 #1-나스닥동기화: QQQ 5분봉 역배열/급락 감지 시 매수 완전 잠금
-      // 조건: 현재가 < 전일종가 AND (변동률 < -0.2% 또는 고가 대비 0.3% 이상 하락)
-      const qqqHighDrop = qqqQuote?.h ? ((qqqQuote.h - qqqPrice) / qqqQuote.h) * 100 : 0;
-      if (qqqPrice < qqqPrevClose && (qqqChange < -0.2 || qqqHighDrop >= 0.3)) {
-        qqqTrendDown = true;
-        marketBuyHalt = true;
-        await addLog('system', 'warning', null, `[필승-시장잠금] 🚫 QQQ 역배열/급락 감지 (변동 ${qqqChange.toFixed(2)}% | 고점 대비 -${qqqHighDrop.toFixed(2)}%) → 모든 매수 버튼 잠금(Lock)`, { qqqChange, qqqPrice, qqqPrevClose, qqqHighDrop });
-      }
-
-      if (spyChange < -1 && qqqChange < -1) {
-        marketBearish = true;
-        marketBuyHalt = true;
-        baseEntryThreshold = 75;
-        await addLog('system', 'warning', null, `[시장동기화] ⚠️ SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 75점 상향 + 매수 중단`, { spyChange, qqqChange });
-      } else if (spyChange < -0.5 || qqqChange < -0.5) {
-        baseEntryThreshold = 55;
-        await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 55점`, { spyChange, qqqChange });
-      } else {
-        await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 50점`, { spyChange, qqqChange });
-      }
+      // ★ 시장잠금 완전 비활성화 — QQQ/SPY 하락과 무관하게 항상 매수 허용
+      await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 시장잠금 OFF, 진입 기준 ${baseEntryThreshold}점`, { spyChange, qqqChange });
     } catch { /* fallback */ }
 
     // --- Dynamic win-rate threshold ---
