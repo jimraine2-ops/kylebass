@@ -792,7 +792,7 @@ Deno.serve(async (req) => {
 
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, sessionSlippage);
       const stopLoss = +(adjustedPrice * 0.982).toFixed(4); // -1.8% 손절
-      const takeProfit = +(adjustedPrice * 1.03).toFixed(4); // 3% 목표
+      const takeProfit = +(adjustedPrice * 1.05).toFixed(4); // ★ 초공격형: 5% 목표 (트레일링으로 추가 수익)
       const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
