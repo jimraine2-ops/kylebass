@@ -347,7 +347,7 @@ Deno.serve(async (req) => {
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
     const entryRelax = sessionInfo.entryRelax;
-    const sessionRvolMin = 3.0; // ★★★ 필승 로직: 모든 세션에서 RVOL ≥ 3배 (20분 평균 대비 3배 이상만 진입)
+    const sessionRvolMin = 2.0; // ★ 초공격형: RVOL 기준 3.0→2.0 (거래 빈도 극대화)
     const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
 
     // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
