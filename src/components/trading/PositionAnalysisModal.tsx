@@ -298,8 +298,8 @@ export function PositionAnalysisModal({
                   <Radar
                     name="점수"
                     dataKey="score"
-                    stroke={score >= 60 ? 'hsl(var(--stock-up))' : score >= 40 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))'}
-                    fill={score >= 60 ? 'hsl(var(--stock-up))' : score >= 40 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))'}
+                    stroke={score >= 55 ? 'hsl(var(--stock-up))' : score >= 35 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))'}
+                    fill={score >= 55 ? 'hsl(var(--stock-up))' : score >= 35 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))'}
                     fillOpacity={0.25}
                     strokeWidth={2}
                     isAnimationActive={true}
