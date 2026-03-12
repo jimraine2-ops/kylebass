@@ -518,10 +518,10 @@ Deno.serve(async (req) => {
         baseEntryThreshold = 75;
         await addLog('system', 'warning', null, `[시장동기화] ⚠️ SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 75점 상향 + 매수 중단`, { spyChange, qqqChange });
       } else if (spyChange < -0.5 || qqqChange < -0.5) {
-        baseEntryThreshold = 60;
-        await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 60점`, { spyChange, qqqChange });
-      } else {
+        baseEntryThreshold = 55;
         await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 55점`, { spyChange, qqqChange });
+      } else {
+        await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 50점`, { spyChange, qqqChange });
       }
     } catch { /* fallback */ }
 
