@@ -300,12 +300,56 @@ const SMALL_SET = new Set(SMALL_CAP_UNIVERSE.filter(s => !LARGE_SET.has(s)));
 // ===== Dynamic Active List Management =====
 const activeUnifiedList: Set<string> = new Set();
 const lastScores: Map<string, number> = new Map();
+let lastSessionType: SessionType | null = null; // 세션 전환 감지용
 
 // Determine cap type: price >= $10 → large, else small
 function getCapType(price: number, symbol: string): 'large' | 'small' {
   if (LARGE_SET.has(symbol) && price >= 10) return 'large';
   if (SMALL_SET.has(symbol)) return 'small';
   return price >= 10 ? 'large' : 'small';
+}
+
+// ===== Volume Leader Fetcher (Finnhub) =====
+async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: string; volume: number; changePct: number; tradingValue: number }[]> {
+  // Use market movers / active stocks approach
+  const leaders: { symbol: string; volume: number; changePct: number; tradingValue: number }[] = [];
+  
+  // Fetch quotes for a batch of known liquid symbols and rank by volume
+  const allSymbols = [...Array.from(LARGE_SET), ...Array.from(SMALL_SET)];
+  // Sample 100 symbols per cycle for volume ranking
+  const sampleSize = 100;
+  const cycleOffset = Math.floor(Math.random() * allSymbols.length);
+  const sample: string[] = [];
+  for (let i = 0; i < Math.min(sampleSize, allSymbols.length); i++) {
+    sample.push(allSymbols[(cycleOffset + i) % allSymbols.length]);
+  }
+  
+  // Batch fetch quotes (5 at a time)
+  for (let i = 0; i < sample.length; i += 5) {
+    const batch = sample.slice(i, i + 5);
+    const results = await Promise.all(batch.map(sym => finnhubFetch(`/quote?symbol=${sym}`).then(q => q ? { symbol: sym, quote: q } : null)));
+    for (const r of results) {
+      if (!r || !r.quote || !r.quote.c) continue;
+      const vol = r.quote.v || 0; // today's volume (may be 0 in extended hours)
+      const price = r.quote.c;
+      const changePct = r.quote.dp || 0;
+      const tradingValue = vol * price; // USD trading value
+      leaders.push({ symbol: r.symbol, volume: vol, changePct, tradingValue });
+    }
+    if (i + 5 < sample.length) await new Promise(r => setTimeout(r, 200));
+  }
+  
+  // Sort by trading value (거래대금) descending
+  leaders.sort((a, b) => b.tradingValue - a.tradingValue);
+  return leaders;
+}
+
+// ===== Liquidity Score: 상승률 + 거래대금 합산 =====
+function liquidityScore(changePct: number, tradingValueUSD: number): number {
+  // Normalize trading value (0-50 points) and changePct (0-50 points)
+  const valueScore = Math.min(50, Math.log10(Math.max(tradingValueUSD, 1)) * 5);
+  const changeScore = Math.min(50, Math.max(0, changePct) * 5);
+  return valueScore + changeScore;
 }
 
 Deno.serve(async (req) => {
