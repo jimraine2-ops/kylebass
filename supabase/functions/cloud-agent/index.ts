@@ -810,6 +810,10 @@ Deno.serve(async (req) => {
           if (alreadyHolding && !isPyramiding) continue;
           if (openCount >= MAX_POSITIONS) continue;
 
+          // ★ 유동성 하한선: 거래대금 $10K 미만 종목 진입 차단 (호가 공백 방지)
+          const vlInfo = volumeLeaders.find(vl => vl.symbol === r.sym);
+          if (vlInfo && vlInfo.tradingValue < 10000) continue;
+
           // Session-adaptive filters
           const sentimentOk = (r.scoring.indicators.sentiment.score || 0) > 0;
           const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= adaptedRvolMin;
@@ -818,16 +822,18 @@ Deno.serve(async (req) => {
           const minFilters = entryRelax < 1.0 ? 2 : 3;
           if (filtersPassed < minFilters) continue;
 
-          // ★ 초공격형 수급필터: RVOL 2.0 이상만 진입 (장외 1.5)
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
-          if (rvol < adaptedRvolMin) {
-            continue;
-          }
+          if (rvol < adaptedRvolMin) continue;
 
-          // ★★★ 필승 로직 #4: 장 시작 직후 15분 뇌동매매 방지
-          if (isOpeningRush) {
-            continue;
-          }
+          if (isOpeningRush) continue;
+
+          // ★ 수급 돌파 플래그: RVOL 200% 이상 폭증 (직전 대비)
+          (r as any).isVolumeBurst = rvol >= 2.0;
+          // ★ 유동성 점수: 상승률 + 거래대금 합산
+          const tradingVal = vlInfo?.tradingValue || 0;
+          (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
+          (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
+          (r as any).tradingValueUSD = tradingVal;
 
           candidates.push(r);
         }
