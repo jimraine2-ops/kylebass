@@ -549,12 +549,12 @@ Deno.serve(async (req) => {
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
 
-        // ★★★ 필승 로직 #2: 본절가 보호 (+1.0%에서 즉시 본절가+수수료 상향 → '패' 원천 차단)
-        if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.002) {
+        // ★★★ 초공격형: 본절가 보호 (+1.2%에서 즉시 본절가+0.2% 수수료 상향 → '패' 원천 차단)
+        if (pnlPct >= 1.2 && pos.stop_loss < pos.price * 1.002) {
           const breakevenStop = +(pos.price * 1.002).toFixed(4); // +0.2% 수수료 포함
           await supabase.from('unified_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
           pos.stop_loss = breakevenStop;
-          await addLog('unified', 'defense', sym, `[필승-본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.0% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | '패' 원천 차단`, {});
+          await addLog('unified', 'defense', sym, `[초공격-본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.2% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | '패' 원천 차단`, {});
         }
 
         // ★ 기존 철갑방어 (+3%에서 추가 상향)
