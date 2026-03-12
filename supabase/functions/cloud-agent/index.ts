@@ -905,7 +905,10 @@ Deno.serve(async (req) => {
       const newBuyBalance = balance - costKRW;
       const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 보정 ×${spreadMul}` : '';
       const capLabel = r.capType === 'large' ? '대형' : '소형';
-      const logMsg = `[통합] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 [${capLabel}] 자율 매수 [${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const volRank = (r as any).volumeRank;
+      const volRankTag = volRank <= 50 ? ` | Vol#${volRank}` : '';
+      const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
+      const logMsg = `[통합] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 [${capLabel}] 자율 매수 [${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       await supabase.from('unified_trades').insert({
         symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,
