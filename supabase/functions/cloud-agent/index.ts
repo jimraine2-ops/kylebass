@@ -557,12 +557,22 @@ Deno.serve(async (req) => {
           await addLog('unified', 'defense', sym, `[초공격-본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.2% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | '패' 원천 차단`, {});
         }
 
-        // ★ 기존 철갑방어 (+3%에서 추가 상향)
-        if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.015) {
-          const reinforcedStop = +(pos.price * 1.015).toFixed(4);
+        // ★ 초공격형 트레일링: 수익 구간별 손절가 계속 상향 (55점 진입 → 60/70점 급등 시 수익 극대화)
+        if (pnlPct >= 5 && pos.stop_loss < pos.price * 1.035) {
+          const reinforcedStop = +(pos.price * 1.035).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: reinforcedStop }).eq('id', pos.id);
           pos.stop_loss = reinforcedStop;
-          await addLog('unified', 'defense', sym, `[철갑방어+] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +1.5% 상향: ${fmtKRW(reinforcedStop)}`, {});
+          await addLog('unified', 'defense', sym, `[초공격-5%방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +3.5% 상향: ${fmtKRW(reinforcedStop)} | 수익 락인`, {});
+        } else if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.02) {
+          const reinforcedStop = +(pos.price * 1.02).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: reinforcedStop }).eq('id', pos.id);
+          pos.stop_loss = reinforcedStop;
+          await addLog('unified', 'defense', sym, `[초공격-3%방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +2.0% 상향: ${fmtKRW(reinforcedStop)} | 수익 락인`, {});
+        } else if (pnlPct >= 2 && pos.stop_loss < pos.price * 1.01) {
+          const reinforcedStop = +(pos.price * 1.01).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: reinforcedStop }).eq('id', pos.id);
+          pos.stop_loss = reinforcedStop;
+          await addLog('unified', 'defense', sym, `[초공격-2%방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +1.0% 상향: ${fmtKRW(reinforcedStop)}`, {});
         }
 
         const peakPrice = Math.max(pos.peak_price || pos.price, price);
