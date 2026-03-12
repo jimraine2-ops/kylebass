@@ -855,20 +855,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sort: explosive first, then by score descending
+    // Sort: explosive first → volume burst → liquidity score → quant score
     candidates.sort((a, b) => {
       const aExp = (a as any).isExplosive ? 1 : 0;
       const bExp = (b as any).isExplosive ? 1 : 0;
       if (aExp !== bExp) return bExp - aExp;
-      const aVolBurst = a.scoring.rvol >= 3 ? 1 : 0;
-      const bVolBurst = b.scoring.rvol >= 3 ? 1 : 0;
-      if (aVolBurst !== bVolBurst) return bVolBurst - aVolBurst;
+      // ★ 수급 돌파 종목 우선
+      const aVB = (a as any).isVolumeBurst ? 1 : 0;
+      const bVB = (b as any).isVolumeBurst ? 1 : 0;
+      if (aVB !== bVB) return bVB - aVB;
+      // ★ 유동성 점수(상승률+거래대금) 합산순
+      const aLiq = (a as any).liquidityScore || 0;
+      const bLiq = (b as any).liquidityScore || 0;
+      if (Math.abs(aLiq - bLiq) > 5) return bLiq - aLiq;
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
     if (candidates.length > 0) {
-      const summary = candidates.slice(0, 10).map(c => `${c.sym}(${c.scoring.totalScore}점/${c.capType})`).join(', ');
-      await addLog('unified', 'scan', null, `[통합스캔] [${timeStr}] 매수 후보 ${candidates.length}개 (점수순): ${summary}`, {});
+      const summary = candidates.slice(0, 10).map(c => {
+        const volRank = (c as any).volumeRank;
+        const volTag = volRank <= 20 ? ` Vol#${volRank}` : '';
+        const burstTag = (c as any).isVolumeBurst ? '🔥' : '';
+        return `${burstTag}${c.sym}(${c.scoring.totalScore}점/${c.capType}${volTag})`;
+      }).join(', ');
+      await addLog('unified', 'scan', null, `[통합스캔] [${timeStr}] 매수 후보 ${candidates.length}개 (수급+점수순): ${summary}`, {});
     }
 
     for (const r of candidates) {
