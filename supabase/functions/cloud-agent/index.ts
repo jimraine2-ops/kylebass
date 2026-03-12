@@ -300,12 +300,56 @@ const SMALL_SET = new Set(SMALL_CAP_UNIVERSE.filter(s => !LARGE_SET.has(s)));
 // ===== Dynamic Active List Management =====
 const activeUnifiedList: Set<string> = new Set();
 const lastScores: Map<string, number> = new Map();
+let lastSessionType: SessionType | null = null; // 세션 전환 감지용
 
 // Determine cap type: price >= $10 → large, else small
 function getCapType(price: number, symbol: string): 'large' | 'small' {
   if (LARGE_SET.has(symbol) && price >= 10) return 'large';
   if (SMALL_SET.has(symbol)) return 'small';
   return price >= 10 ? 'large' : 'small';
+}
+
+// ===== Volume Leader Fetcher (Finnhub) =====
+async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: string; volume: number; changePct: number; tradingValue: number }[]> {
+  // Use market movers / active stocks approach
+  const leaders: { symbol: string; volume: number; changePct: number; tradingValue: number }[] = [];
+  
+  // Fetch quotes for a batch of known liquid symbols and rank by volume
+  const allSymbols = [...Array.from(LARGE_SET), ...Array.from(SMALL_SET)];
+  // Sample 100 symbols per cycle for volume ranking
+  const sampleSize = 100;
+  const cycleOffset = Math.floor(Math.random() * allSymbols.length);
+  const sample: string[] = [];
+  for (let i = 0; i < Math.min(sampleSize, allSymbols.length); i++) {
+    sample.push(allSymbols[(cycleOffset + i) % allSymbols.length]);
+  }
+  
+  // Batch fetch quotes (5 at a time)
+  for (let i = 0; i < sample.length; i += 5) {
+    const batch = sample.slice(i, i + 5);
+    const results = await Promise.all(batch.map(sym => finnhubFetch(`/quote?symbol=${sym}`).then(q => q ? { symbol: sym, quote: q } : null)));
+    for (const r of results) {
+      if (!r || !r.quote || !r.quote.c) continue;
+      const vol = r.quote.v || 0; // today's volume (may be 0 in extended hours)
+      const price = r.quote.c;
+      const changePct = r.quote.dp || 0;
+      const tradingValue = vol * price; // USD trading value
+      leaders.push({ symbol: r.symbol, volume: vol, changePct, tradingValue });
+    }
+    if (i + 5 < sample.length) await new Promise(r => setTimeout(r, 200));
+  }
+  
+  // Sort by trading value (거래대금) descending
+  leaders.sort((a, b) => b.tradingValue - a.tradingValue);
+  return leaders;
+}
+
+// ===== Liquidity Score: 상승률 + 거래대금 합산 =====
+function liquidityScore(changePct: number, tradingValueUSD: number): number {
+  // Normalize trading value (0-50 points) and changePct (0-50 points)
+  const valueScore = Math.min(50, Math.log10(Math.max(tradingValueUSD, 1)) * 5);
+  const changeScore = Math.min(50, Math.max(0, changePct) * 5);
+  return valueScore + changeScore;
 }
 
 Deno.serve(async (req) => {
@@ -356,8 +400,33 @@ Deno.serve(async (req) => {
     const etTime = et2.getHours() * 60 + et2.getMinutes();
     const isOpeningRush = etTime >= 570 && etTime < 585; // 09:30~09:45 ET
 
-    // ========== UNIFIED DYNAMIC UNIVERSE ROTATION ==========
+    // ========== SESSION TRANSITION RESET ==========
+    const currentSession = sessionInfo.session;
+    if (lastSessionType && lastSessionType !== currentSession) {
+      // 세션 전환 감지 → 스캔 리스트 초기화 (보유 종목은 유지)
+      const heldBefore = new Set((openPos || []).map((p: any) => p.symbol));
+      const resetCount = activeUnifiedList.size;
+      activeUnifiedList.clear();
+      // 보유 종목은 계속 유지
+      for (const s of heldBefore) activeUnifiedList.add(s);
+      await addLog('system', 'info', null, `[세션전환] ${lastSessionType} → ${currentSession} | 스캔 리스트 리셋 (${resetCount}개 초기화, 보유 ${heldBefore.size}개 유지) — 새 수급 기반 종목 유입 시작`, {});
+    }
+    lastSessionType = currentSession;
+
+    // ========== UNIFIED DYNAMIC UNIVERSE ROTATION (Volume Leader Priority) ==========
     const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
+
+    // Step 0: Fetch Volume Leaders for current session (거래대금 상위 종목 우선 유입)
+    let volumeLeaders: { symbol: string; volume: number; changePct: number; tradingValue: number }[] = [];
+    try {
+      volumeLeaders = await fetchVolumeLeaders(currentSession);
+      if (volumeLeaders.length > 0) {
+        const topVol = volumeLeaders.slice(0, 10).map(v => `${v.symbol}($${(v.tradingValue/1e6).toFixed(1)}M)`).join(', ');
+        await addLog('system', 'scan', null, `[수급스캔] [${sessionLabel}] Volume Leader ${volumeLeaders.length}개 탐지 | Top10: ${topVol}`, {});
+      }
+    } catch (e) {
+      await addLog('system', 'warning', null, `[수급스캔] Volume Leader 조회 실패: ${e.message}`, {});
+    }
 
     // Step 1: Evict low-score symbols
     const evicted: string[] = [];
@@ -369,12 +438,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Fill 80 active slots (30 large + 50 small)
+    // Step 2: Fill 80 active slots — Volume Leaders 우선 유입
     const LARGE_SLOTS = 30;
     const SMALL_SLOTS = 50;
-    const TOTAL_SLOTS = LARGE_SLOTS + SMALL_SLOTS;
 
-    // Count current composition
     const currentLarge: string[] = [];
     const currentSmall: string[] = [];
     for (const sym of activeUnifiedList) {
@@ -382,7 +449,28 @@ Deno.serve(async (req) => {
       else currentSmall.push(sym);
     }
 
-    // Fill large-cap slots
+    // ★ Volume Leader 우선 유입: 거래대금 상위 종목을 먼저 슬롯에 배치
+    const volumeLeaderSymbols = new Set(volumeLeaders.slice(0, 60).map(v => v.symbol));
+    
+    // Fill from volume leaders first
+    for (const vl of volumeLeaders) {
+      if (currentLarge.length >= LARGE_SLOTS && currentSmall.length >= SMALL_SLOTS) break;
+      const sym = vl.symbol;
+      if (activeUnifiedList.has(sym)) continue;
+      
+      // 유동성 하한선: 거래대금 $10K 미만 제외 (호가 공백 방지)
+      if (vl.tradingValue < 10000) continue;
+      
+      if (LARGE_SET.has(sym) && currentLarge.length < LARGE_SLOTS) {
+        activeUnifiedList.add(sym);
+        currentLarge.push(sym);
+      } else if (SMALL_SET.has(sym) && currentSmall.length < SMALL_SLOTS) {
+        activeUnifiedList.add(sym);
+        currentSmall.push(sym);
+      }
+    }
+
+    // Fill remaining slots with rotation (기존 로직 유지)
     const largeArr = Array.from(LARGE_SET);
     const largeStart = (cycleCount * LARGE_SLOTS) % largeArr.length;
     for (let i = 0; currentLarge.length < LARGE_SLOTS && i < largeArr.length; i++) {
@@ -393,7 +481,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fill small-cap slots
     const smallArr = Array.from(SMALL_SET);
     const smallStart = (cycleCount * SMALL_SLOTS) % smallArr.length;
     for (let i = 0; currentSmall.length < SMALL_SLOTS && i < smallArr.length; i++) {
@@ -405,6 +492,10 @@ Deno.serve(async (req) => {
     }
 
     const SCAN_SYMBOLS = Array.from(activeUnifiedList);
+    
+    // Build volume rank map for UI/logging
+    const volumeRankMap: Map<string, number> = new Map();
+    volumeLeaders.forEach((vl, idx) => volumeRankMap.set(vl.symbol, idx + 1));
 
     // ========== WALLET & POSITIONS ==========
     const { data: openPos } = await supabase.from('unified_trades').select('*').eq('status', 'open');
@@ -719,6 +810,10 @@ Deno.serve(async (req) => {
           if (alreadyHolding && !isPyramiding) continue;
           if (openCount >= MAX_POSITIONS) continue;
 
+          // ★ 유동성 하한선: 거래대금 $10K 미만 종목 진입 차단 (호가 공백 방지)
+          const vlInfo = volumeLeaders.find(vl => vl.symbol === r.sym);
+          if (vlInfo && vlInfo.tradingValue < 10000) continue;
+
           // Session-adaptive filters
           const sentimentOk = (r.scoring.indicators.sentiment.score || 0) > 0;
           const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= adaptedRvolMin;
@@ -727,16 +822,18 @@ Deno.serve(async (req) => {
           const minFilters = entryRelax < 1.0 ? 2 : 3;
           if (filtersPassed < minFilters) continue;
 
-          // ★ 초공격형 수급필터: RVOL 2.0 이상만 진입 (장외 1.5)
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
-          if (rvol < adaptedRvolMin) {
-            continue;
-          }
+          if (rvol < adaptedRvolMin) continue;
 
-          // ★★★ 필승 로직 #4: 장 시작 직후 15분 뇌동매매 방지
-          if (isOpeningRush) {
-            continue;
-          }
+          if (isOpeningRush) continue;
+
+          // ★ 수급 돌파 플래그: RVOL 200% 이상 폭증 (직전 대비)
+          (r as any).isVolumeBurst = rvol >= 2.0;
+          // ★ 유동성 점수: 상승률 + 거래대금 합산
+          const tradingVal = vlInfo?.tradingValue || 0;
+          (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
+          (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
+          (r as any).tradingValueUSD = tradingVal;
 
           candidates.push(r);
         }
@@ -758,20 +855,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sort: explosive first, then by score descending
+    // Sort: explosive first → volume burst → liquidity score → quant score
     candidates.sort((a, b) => {
       const aExp = (a as any).isExplosive ? 1 : 0;
       const bExp = (b as any).isExplosive ? 1 : 0;
       if (aExp !== bExp) return bExp - aExp;
-      const aVolBurst = a.scoring.rvol >= 3 ? 1 : 0;
-      const bVolBurst = b.scoring.rvol >= 3 ? 1 : 0;
-      if (aVolBurst !== bVolBurst) return bVolBurst - aVolBurst;
+      // ★ 수급 돌파 종목 우선
+      const aVB = (a as any).isVolumeBurst ? 1 : 0;
+      const bVB = (b as any).isVolumeBurst ? 1 : 0;
+      if (aVB !== bVB) return bVB - aVB;
+      // ★ 유동성 점수(상승률+거래대금) 합산순
+      const aLiq = (a as any).liquidityScore || 0;
+      const bLiq = (b as any).liquidityScore || 0;
+      if (Math.abs(aLiq - bLiq) > 5) return bLiq - aLiq;
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
     if (candidates.length > 0) {
-      const summary = candidates.slice(0, 10).map(c => `${c.sym}(${c.scoring.totalScore}점/${c.capType})`).join(', ');
-      await addLog('unified', 'scan', null, `[통합스캔] [${timeStr}] 매수 후보 ${candidates.length}개 (점수순): ${summary}`, {});
+      const summary = candidates.slice(0, 10).map(c => {
+        const volRank = (c as any).volumeRank;
+        const volTag = volRank <= 20 ? ` Vol#${volRank}` : '';
+        const burstTag = (c as any).isVolumeBurst ? '🔥' : '';
+        return `${burstTag}${c.sym}(${c.scoring.totalScore}점/${c.capType}${volTag})`;
+      }).join(', ');
+      await addLog('unified', 'scan', null, `[통합스캔] [${timeStr}] 매수 후보 ${candidates.length}개 (수급+점수순): ${summary}`, {});
     }
 
     for (const r of candidates) {
@@ -798,7 +905,10 @@ Deno.serve(async (req) => {
       const newBuyBalance = balance - costKRW;
       const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 보정 ×${spreadMul}` : '';
       const capLabel = r.capType === 'large' ? '대형' : '소형';
-      const logMsg = `[통합] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 [${capLabel}] 자율 매수 [${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const volRank = (r as any).volumeRank;
+      const volRankTag = volRank <= 50 ? ` | Vol#${volRank}` : '';
+      const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
+      const logMsg = `[통합] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 [${capLabel}] 자율 매수 [${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       await supabase.from('unified_trades').insert({
         symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,

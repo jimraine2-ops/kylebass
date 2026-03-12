@@ -2,9 +2,10 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bot } from "lucide-react";
+import { Bot, BarChart3, TrendingUp } from "lucide-react";
 import { INDICATOR_LABELS } from "./RadarChartCard";
 import { formatStockName } from "@/lib/koreanStockMap";
+import { useExchangeRate } from "@/hooks/useExchangeRate";
 
 const ScoreBar = React.forwardRef<HTMLDivElement, { score: number; max?: number }>(
   ({ score, max = 100 }, ref) => {
@@ -19,6 +20,13 @@ const ScoreBar = React.forwardRef<HTMLDivElement, { score: number; max?: number 
 );
 ScoreBar.displayName = "ScoreBar";
 
+function formatTradingValueKRW(volumeUSD: number, rate: number): string {
+  const krw = volumeUSD * rate;
+  if (krw >= 1e8) return `${(krw / 1e8).toFixed(1)}억`;
+  if (krw >= 1e4) return `${(krw / 1e4).toFixed(0)}만`;
+  return `${krw.toFixed(0)}`;
+}
+
 interface StockCardProps {
   stock: any;
   idx: number;
@@ -31,7 +39,15 @@ interface StockCardProps {
 
 export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
   ({ stock, idx, isSelected, onSelect, onTrade, isTrading, isAutoMode }, ref) => {
-    const isUp = (stock.changePct || 0) >= 0;
+    const isUp = (stock.changePct || stock.regularMarketChangePercent || 0) >= 0;
+    const changePct = stock.changePct || stock.regularMarketChangePercent || 0;
+    const price = stock.price || stock.regularMarketPrice || 0;
+    const { rate } = useExchangeRate();
+    
+    // Volume/trading value info
+    const volume = stock.regularMarketVolume || stock.volume || 0;
+    const tradingValueUSD = volume * price;
+    const rvol = stock.indicators?.rvol?.rvol || 0;
 
     return (
       <Card
@@ -48,10 +64,31 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-bold">{formatStockName(stock.symbol)}</span>
-                  <span className="text-lg font-bold font-mono">₩{((stock.price || 0) * 1350).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</span>
+                  <span className="text-lg font-bold font-mono">₩{(price * rate).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}</span>
                   <span className={`text-sm font-mono ${isUp ? 'stock-up' : 'stock-down'}`}>
-                    {isUp ? '+' : ''}{stock.changePct?.toFixed(2)}%
+                    {isUp ? '+' : ''}{changePct?.toFixed(2)}%
                   </span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  {/* 거래대금 (원화) */}
+                  {tradingValueUSD > 0 && (
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 gap-0.5 border-primary/30 text-primary">
+                      <BarChart3 className="w-2.5 h-2.5" />
+                      ₩{formatTradingValueKRW(tradingValueUSD, rate)}
+                    </Badge>
+                  )}
+                  {/* RVOL 표시 */}
+                  {rvol >= 2 && (
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 gap-0.5 border-stock-up/30 text-stock-up">
+                      <TrendingUp className="w-2.5 h-2.5" />
+                      RVOL {rvol.toFixed(1)}x
+                    </Badge>
+                  )}
+                  {stock.capType && (
+                    <Badge variant="outline" className="text-[9px] px-1 py-0">
+                      {stock.capType === 'large' ? '대형' : '소형'}
+                    </Badge>
+                  )}
                 </div>
                 {stock.reason && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">📌 {stock.reason}</p>
