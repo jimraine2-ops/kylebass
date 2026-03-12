@@ -7,7 +7,7 @@ import { formatStockName } from "@/lib/koreanStockMap";
 
 function ScoreBar({ score, max = 100 }: { score: number; max?: number }) {
   const pct = Math.min((score / max) * 100, 100);
-  const color = pct >= 85 ? 'bg-stock-up' : pct >= 60 ? 'bg-warning' : 'bg-stock-down';
+  const color = pct >= 85 ? 'bg-stock-up' : pct >= 55 ? 'bg-warning' : 'bg-stock-down';
   return (
     <div className="w-full bg-muted rounded-full h-2">
       <div className={`h-2 rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />

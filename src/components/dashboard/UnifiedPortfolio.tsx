@@ -96,8 +96,8 @@ export function UnifiedPortfolio({ wsGetPrice, fxRate = 1350 }: UnifiedPortfolio
                 <div className="flex items-center gap-3 shrink-0">
                   {pos.ai_confidence && (
                     <Badge variant="outline" className={`text-[9px] ${
-                      pos.ai_confidence >= 60 ? 'border-[hsl(var(--stock-up)/0.3)] text-[hsl(var(--stock-up))]' :
-                      pos.ai_confidence >= 40 ? 'border-[hsl(var(--warning)/0.3)] text-[hsl(var(--warning))]' :
+                      pos.ai_confidence >= 55 ? 'border-[hsl(var(--stock-up)/0.3)] text-[hsl(var(--stock-up))]' :
+                      pos.ai_confidence >= 35 ? 'border-[hsl(var(--warning)/0.3)] text-[hsl(var(--warning))]' :
                       'border-[hsl(var(--stock-down)/0.3)] text-[hsl(var(--stock-down))]'
                     }`}>
                       {pos.ai_confidence}점

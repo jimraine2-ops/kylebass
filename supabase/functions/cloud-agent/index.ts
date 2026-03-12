@@ -487,7 +487,7 @@ Deno.serve(async (req) => {
     // --- Market Trend Guard (★ MIH Phase 3: QQQ 하락 추세 시 매수 중단) ---
     let marketBearish = false;
     let marketBuyHalt = false;
-    let baseEntryThreshold = 60; // ★ MIH Phase 1: 최소 60점 고정
+    let baseEntryThreshold = 55; // ★ 전략 수정: 55점으로 하향하여 거래 활성도 제고
     let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
@@ -514,10 +514,10 @@ Deno.serve(async (req) => {
         baseEntryThreshold = 75;
         await addLog('system', 'warning', null, `[시장동기화] ⚠️ SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 75점 상향 + 매수 중단`, { spyChange, qqqChange });
       } else if (spyChange < -0.5 || qqqChange < -0.5) {
-        baseEntryThreshold = 65;
-        await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 65점`, { spyChange, qqqChange });
-      } else {
+        baseEntryThreshold = 60;
         await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 60점`, { spyChange, qqqChange });
+      } else {
+        await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 진입 기준 55점`, { spyChange, qqqChange });
       }
     } catch { /* fallback */ }
 
@@ -536,9 +536,9 @@ Deno.serve(async (req) => {
     if (recentWinRate < 40) baseEntryThreshold = Math.max(baseEntryThreshold, 70);
     else if (recentWinRate < 50) baseEntryThreshold = Math.max(baseEntryThreshold, 65);
 
-    // Session adaptation — ★★★ 필승: 최소 60점 강제 하한선 (어떤 세션이든 60점 미만 진입 불가)
+    // Session adaptation — ★ 전략 수정: 최소 55점 강제 하한선
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 60); // 절대 하한 60점
+    const adaptedEntryThreshold = Math.max(rawAdapted, 55); // 절대 하한 55점
     const adaptedRvolMin = entryRelax < 1.0 ? 1.0 : 1.5;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
 
@@ -751,9 +751,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sort by score descending (highest score gets priority for ₩400M allocation)
+    // ★ 급등 예상 패턴 감지 (Explosive Growth Predictive Engine)
+    // 수급 폭발(RVOL≥5 + VWAP상단) + 변동성 돌파(BB squeeze) + 모멘텀 가속(MACD 0선돌파) 
+    for (const c of candidates) {
+      const ind = c.scoring.indicators;
+      const rvolExplosive = (ind.rvol?.rvol || 0) >= 5 && (ind.candle?.vwapCross === true);
+      const bbSqueeze = (ind.squeeze?.score || 0) >= 8;
+      const macdAccel = (ind.macd?.score || 0) >= 8 && (ind.macd?.macd || 0) > 0;
+      const explosiveSignals = [rvolExplosive, bbSqueeze, macdAccel].filter(Boolean).length;
+      (c as any).isExplosive = explosiveSignals >= 2;
+      if ((c as any).isExplosive) {
+        await addLog('unified', 'scan', c.sym, `[🔥급등예상] ${c.sym} 폭발 신호 ${explosiveSignals}/3 감지 (RVOL:${(ind.rvol?.rvol||0).toFixed(1)}x | Squeeze:${ind.squeeze?.score} | MACD:${ind.macd?.score}) → 우선 진입`, { explosiveSignals });
+      }
+    }
+
+    // Sort: explosive first, then by score descending
     candidates.sort((a, b) => {
-      // RVOL >= 3 burst priority
+      const aExp = (a as any).isExplosive ? 1 : 0;
+      const bExp = (b as any).isExplosive ? 1 : 0;
+      if (aExp !== bExp) return bExp - aExp;
       const aVolBurst = a.scoring.rvol >= 3 ? 1 : 0;
       const bVolBurst = b.scoring.rvol >= 3 ? 1 : 0;
       if (aVolBurst !== bVolBurst) return bVolBurst - aVolBurst;
@@ -782,8 +798,8 @@ Deno.serve(async (req) => {
       }
 
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, sessionSlippage);
-      const stopLoss = +(adjustedPrice * 0.975).toFixed(4);
-      const takeProfit = +(adjustedPrice * 1.03).toFixed(4); // ★ 필승: 3% 목표 (추격익절과 연동)
+      const stopLoss = +(adjustedPrice * 0.982).toFixed(4); // -1.8% 손절
+      const takeProfit = +(adjustedPrice * 1.03).toFixed(4); // 3% 목표
       const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;

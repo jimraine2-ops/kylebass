@@ -25,8 +25,8 @@ export function SuperScannerPanel() {
   }, [top30]);
 
   const getScoreColor = (score: number) => {
-    if (score >= 60) return 'hsl(var(--stock-up))';
-    if (score >= 45) return 'hsl(var(--warning))';
+    if (score >= 55) return 'hsl(var(--stock-up))';
+    if (score >= 40) return 'hsl(var(--warning))';
     return 'hsl(var(--stock-down))';
   };
 
@@ -131,8 +131,8 @@ export function SuperScannerPanel() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant="outline" className={`text-[10px] font-mono ${
-                        stock.totalScore >= 60 ? 'border-[hsl(var(--stock-up)/0.4)] text-[hsl(var(--stock-up))]' :
-                        stock.totalScore >= 45 ? 'border-[hsl(var(--warning)/0.4)] text-[hsl(var(--warning))]' :
+                        stock.totalScore >= 55 ? 'border-[hsl(var(--stock-up)/0.4)] text-[hsl(var(--stock-up))]' :
+                        stock.totalScore >= 40 ? 'border-[hsl(var(--warning)/0.4)] text-[hsl(var(--warning))]' :
                         'border-border text-muted-foreground'
                       }`}>
                         {stock.totalScore}점

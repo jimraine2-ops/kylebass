@@ -23,23 +23,23 @@ function getStrategyTag(aiReason: string | null): { label: string; color: string
 }
 
 function getScoreColor(score: number): string {
-  if (score >= 60) return 'text-stock-up';
-  if (score >= 50) return 'text-primary';
-  if (score >= 40) return 'text-warning';
+  if (score >= 55) return 'text-stock-up';
+  if (score >= 45) return 'text-primary';
+  if (score >= 35) return 'text-warning';
   return 'text-destructive';
 }
 
 function getScoreBgColor(score: number): string {
-  if (score >= 60) return 'bg-stock-up/15 border-stock-up/40';
-  if (score >= 50) return 'bg-primary/15 border-primary/40';
-  if (score >= 40) return 'bg-warning/15 border-warning/40';
+  if (score >= 55) return 'bg-stock-up/15 border-stock-up/40';
+  if (score >= 45) return 'bg-primary/15 border-primary/40';
+  if (score >= 35) return 'bg-warning/15 border-warning/40';
   return 'bg-destructive/15 border-destructive/40';
 }
 
 function getScoreLabel(score: number): string {
-  if (score >= 60) return '강력 보유';
-  if (score >= 50) return '보유 유지';
-  if (score >= 40) return '주의';
+  if (score >= 55) return '강력 보유';
+  if (score >= 45) return '보유 유지';
+  if (score >= 35) return '주의';
   return '매도 검토';
 }
 
