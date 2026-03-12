@@ -516,14 +516,14 @@ Deno.serve(async (req) => {
     const recentTotal = (recentTrades || []).length;
     const recentWinRate = recentTotal > 0 ? (recentWins / recentTotal) * 100 : 50;
 
-    // Win-rate adjustment (완화: 50점 기준 유지, 극단적 저승률에서만 소폭 상향)
-    if (recentWinRate < 20) baseEntryThreshold = Math.max(baseEntryThreshold, 55);
-    else if (recentWinRate < 30) baseEntryThreshold = Math.max(baseEntryThreshold, 53);
+    // Win-rate adjustment (초공격형: 극단적 저승률에서만 소폭 상향)
+    if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 60);
+    else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 57);
 
-    // Session adaptation — ★ 전략 수정: 최소 50점 강제 하한선
+    // Session adaptation — ★ 초공격형: 최소 55점 강제 하한선
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 50); // 절대 하한 50점
-    const adaptedRvolMin = entryRelax < 1.0 ? 1.0 : 1.5;
+    const adaptedEntryThreshold = Math.max(rawAdapted, 55); // 절대 하한 55점
+    const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0; // ★ RVOL 완화: 장외 1.5, 정규 2.0
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
 
     if (entryRelax < 1.0) {
