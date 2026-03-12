@@ -400,8 +400,33 @@ Deno.serve(async (req) => {
     const etTime = et2.getHours() * 60 + et2.getMinutes();
     const isOpeningRush = etTime >= 570 && etTime < 585; // 09:30~09:45 ET
 
-    // ========== UNIFIED DYNAMIC UNIVERSE ROTATION ==========
+    // ========== SESSION TRANSITION RESET ==========
+    const currentSession = sessionInfo.session;
+    if (lastSessionType && lastSessionType !== currentSession) {
+      // 세션 전환 감지 → 스캔 리스트 초기화 (보유 종목은 유지)
+      const heldBefore = new Set((openPos || []).map((p: any) => p.symbol));
+      const resetCount = activeUnifiedList.size;
+      activeUnifiedList.clear();
+      // 보유 종목은 계속 유지
+      for (const s of heldBefore) activeUnifiedList.add(s);
+      await addLog('system', 'info', null, `[세션전환] ${lastSessionType} → ${currentSession} | 스캔 리스트 리셋 (${resetCount}개 초기화, 보유 ${heldBefore.size}개 유지) — 새 수급 기반 종목 유입 시작`, {});
+    }
+    lastSessionType = currentSession;
+
+    // ========== UNIFIED DYNAMIC UNIVERSE ROTATION (Volume Leader Priority) ==========
     const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
+
+    // Step 0: Fetch Volume Leaders for current session (거래대금 상위 종목 우선 유입)
+    let volumeLeaders: { symbol: string; volume: number; changePct: number; tradingValue: number }[] = [];
+    try {
+      volumeLeaders = await fetchVolumeLeaders(currentSession);
+      if (volumeLeaders.length > 0) {
+        const topVol = volumeLeaders.slice(0, 10).map(v => `${v.symbol}($${(v.tradingValue/1e6).toFixed(1)}M)`).join(', ');
+        await addLog('system', 'scan', null, `[수급스캔] [${sessionLabel}] Volume Leader ${volumeLeaders.length}개 탐지 | Top10: ${topVol}`, {});
+      }
+    } catch (e) {
+      await addLog('system', 'warning', null, `[수급스캔] Volume Leader 조회 실패: ${e.message}`, {});
+    }
 
     // Step 1: Evict low-score symbols
     const evicted: string[] = [];
@@ -413,12 +438,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Fill 80 active slots (30 large + 50 small)
+    // Step 2: Fill 80 active slots — Volume Leaders 우선 유입
     const LARGE_SLOTS = 30;
     const SMALL_SLOTS = 50;
-    const TOTAL_SLOTS = LARGE_SLOTS + SMALL_SLOTS;
 
-    // Count current composition
     const currentLarge: string[] = [];
     const currentSmall: string[] = [];
     for (const sym of activeUnifiedList) {
@@ -426,7 +449,28 @@ Deno.serve(async (req) => {
       else currentSmall.push(sym);
     }
 
-    // Fill large-cap slots
+    // ★ Volume Leader 우선 유입: 거래대금 상위 종목을 먼저 슬롯에 배치
+    const volumeLeaderSymbols = new Set(volumeLeaders.slice(0, 60).map(v => v.symbol));
+    
+    // Fill from volume leaders first
+    for (const vl of volumeLeaders) {
+      if (currentLarge.length >= LARGE_SLOTS && currentSmall.length >= SMALL_SLOTS) break;
+      const sym = vl.symbol;
+      if (activeUnifiedList.has(sym)) continue;
+      
+      // 유동성 하한선: 거래대금 $10K 미만 제외 (호가 공백 방지)
+      if (vl.tradingValue < 10000) continue;
+      
+      if (LARGE_SET.has(sym) && currentLarge.length < LARGE_SLOTS) {
+        activeUnifiedList.add(sym);
+        currentLarge.push(sym);
+      } else if (SMALL_SET.has(sym) && currentSmall.length < SMALL_SLOTS) {
+        activeUnifiedList.add(sym);
+        currentSmall.push(sym);
+      }
+    }
+
+    // Fill remaining slots with rotation (기존 로직 유지)
     const largeArr = Array.from(LARGE_SET);
     const largeStart = (cycleCount * LARGE_SLOTS) % largeArr.length;
     for (let i = 0; currentLarge.length < LARGE_SLOTS && i < largeArr.length; i++) {
@@ -437,7 +481,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Fill small-cap slots
     const smallArr = Array.from(SMALL_SET);
     const smallStart = (cycleCount * SMALL_SLOTS) % smallArr.length;
     for (let i = 0; currentSmall.length < SMALL_SLOTS && i < smallArr.length; i++) {
@@ -449,6 +492,10 @@ Deno.serve(async (req) => {
     }
 
     const SCAN_SYMBOLS = Array.from(activeUnifiedList);
+    
+    // Build volume rank map for UI/logging
+    const volumeRankMap: Map<string, number> = new Map();
+    volumeLeaders.forEach((vl, idx) => volumeRankMap.set(vl.symbol, idx + 1));
 
     // ========== WALLET & POSITIONS ==========
     const { data: openPos } = await supabase.from('unified_trades').select('*').eq('status', 'open');
