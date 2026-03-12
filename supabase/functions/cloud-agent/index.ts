@@ -727,10 +727,9 @@ Deno.serve(async (req) => {
           const minFilters = entryRelax < 1.0 ? 2 : 3;
           if (filtersPassed < minFilters) continue;
 
-          // ★★★ 필승 로직 #1-수급필터: 실시간 거래대금 20분 평균 대비 3배 이상만 진입 (돈이 들어온 종목만)
+          // ★ 초공격형 수급필터: RVOL 2.0 이상만 진입 (장외 1.5)
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
-          if (rvol < 3.0) {
-            // 3배 미만 거래량 = 수급 부족 → 절대 매수 금지
+          if (rvol < adaptedRvolMin) {
             continue;
           }
 
