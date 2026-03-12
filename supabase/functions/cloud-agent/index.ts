@@ -465,11 +465,13 @@ Deno.serve(async (req) => {
       await addLog('unified', 'warning', null, `[자금경고] ⚠️ 통합 자금 운용률 ${utilization.toFixed(1)}%`, { utilization });
     }
 
-    // --- SELF-LEARNING: Blacklist ---
+    // --- SELF-LEARNING: Blacklist (시한부: 2일 이내 연속 5패 이상만 블랙리스트) ---
+    const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString();
     const { data: recentLosses } = await supabase
       .from('unified_trades')
-      .select('symbol, pnl, status')
+      .select('symbol, pnl, status, closed_at')
       .lt('pnl', 0)
+      .gte('closed_at', twoDaysAgo)
       .order('closed_at', { ascending: false })
       .limit(200);
 
@@ -478,10 +480,12 @@ Deno.serve(async (req) => {
       lossCount[t.symbol] = (lossCount[t.symbol] || 0) + 1;
     }
     const blacklistSymbols = new Set(
-      Object.entries(lossCount).filter(([_, c]) => c >= 3).map(([s]) => s)
+      Object.entries(lossCount).filter(([_, c]) => c >= 5).map(([s]) => s)
     );
     if (blacklistSymbols.size > 0) {
-      await addLog('unified', 'learn', null, `[AI-Learn] 진입 금지 블랙리스트: ${[...blacklistSymbols].join(', ')}`, {});
+      await addLog('unified', 'learn', null, `[AI-Learn] 진입 금지 블랙리스트 (2일내 5패↑): ${[...blacklistSymbols].join(', ')}`, {});
+    } else {
+      await addLog('unified', 'learn', null, `[AI-Learn] 블랙리스트 0개 (2일내 5패 기준 해당 없음)`, {});
     }
 
     // --- Market Trend Guard (★ MIH Phase 3: QQQ 하락 추세 시 매수 중단) ---
