@@ -532,9 +532,9 @@ Deno.serve(async (req) => {
     const recentTotal = (recentTrades || []).length;
     const recentWinRate = recentTotal > 0 ? (recentWins / recentTotal) * 100 : 50;
 
-    // Win-rate adjustment
-    if (recentWinRate < 40) baseEntryThreshold = Math.max(baseEntryThreshold, 70);
-    else if (recentWinRate < 50) baseEntryThreshold = Math.max(baseEntryThreshold, 65);
+    // Win-rate adjustment (완화: 55점 기준 유지, 극단적 저승률에서만 소폭 상향)
+    if (recentWinRate < 20) baseEntryThreshold = Math.max(baseEntryThreshold, 60);
+    else if (recentWinRate < 30) baseEntryThreshold = Math.max(baseEntryThreshold, 58);
 
     // Session adaptation — ★ 전략 수정: 최소 55점 강제 하한선
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
