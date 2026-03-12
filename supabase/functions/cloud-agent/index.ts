@@ -491,7 +491,7 @@ Deno.serve(async (req) => {
     // --- Market Trend Guard (★ MIH Phase 3: QQQ 하락 추세 시 매수 중단) ---
     let marketBearish = false;
     let marketBuyHalt = false;
-    let baseEntryThreshold = 55; // ★ 전략 수정: 55점으로 하향하여 거래 활성도 제고
+    let baseEntryThreshold = 50; // ★ 전략 수정: 50점으로 하향하여 거래 활성도 극대화
     let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
