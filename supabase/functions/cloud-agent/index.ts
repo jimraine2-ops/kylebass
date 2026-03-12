@@ -347,7 +347,7 @@ Deno.serve(async (req) => {
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
     const entryRelax = sessionInfo.entryRelax;
-    const sessionRvolMin = 3.0; // ★★★ 필승 로직: 모든 세션에서 RVOL ≥ 3배 (20분 평균 대비 3배 이상만 진입)
+    const sessionRvolMin = 2.0; // ★ 초공격형: RVOL 기준 3.0→2.0 (거래 빈도 극대화)
     const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
 
     // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
@@ -491,7 +491,7 @@ Deno.serve(async (req) => {
     // --- Market Trend Guard (비활성화: 시장잠금 OFF) ---
     let marketBearish = false;
     let marketBuyHalt = false;
-    let baseEntryThreshold = 50;
+    let baseEntryThreshold = 55; // ★ 초공격형: 진입 문턱 55점
     let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
@@ -516,14 +516,14 @@ Deno.serve(async (req) => {
     const recentTotal = (recentTrades || []).length;
     const recentWinRate = recentTotal > 0 ? (recentWins / recentTotal) * 100 : 50;
 
-    // Win-rate adjustment (완화: 50점 기준 유지, 극단적 저승률에서만 소폭 상향)
-    if (recentWinRate < 20) baseEntryThreshold = Math.max(baseEntryThreshold, 55);
-    else if (recentWinRate < 30) baseEntryThreshold = Math.max(baseEntryThreshold, 53);
+    // Win-rate adjustment (초공격형: 극단적 저승률에서만 소폭 상향)
+    if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 60);
+    else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 57);
 
-    // Session adaptation — ★ 전략 수정: 최소 50점 강제 하한선
+    // Session adaptation — ★ 초공격형: 최소 55점 강제 하한선
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 50); // 절대 하한 50점
-    const adaptedRvolMin = entryRelax < 1.0 ? 1.0 : 1.5;
+    const adaptedEntryThreshold = Math.max(rawAdapted, 55); // 절대 하한 55점
+    const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0; // ★ RVOL 완화: 장외 1.5, 정규 2.0
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
 
     if (entryRelax < 1.0) {
@@ -549,20 +549,30 @@ Deno.serve(async (req) => {
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
 
-        // ★★★ 필승 로직 #2: 본절가 보호 (+1.0%에서 즉시 본절가+수수료 상향 → '패' 원천 차단)
-        if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.002) {
+        // ★★★ 초공격형: 본절가 보호 (+1.2%에서 즉시 본절가+0.2% 수수료 상향 → '패' 원천 차단)
+        if (pnlPct >= 1.2 && pos.stop_loss < pos.price * 1.002) {
           const breakevenStop = +(pos.price * 1.002).toFixed(4); // +0.2% 수수료 포함
           await supabase.from('unified_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
           pos.stop_loss = breakevenStop;
-          await addLog('unified', 'defense', sym, `[필승-본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.0% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | '패' 원천 차단`, {});
+          await addLog('unified', 'defense', sym, `[초공격-본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.2% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | '패' 원천 차단`, {});
         }
 
-        // ★ 기존 철갑방어 (+3%에서 추가 상향)
-        if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.015) {
-          const reinforcedStop = +(pos.price * 1.015).toFixed(4);
+        // ★ 초공격형 트레일링: 수익 구간별 손절가 계속 상향 (55점 진입 → 60/70점 급등 시 수익 극대화)
+        if (pnlPct >= 5 && pos.stop_loss < pos.price * 1.035) {
+          const reinforcedStop = +(pos.price * 1.035).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: reinforcedStop }).eq('id', pos.id);
           pos.stop_loss = reinforcedStop;
-          await addLog('unified', 'defense', sym, `[철갑방어+] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +1.5% 상향: ${fmtKRW(reinforcedStop)}`, {});
+          await addLog('unified', 'defense', sym, `[초공격-5%방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +3.5% 상향: ${fmtKRW(reinforcedStop)} | 수익 락인`, {});
+        } else if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.02) {
+          const reinforcedStop = +(pos.price * 1.02).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: reinforcedStop }).eq('id', pos.id);
+          pos.stop_loss = reinforcedStop;
+          await addLog('unified', 'defense', sym, `[초공격-3%방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +2.0% 상향: ${fmtKRW(reinforcedStop)} | 수익 락인`, {});
+        } else if (pnlPct >= 2 && pos.stop_loss < pos.price * 1.01) {
+          const reinforcedStop = +(pos.price * 1.01).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: reinforcedStop }).eq('id', pos.id);
+          pos.stop_loss = reinforcedStop;
+          await addLog('unified', 'defense', sym, `[초공격-2%방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +1.0% 상향: ${fmtKRW(reinforcedStop)}`, {});
         }
 
         const peakPrice = Math.max(pos.peak_price || pos.price, price);
@@ -717,10 +727,9 @@ Deno.serve(async (req) => {
           const minFilters = entryRelax < 1.0 ? 2 : 3;
           if (filtersPassed < minFilters) continue;
 
-          // ★★★ 필승 로직 #1-수급필터: 실시간 거래대금 20분 평균 대비 3배 이상만 진입 (돈이 들어온 종목만)
+          // ★ 초공격형 수급필터: RVOL 2.0 이상만 진입 (장외 1.5)
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
-          if (rvol < 3.0) {
-            // 3배 미만 거래량 = 수급 부족 → 절대 매수 금지
+          if (rvol < adaptedRvolMin) {
             continue;
           }
 
@@ -783,7 +792,7 @@ Deno.serve(async (req) => {
 
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, sessionSlippage);
       const stopLoss = +(adjustedPrice * 0.982).toFixed(4); // -1.8% 손절
-      const takeProfit = +(adjustedPrice * 1.03).toFixed(4); // 3% 목표
+      const takeProfit = +(adjustedPrice * 1.05).toFixed(4); // ★ 초공격형: 5% 목표 (트레일링으로 추가 수익)
       const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
