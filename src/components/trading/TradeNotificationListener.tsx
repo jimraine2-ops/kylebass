@@ -49,21 +49,26 @@ export function TradeNotificationListener() {
           const priceKRW = Math.round((trade.price || 0) * 1350);
           const score = trade.entry_score ?? "N/A";
           const confidence = trade.ai_confidence ?? "N/A";
+          const isSuperPattern = (trade.ai_reason || '').includes('15%') || (trade.ai_reason || '').includes('슈퍼');
+          const targetPriceKRW = isSuperPattern ? Math.round((trade.price || 0) * 1.15 * 1350) : null;
 
-          const message = `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 신뢰도: ${confidence}%`;
+          const message = isSuperPattern
+            ? `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 🎯15% 목표가: ₩${targetPriceKRW?.toLocaleString("ko-KR")}`
+            : `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 신뢰도: ${confidence}%`;
 
-          toast.success(`🚀 매수 완료`, {
+          const title = isSuperPattern
+            ? `🎯 슈퍼 패턴 매수! 15% 수익 타겟`
+            : `🚀 매수 완료`;
+
+          toast.success(title, {
             description: message,
-            duration: 8000,
+            duration: isSuperPattern ? 12000 : 8000,
             style: {
-              borderLeft: "4px solid hsl(var(--stock-up))",
+              borderLeft: `4px solid hsl(var(--${isSuperPattern ? 'warning' : 'stock-up'}))`,
             },
           });
 
-          sendBrowserNotification(
-            "🚀 매수 완료",
-            `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표 ${score}점`
-          );
+          sendBrowserNotification(title, message);
         }
       )
       .on(
