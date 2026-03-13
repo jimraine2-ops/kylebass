@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, Shield, ArrowUp, ArrowDown, Activity, Radar, ShieldCheck } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { TrendingUp, TrendingDown, Shield, ArrowUp, ArrowDown, Activity, Radar, ShieldCheck, Target } from "lucide-react";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ interface OpenPositionCardProps {
 
 function getStrategyTag(aiReason: string | null): { label: string; color: string } {
   if (!aiReason) return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
+  if (aiReason.includes('15%') || aiReason.includes('슈퍼')) return { label: '🎯15%', color: 'bg-warning/20 text-warning border-warning/30' };
   if (aiReason.startsWith('[Quant]')) return { label: 'Quant', color: 'bg-stock-up/20 text-stock-up border-stock-up/30' };
   if (aiReason.startsWith('[Scalp]')) return { label: 'Scalp', color: 'bg-warning/20 text-warning border-warning/30' };
   return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
@@ -43,11 +45,8 @@ function getScoreLabel(score: number): string {
   return '매도 검토';
 }
 
-// ★ AI 홀딩 판단 메시지 & 익절 예상 확률 계산
 function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: string; color: string; winProb: number } | null {
   if (score === null) return null;
-  
-  // 익절 예상 확률: 지표 점수 기반 (55점=75%, 70점=90%, 40점=30%)
   let winProb = 0;
   if (score >= 70) winProb = 90;
   else if (score >= 65) winProb = 85;
@@ -57,46 +56,23 @@ function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: 
   else if (score >= 45) winProb = 45;
   else if (score >= 40) winProb = 30;
   else winProb = 15;
-  
-  // 수익 중이면 확률 보너스
   if (pnlPct >= 2) winProb = Math.min(98, winProb + 10);
   else if (pnlPct >= 1) winProb = Math.min(95, winProb + 5);
-  
-  // 가격 하락 중이지만 지표 양호 → 홀딩 권장 메시지
+
   if (pnlPct < 0 && score >= 50) {
-    return {
-      message: `[AI 판단: 홀딩 권장 - 지표 양호] 눌림목 구간, 반등 대기`,
-      color: 'text-stock-up',
-      winProb,
-    };
+    return { message: `[AI 판단: 홀딩 권장 - 지표 양호] 눌림목 구간, 반등 대기`, color: 'text-stock-up', winProb };
   }
   if (pnlPct < 0 && score >= 40 && score < 50) {
-    return {
-      message: `[AI 판단: 주의 관찰 중] 지표 약화, 추세 감시`,
-      color: 'text-warning',
-      winProb,
-    };
+    return { message: `[AI 판단: 주의 관찰 중] 지표 약화, 추세 감시`, color: 'text-warning', winProb };
   }
   if (pnlPct < 0 && score < 40) {
-    return {
-      message: `[AI 판단: 매도 검토] 추세 이탈 위험`,
-      color: 'text-destructive',
-      winProb,
-    };
+    return { message: `[AI 판단: 매도 검토] 추세 이탈 위험`, color: 'text-destructive', winProb };
   }
   if (pnlPct >= 0 && score >= 55) {
-    return {
-      message: `[AI 판단: 강력 보유] 추가 상승 기대`,
-      color: 'text-stock-up',
-      winProb,
-    };
+    return { message: `[AI 판단: 강력 보유] 추가 상승 기대`, color: 'text-stock-up', winProb };
   }
   if (pnlPct >= 0 && score >= 45) {
-    return {
-      message: `[AI 판단: 보유 유지] 안정 구간`,
-      color: 'text-primary',
-      winProb,
-    };
+    return { message: `[AI 판단: 보유 유지] 안정 구간`, color: 'text-primary', winProb };
   }
   return { message: '', color: 'text-muted-foreground', winProb };
 }
@@ -115,9 +91,16 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
   const scoreChanged = score !== null && prevScore !== null && prevScore !== undefined ? score - prevScore : 0;
   const isDanger = score !== null && score < 40;
 
-  // ★ AI 홀딩 판단 & 익절 확률
   const aiJudgment = getAIHoldingJudgment(score, unrealizedPnlPct);
   const isHoldingRecommended = !isProfit && score !== null && score >= 50;
+
+  // ★ 15% 목표가 & 진행률 계산
+  const isSuperTarget = (pos.ai_reason || '').includes('15%') || (pos.ai_reason || '').includes('슈퍼');
+  const targetPct = isSuperTarget ? 15 : (pos.take_profit && pos.price > 0)
+    ? ((pos.take_profit - pos.price) / pos.price * 100)
+    : 5;
+  const targetProgress = targetPct > 0 ? Math.min(100, Math.max(0, (unrealizedPnlPct / targetPct) * 100)) : 0;
+  const targetPriceKRW = Math.round(pos.price * (1 + targetPct / 100) * fxRate);
 
   return (
     <div
@@ -138,7 +121,6 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
           <span className="font-bold text-sm">{formatStockName(pos.symbol)}</span>
           <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * fxRate).toLocaleString('ko-KR')}</span>
 
-          {/* ★ Live AI Score Badge */}
           {score !== null && (
             <Badge variant="outline" className={cn("text-[10px] px-2 py-0.5 gap-1 font-mono font-bold border", getScoreBgColor(score))}>
               <Activity className={cn("w-3 h-3", getScoreColor(score))} />
@@ -157,7 +139,6 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
             </span>
           )}
 
-          {/* ★ 익절 예상 확률 */}
           {aiJudgment && aiJudgment.winProb > 0 && (
             <Badge variant="outline" className={cn(
               "text-[10px] px-2 py-0.5 gap-1 font-mono border",
@@ -188,9 +169,33 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         </div>
       </div>
 
-      {/* ★ AI 홀딩 판단 메시지 */}
+      {/* ★ 목표가 진행률 게이지 */}
+      <div className="flex items-center gap-2">
+        <Target className={cn("w-3.5 h-3.5 shrink-0", isSuperTarget ? 'text-warning' : 'text-primary')} />
+        <div className="flex-1">
+          <div className="flex items-center justify-between text-[10px] mb-0.5">
+            <span className={cn("font-semibold", isSuperTarget ? 'text-warning' : 'text-muted-foreground')}>
+              {isSuperTarget ? '🎯 15% 슈퍼 타겟' : `목표 +${targetPct.toFixed(1)}%`}
+            </span>
+            <span className="text-muted-foreground font-mono">
+              ₩{targetPriceKRW.toLocaleString('ko-KR')} | {unrealizedPnlPct.toFixed(1)}% / {targetPct.toFixed(1)}%
+            </span>
+          </div>
+          <Progress
+            value={targetProgress}
+            className={cn("h-2", isSuperTarget ? '[&>div]:bg-warning' : '[&>div]:bg-primary')}
+          />
+        </div>
+        <span className={cn("text-[10px] font-bold font-mono min-w-[40px] text-right",
+          targetProgress >= 100 ? 'text-stock-up' : targetProgress >= 50 ? 'text-warning' : 'text-muted-foreground'
+        )}>
+          {targetProgress.toFixed(0)}%
+        </span>
+      </div>
+
+      {/* AI 홀딩 판단 메시지 */}
       {aiJudgment && aiJudgment.message && (
-        <div className={cn("flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded", 
+        <div className={cn("flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded",
           isHoldingRecommended ? 'bg-stock-up/10' : isDanger ? 'bg-destructive/10' : 'bg-muted'
         )}>
           {isHoldingRecommended ? (
