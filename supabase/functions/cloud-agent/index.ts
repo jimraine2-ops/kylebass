@@ -868,8 +868,17 @@ Deno.serve(async (req) => {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
         const capType = getCapType(price, sym);
 
-        // ===== 수익 구간 트레일링 방어 (본절가는 아래 혁파 로직에서 처리) =====
-        if (pnlPct >= 5 && pos.stop_loss < pos.price * 1.035) {
+        // ===== 수익 구간 트레일링 방어 (15% 타겟용 강화) =====
+        const isSuperTarget = (pos.ai_reason || '').includes('15%') || (pos.ai_reason || '').includes('슈퍼');
+        const indicatorsOver60 = quantScore >= 60;
+
+        // ★ 15% 타겟: 7% 돌파 시 SL을 +3%로 상향 (최소 수익 보장)
+        if (pnlPct >= 7 && pos.stop_loss < pos.price * 1.03) {
+          const rs = +(pos.price * 1.03).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: rs }).eq('id', pos.id);
+          pos.stop_loss = rs;
+          await addLog('unified', 'defense', sym, `[7%방어→15%추격] ${sym} → SL +3.0% (최소 수익 확보, 15% 고지 추격 중)`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+        } else if (pnlPct >= 5 && pos.stop_loss < pos.price * 1.035) {
           const rs = +(pos.price * 1.035).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: rs }).eq('id', pos.id);
           pos.stop_loss = rs;
@@ -892,25 +901,22 @@ Deno.serve(async (req) => {
         }
 
         // ===== [혁파] 지표 무결성 기반 동적 홀딩 & 익절 극대화 =====
-        // ★ 핵심 원칙: 단순 가격 하락 → 매도 금지. 오직 10대 지표의 추세 이탈로만 매도 결정.
-        const indicatorsStrong = quantScore >= 55;  // 강력 보유
-        const indicatorsHold = quantScore >= 50;     // 홀딩 유지 (눌림목 간주)
-        const technicalSafe = vwapCross || aboveBB;  // 핵심 기술 안전
+        const indicatorsStrong = quantScore >= 55;
+        const indicatorsHold = quantScore >= 50;
+        const technicalSafe = vwapCross || aboveBB;
         const withinATR = price > (pos.price - 2.0 * currentATR);
         const isPreMarketEntry = isLowVolumeSession && (pos.ai_reason || '').includes('선취매');
 
-        // ★ '필승 패턴' 감지 (Iron Hold 조건): 변동성 수축 + 거래량 점증 = 대폭 상승 전조
         const accumInfo = scoring?.accumulation;
         const isIronHold = accumInfo && accumInfo.condensation >= 6 && indicatorsHold;
-        // ★ 이평선 정배열 확인 (VWAP + EMA alignment)
         const emaAligned = scoring?.indicators?.emaAlign?.aligned === true;
-        const coreIntact = vwapCross && emaAligned; // 핵심 지표(VWAP, 이평선 정배열) 무결성
+        const coreIntact = vwapCross && emaAligned;
 
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ [공격적 본절가 전략] 승률 100% 설계: +1.0% 진입 시 SL을 매수가+0.2%로 즉시 상향
+        // ★ [공격적 본절가 전략]
         if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.002) {
           const bs = +(pos.price * 1.002).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
@@ -918,14 +924,16 @@ Deno.serve(async (req) => {
           await addLog('unified', 'defense', sym, `[승률100%설계] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (매수가+0.2%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
-        // 1. 익절 로직 (최우선 — 지표 기반 확장)
-        if (pnlPct >= 3.0) {
+        // 1. 익절 로직 — ★ 15% 타겟 조기매도 금지
+        if (pnlPct >= 3.0 && pnlPct < 15.0 && indicatorsOver60 && (isSuperTarget || quantScore >= 60)) {
+          // ★ 조기 매도 금지: 3~15% 수익 구간에서 지표 60점 이상이면 무조건 홀딩
+          await addLog('unified', 'hold', sym, `[🎯15%홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 중이지만 지표 ${quantScore}점(≥60) → 15% 목표까지 강력 홀딩! 조기 매도 금지`, { quantScore, pnlPct: +pnlPct.toFixed(2), isSuperTarget });
+        } else if (pnlPct >= 3.0) {
           const drop = ((peakPrice - price) / peakPrice) * 100;
-          // ★ Iron Hold: 필승 패턴 시 고점 -0.5%에도 매도 안 함 (1% 이상 하락만)
           const dropThreshold = isIronHold ? 1.0 : 0.5;
           if (drop >= dropThreshold && !indicatorsStrong) {
             shouldClose = true;
-            closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +3% 후 고점-${drop.toFixed(2)}% + 지표 약화(${quantScore}점) → 수익 확정`;
+            closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 후 고점-${drop.toFixed(2)}% + 지표 약화(${quantScore}점) → 수익 확정`;
             newStatus = 'trailing_profit';
           } else if (drop >= dropThreshold && indicatorsStrong) {
             await addLog('unified', 'hold', sym, `[Iron Hold] ${sym} +${pnlPct.toFixed(2)}% 고점-${drop.toFixed(2)}% BUT 지표 ${quantScore}점(≥55) 강력 유지 → 추가 상승 대기`, { quantScore, drop, isIronHold });
@@ -938,9 +946,13 @@ Deno.serve(async (req) => {
             newStatus = 'trailing_profit';
           }
         } else if (pos.take_profit && price >= pos.take_profit) {
-          // ★ 목표가 도달해도 지표 강하면 홀딩 (수익 극대화)
-          if (indicatorsStrong) {
-            await addLog('unified', 'hold', sym, `[목표돌파홀딩] ${sym} 목표가 도달 BUT 지표 ${quantScore}점(≥55) → TP 상향, 추가 상승 추적`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          // ★ 목표가 도달: 지표 60점 이상이면 TP 상향 (15% 추가 추격)
+          if (indicatorsOver60) {
+            await addLog('unified', 'hold', sym, `[🎯목표돌파→15%추격] ${sym} 목표가 도달 BUT 지표 ${quantScore}점(≥60) → TP 3% 추가 상향`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+            const newTP = +(price * 1.03).toFixed(4);
+            await supabase.from('unified_trades').update({ take_profit: newTP }).eq('id', pos.id);
+          } else if (indicatorsStrong) {
+            await addLog('unified', 'hold', sym, `[목표돌파홀딩] ${sym} 목표가 도달 BUT 지표 ${quantScore}점(≥55) → TP 상향`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
             const newTP = +(price * 1.03).toFixed(4);
             await supabase.from('unified_trades').update({ take_profit: newTP }).eq('id', pos.id);
           } else {
