@@ -619,8 +619,11 @@ Deno.serve(async (req) => {
       const spyChange = spyQuote?.dp || 0;
       const qqqChange = qqqQuote?.dp || 0;
 
-      // ★ 시장잠금 완전 비활성화 — QQQ/SPY 하락과 무관하게 항상 매수 허용
-      await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 시장잠금 OFF, 진입 기준 ${baseEntryThreshold}점`, { spyChange, qqqChange });
+      // ★ QQQ 모멘텀 보너스: QQQ 상승 시 진입 점수에 보너스 부여
+      qqqTrendDown = qqqChange < -0.5;
+      const qqqBonus = qqqChange >= 1.0 ? 3 : qqqChange >= 0.3 ? 1 : 0;
+      if (qqqBonus > 0) baseEntryThreshold = Math.max(52, baseEntryThreshold - qqqBonus);
+      await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → QQQ보너스 -${qqqBonus}점, 진입기준 ${baseEntryThreshold}점`, { spyChange, qqqChange, qqqBonus });
     } catch { /* fallback */ }
 
     // --- Dynamic win-rate threshold ---
