@@ -141,6 +141,97 @@ function generateSyntheticCandles(quote: any, days = 40) {
   return { closes, highs, lows, opens, volumes };
 }
 
+// ===== ADX (Average Directional Index) 계산 =====
+function calculateADX(highs: number[], lows: number[], closes: number[], period = 14): number {
+  if (highs.length < period + 1) return 0;
+  const n = highs.length;
+  let sumDMPlus = 0, sumDMMinus = 0, sumTR = 0;
+  for (let i = 1; i <= period; i++) {
+    const dmPlus = Math.max(highs[i] - highs[i-1], 0);
+    const dmMinus = Math.max(lows[i-1] - lows[i], 0);
+    if (dmPlus > dmMinus) { sumDMPlus += dmPlus; } else { sumDMMinus += dmMinus; }
+    sumTR += Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i-1]), Math.abs(lows[i] - closes[i-1]));
+  }
+  let smoothDMPlus = sumDMPlus, smoothDMMinus = sumDMMinus, smoothTR = sumTR;
+  const dxValues: number[] = [];
+  for (let i = period + 1; i < n; i++) {
+    const dmPlus = Math.max(highs[i] - highs[i-1], 0);
+    const dmMinus = Math.max(lows[i-1] - lows[i], 0);
+    const tr = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i-1]), Math.abs(lows[i] - closes[i-1]));
+    smoothDMPlus = smoothDMPlus - smoothDMPlus/period + (dmPlus > dmMinus ? dmPlus : 0);
+    smoothDMMinus = smoothDMMinus - smoothDMMinus/period + (dmMinus > dmPlus ? dmMinus : 0);
+    smoothTR = smoothTR - smoothTR/period + tr;
+    const diPlus = smoothTR > 0 ? (smoothDMPlus / smoothTR) * 100 : 0;
+    const diMinus = smoothTR > 0 ? (smoothDMMinus / smoothTR) * 100 : 0;
+    const diSum = diPlus + diMinus;
+    const dx = diSum > 0 ? (Math.abs(diPlus - diMinus) / diSum) * 100 : 0;
+    dxValues.push(dx);
+  }
+  if (dxValues.length === 0) return 0;
+  return dxValues.slice(-period).reduce((a, b) => a + b, 0) / Math.min(period, dxValues.length);
+}
+
+// ===== OBV (On-Balance Volume) 추세 감지 =====
+function detectOBVDivergence(closes: number[], volumes: number[]): { obvRising: boolean; priceSideways: boolean; score: number } {
+  const n = closes.length - 1;
+  if (n < 10) return { obvRising: false, priceSideways: false, score: 0 };
+  // OBV 계산
+  let obv = 0;
+  const obvArr: number[] = [0];
+  for (let i = 1; i <= n; i++) {
+    if (closes[i] > closes[i-1]) obv += volumes[i];
+    else if (closes[i] < closes[i-1]) obv -= volumes[i];
+    obvArr.push(obv);
+  }
+  // 최근 10봉 OBV 추세 (선형회귀 기울기)
+  const recentOBV = obvArr.slice(-10);
+  const obvSlope = (recentOBV[recentOBV.length-1] - recentOBV[0]) / recentOBV.length;
+  const obvRising = obvSlope > 0;
+  // 가격 횡보 체크
+  const recentCloses = closes.slice(-10);
+  const priceRange = (Math.max(...recentCloses) - Math.min(...recentCloses)) / Math.min(...recentCloses) * 100;
+  const priceSideways = priceRange < 5; // 5% 이내
+  // 매집 점수: OBV 상승 + 가격 횡보 = 세력 매집 신호
+  let score = 0;
+  if (obvRising) score += 5;
+  if (priceSideways && obvRising) score += 5; // 강력 매집 신호
+  return { obvRising, priceSideways, score: Math.min(10, score) };
+}
+
+// ===== 슈퍼 패턴 감지 (15% 수익 타겟 종목) =====
+function detectSuperPattern(closes: number[], highs: number[], lows: number[], volumes: number[], adx: number): { isSuperPattern: boolean; signals: string[]; confidence: number } {
+  const n = closes.length - 1;
+  if (n < 20) return { isSuperPattern: false, signals: [], confidence: 0 };
+  const signals: string[] = [];
+  
+  // 1. BB Squeeze Breakout: 밴드 수축 후 상단 돌파
+  const ema20 = calculateEMA(closes, 20);
+  const atr = calculateATR(highs, lows, closes, 14);
+  const bbWidth5 = atr.slice(-5).reduce((a,b)=>a+b,0) / 5;
+  const bbWidth20 = atr.slice(-20).reduce((a,b)=>a+b,0) / 20;
+  const isSqueeze = bbWidth20 > 0 && bbWidth5 / bbWidth20 < 0.7; // 밴드 30% 이상 수축
+  const bbUpper = ema20[n] + 2 * atr[n];
+  const bbBreakout = closes[n] > bbUpper && volumes[n] > (volumes.slice(-20).reduce((a,b)=>a+b,0)/20) * 1.5;
+  if (isSqueeze && bbBreakout) signals.push('BB스퀴즈돌파');
+  else if (bbBreakout) signals.push('BB상단돌파');
+  
+  // 2. OBV 매집 (가격 횡보 + OBV 우상향)
+  const obv = detectOBVDivergence(closes, volumes);
+  if (obv.priceSideways && obv.obvRising) signals.push('OBV매집');
+  
+  // 3. ADX 추세 강도 (≥ 25)
+  if (adx >= 25) signals.push(`ADX${Math.round(adx)}`);
+  
+  // 4. 거래량 폭발 (RVOL ≥ 3)
+  const avgVol20 = volumes.slice(-20).reduce((a,b)=>a+b,0) / 20;
+  const rvol = avgVol20 > 0 ? volumes[n] / avgVol20 : 1;
+  if (rvol >= 3) signals.push(`RVOL${rvol.toFixed(1)}x`);
+  
+  const isSuperPattern = signals.length >= 2; // 2개 이상 충족 시 슈퍼 패턴
+  const confidence = Math.min(100, signals.length * 25);
+  return { isSuperPattern, signals, confidence };
+}
+
 // ===== Accumulation Pattern Detection (매집 패턴 포착) =====
 function detectAccumulation(closes: number[], highs: number[], lows: number[], volumes: number[], rsi: number[]): { isAccumulating: boolean; confidence: number; pattern: string; condensation: number } {
   const n = closes.length - 1;
@@ -310,10 +401,18 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const recentHigh = Math.max(...highs.slice(-10));
   const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
 
-  return {
+    // ★ ADX & OBV & 슈퍼 패턴 감지
+    const adxValue = calculateADX(highs, lows, closes, 14);
+    const obvData = detectOBVDivergence(closes, volumes);
+    const superPattern = detectSuperPattern(closes, highs, lows, volumes, adxValue);
+
+    return {
     totalScore, trailingStop, rvol, changePct, metCount,
     vwap, bbLower, bbUpper,
     accumulation,
+    adx: adxValue,
+    obv: obvData,
+    superPattern,
     indicators: {
       sentiment: { score: sentimentScore, details: `변동률 ${changePct.toFixed(2)}%` },
       rvol: { score: rvolScore, rvol, weight: isLowVolumeSession ? '×0.8(선취매)' : '×1.5', details: `RVOL ${rvol.toFixed(1)}x` },
@@ -769,8 +868,17 @@ Deno.serve(async (req) => {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
         const capType = getCapType(price, sym);
 
-        // ===== 수익 구간 트레일링 방어 (본절가는 아래 혁파 로직에서 처리) =====
-        if (pnlPct >= 5 && pos.stop_loss < pos.price * 1.035) {
+        // ===== 수익 구간 트레일링 방어 (15% 타겟용 강화) =====
+        const isSuperTarget = (pos.ai_reason || '').includes('15%') || (pos.ai_reason || '').includes('슈퍼');
+        const indicatorsOver60 = quantScore >= 60;
+
+        // ★ 15% 타겟: 7% 돌파 시 SL을 +3%로 상향 (최소 수익 보장)
+        if (pnlPct >= 7 && pos.stop_loss < pos.price * 1.03) {
+          const rs = +(pos.price * 1.03).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: rs }).eq('id', pos.id);
+          pos.stop_loss = rs;
+          await addLog('unified', 'defense', sym, `[7%방어→15%추격] ${sym} → SL +3.0% (최소 수익 확보, 15% 고지 추격 중)`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+        } else if (pnlPct >= 5 && pos.stop_loss < pos.price * 1.035) {
           const rs = +(pos.price * 1.035).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: rs }).eq('id', pos.id);
           pos.stop_loss = rs;
@@ -793,25 +901,22 @@ Deno.serve(async (req) => {
         }
 
         // ===== [혁파] 지표 무결성 기반 동적 홀딩 & 익절 극대화 =====
-        // ★ 핵심 원칙: 단순 가격 하락 → 매도 금지. 오직 10대 지표의 추세 이탈로만 매도 결정.
-        const indicatorsStrong = quantScore >= 55;  // 강력 보유
-        const indicatorsHold = quantScore >= 50;     // 홀딩 유지 (눌림목 간주)
-        const technicalSafe = vwapCross || aboveBB;  // 핵심 기술 안전
+        const indicatorsStrong = quantScore >= 55;
+        const indicatorsHold = quantScore >= 50;
+        const technicalSafe = vwapCross || aboveBB;
         const withinATR = price > (pos.price - 2.0 * currentATR);
         const isPreMarketEntry = isLowVolumeSession && (pos.ai_reason || '').includes('선취매');
 
-        // ★ '필승 패턴' 감지 (Iron Hold 조건): 변동성 수축 + 거래량 점증 = 대폭 상승 전조
         const accumInfo = scoring?.accumulation;
         const isIronHold = accumInfo && accumInfo.condensation >= 6 && indicatorsHold;
-        // ★ 이평선 정배열 확인 (VWAP + EMA alignment)
         const emaAligned = scoring?.indicators?.emaAlign?.aligned === true;
-        const coreIntact = vwapCross && emaAligned; // 핵심 지표(VWAP, 이평선 정배열) 무결성
+        const coreIntact = vwapCross && emaAligned;
 
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ [공격적 본절가 전략] 승률 100% 설계: +1.0% 진입 시 SL을 매수가+0.2%로 즉시 상향
+        // ★ [공격적 본절가 전략]
         if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.002) {
           const bs = +(pos.price * 1.002).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
@@ -819,14 +924,16 @@ Deno.serve(async (req) => {
           await addLog('unified', 'defense', sym, `[승률100%설계] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (매수가+0.2%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
-        // 1. 익절 로직 (최우선 — 지표 기반 확장)
-        if (pnlPct >= 3.0) {
+        // 1. 익절 로직 — ★ 15% 타겟 조기매도 금지
+        if (pnlPct >= 3.0 && pnlPct < 15.0 && indicatorsOver60 && (isSuperTarget || quantScore >= 60)) {
+          // ★ 조기 매도 금지: 3~15% 수익 구간에서 지표 60점 이상이면 무조건 홀딩
+          await addLog('unified', 'hold', sym, `[🎯15%홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 중이지만 지표 ${quantScore}점(≥60) → 15% 목표까지 강력 홀딩! 조기 매도 금지`, { quantScore, pnlPct: +pnlPct.toFixed(2), isSuperTarget });
+        } else if (pnlPct >= 3.0) {
           const drop = ((peakPrice - price) / peakPrice) * 100;
-          // ★ Iron Hold: 필승 패턴 시 고점 -0.5%에도 매도 안 함 (1% 이상 하락만)
           const dropThreshold = isIronHold ? 1.0 : 0.5;
           if (drop >= dropThreshold && !indicatorsStrong) {
             shouldClose = true;
-            closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +3% 후 고점-${drop.toFixed(2)}% + 지표 약화(${quantScore}점) → 수익 확정`;
+            closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 후 고점-${drop.toFixed(2)}% + 지표 약화(${quantScore}점) → 수익 확정`;
             newStatus = 'trailing_profit';
           } else if (drop >= dropThreshold && indicatorsStrong) {
             await addLog('unified', 'hold', sym, `[Iron Hold] ${sym} +${pnlPct.toFixed(2)}% 고점-${drop.toFixed(2)}% BUT 지표 ${quantScore}점(≥55) 강력 유지 → 추가 상승 대기`, { quantScore, drop, isIronHold });
@@ -839,9 +946,13 @@ Deno.serve(async (req) => {
             newStatus = 'trailing_profit';
           }
         } else if (pos.take_profit && price >= pos.take_profit) {
-          // ★ 목표가 도달해도 지표 강하면 홀딩 (수익 극대화)
-          if (indicatorsStrong) {
-            await addLog('unified', 'hold', sym, `[목표돌파홀딩] ${sym} 목표가 도달 BUT 지표 ${quantScore}점(≥55) → TP 상향, 추가 상승 추적`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          // ★ 목표가 도달: 지표 60점 이상이면 TP 상향 (15% 추가 추격)
+          if (indicatorsOver60) {
+            await addLog('unified', 'hold', sym, `[🎯목표돌파→15%추격] ${sym} 목표가 도달 BUT 지표 ${quantScore}점(≥60) → TP 3% 추가 상향`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+            const newTP = +(price * 1.03).toFixed(4);
+            await supabase.from('unified_trades').update({ take_profit: newTP }).eq('id', pos.id);
+          } else if (indicatorsStrong) {
+            await addLog('unified', 'hold', sym, `[목표돌파홀딩] ${sym} 목표가 도달 BUT 지표 ${quantScore}점(≥55) → TP 상향`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
             const newTP = +(price * 1.03).toFixed(4);
             await supabase.from('unified_trades').update({ take_profit: newTP }).eq('id', pos.id);
           } else {
@@ -1103,7 +1214,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 급등 예상 패턴 감지
+    // ★ 급등 예상 패턴 + 슈퍼 패턴(15% 타겟) 감지
     for (const c of candidates) {
       const ind = c.scoring.indicators;
       const rvolExplosive = (ind.rvol?.rvol || 0) >= 5 && (ind.candle?.vwapCross === true);
@@ -1114,12 +1225,24 @@ Deno.serve(async (req) => {
       if ((c as any).isExplosive) {
         await addLog('unified', 'scan', c.sym, `[🔥급등예상] ${c.sym} 폭발 신호 ${explosiveSignals}/3 (RVOL:${(ind.rvol?.rvol||0).toFixed(1)}x | Squeeze:${ind.squeeze?.score} | MACD:${ind.macd?.score}) → 우선 진입`, { explosiveSignals });
       }
+
+      // ★ 슈퍼 패턴 (15% 수익 타겟): BB스퀴즈돌파 + OBV매집 + ADX≥25 중 2개 이상
+      const superPat = c.scoring.superPattern;
+      (c as any).isSuperPattern = superPat?.isSuperPattern || false;
+      (c as any).superPatternSignals = superPat?.signals || [];
+      if ((c as any).isSuperPattern) {
+        await addLog('unified', 'scan', c.sym, `[🎯15%타겟] ${c.sym} 슈퍼 패턴 감지! [${superPat.signals.join('+')}] 신뢰도 ${superPat.confidence}% → 15% 수익 목표 설정`, { superPattern: superPat });
+      }
     }
 
     // Sort: session-specific → explosive → volume burst → liquidity → score
     // ★ 세션별 최적화: 프리/데이 → 소형주 우선, 정규장 → 대형주 우선
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
     candidates.sort((a, b) => {
+      // ★ 슈퍼 패턴(15% 타겟) 최우선
+      const aSP = (a as any).isSuperPattern ? 2 : 0;
+      const bSP = (b as any).isSuperPattern ? 2 : 0;
+      if (aSP !== bSP) return bSP - aSP;
       // Session cap preference bonus
       const aCapBonus = a.capType === sessionCapPreference ? 1 : 0;
       const bCapBonus = b.capType === sessionCapPreference ? 1 : 0;
@@ -1168,10 +1291,11 @@ Deno.serve(async (req) => {
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
       // ★ [혁파] 고정 손절 폐기: 초기 SL을 넉넉하게 설정 (지표 기반 매도로 전환)
       const stopLoss = +(adjustedPrice * 0.95).toFixed(4); // -5% 안전망 (실질적으로 지표 40점 미만에서 매도)
-      // ★ 선취매: 정규장 폭발 대비 기대수익률 1.5배 상향 (5% → 7.5%)
-      const tpMultiplier = isAccumEntry ? 1.075 : 1.05;
+      // ★ 슈퍼 패턴: 15% 목표가 / 선취매: 7.5% / 기본: 5%
+      const isSuperEntry = (r as any).isSuperPattern;
+      const tpMultiplier = isSuperEntry ? 1.15 : isAccumEntry ? 1.075 : 1.05;
       const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
-      const tier = isPyramiding ? 'PYRAMID' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
+      const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
       const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 ×${spreadMul}` : '';
@@ -1180,12 +1304,13 @@ Deno.serve(async (req) => {
       const volRankTag = volRank <= 50 ? ` | Vol#${volRank}` : '';
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
       const condensationTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)})` : '';
+      const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟` : '';
       
       // ★ 엔진 개편: 지표 상세 근거 로그
       const indDetails = Object.entries(r.scoring.indicators)
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
-      const logMsg = `[${isAccumEntry ? '데이장 선취매' : '10대지표매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${condensationTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const logMsg = `[${isSuperEntry ? '🎯15%슈퍼매수' : isAccumEntry ? '데이장 선취매' : '10대지표매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${condensationTag}${superTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       await supabase.from('unified_trades').insert({
         symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,
@@ -1197,7 +1322,7 @@ Deno.serve(async (req) => {
       await supabase.from('unified_wallet').update({ balance: newBuyBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
       balance = newBuyBalance;
       openCount++;
-      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators });
+      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry });
     }
 
     // ========== AUTO-REPLACEMENT ==========
