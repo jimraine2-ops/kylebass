@@ -1159,7 +1159,7 @@ Deno.serve(async (req) => {
       for (const pos of refreshedOpenPos) {
         const data = await getQuoteAndCandles(pos.symbol);
         if (!data) continue;
-        const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
+        const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
         const currentScore = scoring?.totalScore || 0;
 
         // ★ 승률 강화: 교체매매 점수 차이 10→20점 (잦은 교체 = 잦은 패 → 차단)
