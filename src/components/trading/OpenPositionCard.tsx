@@ -209,6 +209,24 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         </div>
       )}
 
+      {/* ★ 변동성 구간 홀딩 상태 표시: -1%~-9% 하락 + 지표 50점 이상 */}
+      {!isProfit && unrealizedPnlPct > -10 && unrealizedPnlPct < -1 && score !== null && score >= 50 && (
+        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-primary/10 border border-primary/20">
+          <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+          <span className="text-primary">[변동성 구간: 지표 기반 홀딩 중] 정상 흔들림 — 대시세 대기</span>
+          <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/30 text-primary ml-auto">
+            손절 기준: -10%
+          </Badge>
+        </div>
+      )}
+      {/* -9%~-10% 근접 경고 */}
+      {!isProfit && unrealizedPnlPct <= -10 && score !== null && score >= 50 && (
+        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-warning/10 border border-warning/20">
+          <Shield className="w-3.5 h-3.5 text-warning shrink-0" />
+          <span className="text-warning">[⚠️ -10% 도달] 지표 {score}점(≥50) 양호 — 수급 기반 홀딩 유지 중</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1">
           <Shield className="w-3 h-3 text-destructive" />
