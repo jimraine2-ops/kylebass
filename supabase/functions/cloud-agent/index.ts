@@ -978,8 +978,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sort: explosive → volume burst → liquidity → score
+    // Sort: session-specific → explosive → volume burst → liquidity → score
+    // ★ 세션별 최적화: 프리/데이 → 소형주 우선, 정규장 → 대형주 우선
+    const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
     candidates.sort((a, b) => {
+      // Session cap preference bonus
+      const aCapBonus = a.capType === sessionCapPreference ? 1 : 0;
+      const bCapBonus = b.capType === sessionCapPreference ? 1 : 0;
+      if (aCapBonus !== bCapBonus) return bCapBonus - aCapBonus;
       const aExp = (a as any).isExplosive ? 1 : 0;
       const bExp = (b as any).isExplosive ? 1 : 0;
       if (aExp !== bExp) return bExp - aExp;

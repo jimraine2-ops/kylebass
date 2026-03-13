@@ -98,6 +98,18 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
       return acc;
     }, []);
 
+  // ★ 일일 수익 목표 체크
+  const DAILY_TARGET_KRW = 300000;
+  const todayPnl = useMemo(() => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    return closedTrades
+      .filter((t: any) => t.closed_at && new Date(t.closed_at) >= todayStart)
+      .reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
+  }, [closedTrades]);
+  const dailyTargetHit = todayPnl >= DAILY_TARGET_KRW;
+  const dailyProgress = Math.min(100, (todayPnl / DAILY_TARGET_KRW) * 100);
+
   const wins = stats.wins || 0;
   const losses = stats.losses || 0;
   const pieData = [
