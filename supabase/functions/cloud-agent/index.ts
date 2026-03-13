@@ -920,9 +920,15 @@ Deno.serve(async (req) => {
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
           const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
           
-          // 최소 충족 조건: 10개 중 5개 이상 충족 + RVOL 기준 통과
+          // 최소 충족 조건: 10개 중 5개 이상 충족 + RVOL 기준 통과 + 체결강도 120%+
           if (metCount < 5) continue;
           if (rvol < adaptedRvolMin) continue;
+          const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
+          const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
+          if (aggrVal < 120) {
+            // 체결강도 120% 미만 → '무조건 익절 후보' 탈락
+            continue;
+          }
 
           if (isOpeningRush) continue;
 
