@@ -1227,6 +1227,10 @@ Deno.serve(async (req) => {
     // ★ 세션별 최적화: 프리/데이 → 소형주 우선, 정규장 → 대형주 우선
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
     candidates.sort((a, b) => {
+      // ★ 슈퍼 패턴(15% 타겟) 최우선
+      const aSP = (a as any).isSuperPattern ? 2 : 0;
+      const bSP = (b as any).isSuperPattern ? 2 : 0;
+      if (aSP !== bSP) return bSP - aSP;
       // Session cap preference bonus
       const aCapBonus = a.capType === sessionCapPreference ? 1 : 0;
       const bCapBonus = b.capType === sessionCapPreference ? 1 : 0;
