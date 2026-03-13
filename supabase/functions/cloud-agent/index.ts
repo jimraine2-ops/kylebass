@@ -141,6 +141,97 @@ function generateSyntheticCandles(quote: any, days = 40) {
   return { closes, highs, lows, opens, volumes };
 }
 
+// ===== ADX (Average Directional Index) 계산 =====
+function calculateADX(highs: number[], lows: number[], closes: number[], period = 14): number {
+  if (highs.length < period + 1) return 0;
+  const n = highs.length;
+  let sumDMPlus = 0, sumDMMinus = 0, sumTR = 0;
+  for (let i = 1; i <= period; i++) {
+    const dmPlus = Math.max(highs[i] - highs[i-1], 0);
+    const dmMinus = Math.max(lows[i-1] - lows[i], 0);
+    if (dmPlus > dmMinus) { sumDMPlus += dmPlus; } else { sumDMMinus += dmMinus; }
+    sumTR += Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i-1]), Math.abs(lows[i] - closes[i-1]));
+  }
+  let smoothDMPlus = sumDMPlus, smoothDMMinus = sumDMMinus, smoothTR = sumTR;
+  const dxValues: number[] = [];
+  for (let i = period + 1; i < n; i++) {
+    const dmPlus = Math.max(highs[i] - highs[i-1], 0);
+    const dmMinus = Math.max(lows[i-1] - lows[i], 0);
+    const tr = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i-1]), Math.abs(lows[i] - closes[i-1]));
+    smoothDMPlus = smoothDMPlus - smoothDMPlus/period + (dmPlus > dmMinus ? dmPlus : 0);
+    smoothDMMinus = smoothDMMinus - smoothDMMinus/period + (dmMinus > dmPlus ? dmMinus : 0);
+    smoothTR = smoothTR - smoothTR/period + tr;
+    const diPlus = smoothTR > 0 ? (smoothDMPlus / smoothTR) * 100 : 0;
+    const diMinus = smoothTR > 0 ? (smoothDMMinus / smoothTR) * 100 : 0;
+    const diSum = diPlus + diMinus;
+    const dx = diSum > 0 ? (Math.abs(diPlus - diMinus) / diSum) * 100 : 0;
+    dxValues.push(dx);
+  }
+  if (dxValues.length === 0) return 0;
+  return dxValues.slice(-period).reduce((a, b) => a + b, 0) / Math.min(period, dxValues.length);
+}
+
+// ===== OBV (On-Balance Volume) 추세 감지 =====
+function detectOBVDivergence(closes: number[], volumes: number[]): { obvRising: boolean; priceSideways: boolean; score: number } {
+  const n = closes.length - 1;
+  if (n < 10) return { obvRising: false, priceSideways: false, score: 0 };
+  // OBV 계산
+  let obv = 0;
+  const obvArr: number[] = [0];
+  for (let i = 1; i <= n; i++) {
+    if (closes[i] > closes[i-1]) obv += volumes[i];
+    else if (closes[i] < closes[i-1]) obv -= volumes[i];
+    obvArr.push(obv);
+  }
+  // 최근 10봉 OBV 추세 (선형회귀 기울기)
+  const recentOBV = obvArr.slice(-10);
+  const obvSlope = (recentOBV[recentOBV.length-1] - recentOBV[0]) / recentOBV.length;
+  const obvRising = obvSlope > 0;
+  // 가격 횡보 체크
+  const recentCloses = closes.slice(-10);
+  const priceRange = (Math.max(...recentCloses) - Math.min(...recentCloses)) / Math.min(...recentCloses) * 100;
+  const priceSideways = priceRange < 5; // 5% 이내
+  // 매집 점수: OBV 상승 + 가격 횡보 = 세력 매집 신호
+  let score = 0;
+  if (obvRising) score += 5;
+  if (priceSideways && obvRising) score += 5; // 강력 매집 신호
+  return { obvRising, priceSideways, score: Math.min(10, score) };
+}
+
+// ===== 슈퍼 패턴 감지 (15% 수익 타겟 종목) =====
+function detectSuperPattern(closes: number[], highs: number[], lows: number[], volumes: number[], adx: number): { isSuperPattern: boolean; signals: string[]; confidence: number } {
+  const n = closes.length - 1;
+  if (n < 20) return { isSuperPattern: false, signals: [], confidence: 0 };
+  const signals: string[] = [];
+  
+  // 1. BB Squeeze Breakout: 밴드 수축 후 상단 돌파
+  const ema20 = calculateEMA(closes, 20);
+  const atr = calculateATR(highs, lows, closes, 14);
+  const bbWidth5 = atr.slice(-5).reduce((a,b)=>a+b,0) / 5;
+  const bbWidth20 = atr.slice(-20).reduce((a,b)=>a+b,0) / 20;
+  const isSqueeze = bbWidth20 > 0 && bbWidth5 / bbWidth20 < 0.7; // 밴드 30% 이상 수축
+  const bbUpper = ema20[n] + 2 * atr[n];
+  const bbBreakout = closes[n] > bbUpper && volumes[n] > (volumes.slice(-20).reduce((a,b)=>a+b,0)/20) * 1.5;
+  if (isSqueeze && bbBreakout) signals.push('BB스퀴즈돌파');
+  else if (bbBreakout) signals.push('BB상단돌파');
+  
+  // 2. OBV 매집 (가격 횡보 + OBV 우상향)
+  const obv = detectOBVDivergence(closes, volumes);
+  if (obv.priceSideways && obv.obvRising) signals.push('OBV매집');
+  
+  // 3. ADX 추세 강도 (≥ 25)
+  if (adx >= 25) signals.push(`ADX${Math.round(adx)}`);
+  
+  // 4. 거래량 폭발 (RVOL ≥ 3)
+  const avgVol20 = volumes.slice(-20).reduce((a,b)=>a+b,0) / 20;
+  const rvol = avgVol20 > 0 ? volumes[n] / avgVol20 : 1;
+  if (rvol >= 3) signals.push(`RVOL${rvol.toFixed(1)}x`);
+  
+  const isSuperPattern = signals.length >= 2; // 2개 이상 충족 시 슈퍼 패턴
+  const confidence = Math.min(100, signals.length * 25);
+  return { isSuperPattern, signals, confidence };
+}
+
 // ===== Accumulation Pattern Detection (매집 패턴 포착) =====
 function detectAccumulation(closes: number[], highs: number[], lows: number[], volumes: number[], rsi: number[]): { isAccumulating: boolean; confidence: number; pattern: string; condensation: number } {
   const n = closes.length - 1;
