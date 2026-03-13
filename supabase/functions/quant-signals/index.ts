@@ -215,12 +215,12 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
 }
 
 function getTopReason(indicators: any): string {
-  const entries = Object.entries(indicators).filter(([k]) => k !== 'confluence') as [string, any][];
+  const entries = Object.entries(indicators) as [string, any][];
   entries.sort((a, b) => b[1].score - a[1].score);
   const labels: Record<string, string> = {
-    sentiment: '호재', rvol: 'RVOL', candle: '캔들패턴', atr: 'ATR',
-    gap: '갭분석', squeeze: '스퀴즈', position: '가격위치',
-    sectorSynergy: '섹터', aggression: '체결강도', preMarket: '프리마켓'
+    sentiment: '호재', rvol: 'RVOL', candle: 'VWAP/캔들', macd: 'MACD',
+    rsi: 'RSI', bb: '볼린저', emaAlign: '정배열', gap: '갭분석',
+    squeeze: '스퀴즈', aggression: '체결강도'
   };
   return entries.slice(0, 2).map(([k, v]) => `${labels[k] || k}(${v.score})`).join(' + ');
 }
