@@ -698,37 +698,37 @@ Deno.serve(async (req) => {
           await supabase.from('unified_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
         }
 
-        // ★ MIH Phase 4: 동적 손절 (VWAP/볼린저 하단 이탈 감지)
+        // ★ 엔진 개편: 지표 기반 동적 손절 (VWAP/볼린저 하단 이탈 → 즉시 매도)
         const n = data.closes.length - 1;
-        const vwap = calculateVWAP(data.highs.slice(-20), data.lows.slice(-20), data.closes.slice(-20), data.volumes.slice(-20));
+        const vwap = scoring?.vwap || calculateVWAP(data.highs.slice(-20), data.lows.slice(-20), data.closes.slice(-20), data.volumes.slice(-20));
         const ema20 = calculateEMA(data.closes, 20);
         const atr = calculateATR(data.highs, data.lows, data.closes, 14);
         const currentATR = atr[atr.length - 1] || 0;
-        const bbLower = (ema20[n] || price) - 2 * currentATR; // 볼린저 하단 근사
-        const dynamicFloor = Math.max(vwap, bbLower); // VWAP와 BB 하단 중 높은 값
+        const bbLower = scoring?.bbLower || ((ema20[n] || price) - 2 * currentATR);
+        const dynamicFloor = Math.max(vwap, bbLower);
+
+        // ★ 지표 충족 수 기반 보조 판단
+        const metCount = scoring?.metCount || 0;
 
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ Phase 4: VWAP/BB 이탈 동적 손절 (고정 -2.5% 대신)
+        // ★ 엔진 개편 #1: VWAP/BB 이탈 동적 손절
         if (price < dynamicFloor && pnlPct < 0) {
           shouldClose = true;
-          const dynamicLossPct = pnlPct.toFixed(2);
-          closeReason = `[MIH-4 동적손절] [${sessionLabel}] [${timeStr}] [${sym}] VWAP(${fmtKRW(vwap)})/BB하단(${fmtKRW(bbLower)}) 이탈 → 손실 ${dynamicLossPct}%에서 조기 탈출`;
+          closeReason = `[지표손절] [${sessionLabel}] [${timeStr}] [${sym}] VWAP(${fmtKRW(vwap)})/BB하단(${fmtKRW(bbLower)}) 이탈 | 10대 지표 ${metCount}/10 충족 (${quantScore}점) → 손실 ${pnlPct.toFixed(2)}%에서 조기 탈출`;
           newStatus = 'dynamic_stop';
         } else if (pnlPct <= -1.8) {
-          // ★ 승률 강화: 고정 손절 -2.5% → -1.8% (큰 손실 방지, 작은 패배만 허용)
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 실행 (-1.8% 도달: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[고정손절] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 -1.8% 도달 (${pnlPct.toFixed(2)}%) | ${metCount}/10 지표 충족 (${quantScore}점)`;
           newStatus = 'stopped';
         } else if (pnlPct >= 3.0) {
-          // ★★★ 필승 로직 #3: 3% 수익 달성 후 고점 대비 0.5% 하락 시 즉시 익절
           const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
           if (dropFromPeak >= 0.5) {
             const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
             shouldClose = true;
-            closeReason = `[필승-추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +3% 달성 후 고점 대비 -${dropFromPeak.toFixed(2)}% 하락 → 수익 ${lockedPnl}% 확정`;
+            closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +3% 달성 후 고점 대비 -${dropFromPeak.toFixed(2)}% → 수익 ${lockedPnl}% 확정`;
             newStatus = 'trailing_profit';
           }
         } else if (peakPrice >= pos.price * 1.10) {
@@ -736,24 +736,30 @@ Deno.serve(async (req) => {
           if (dropFromPeak >= 3) {
             const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
             shouldClose = true;
-            closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 대형 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정)`;
+            closeReason = `[대형익절] [${sessionLabel}] [${timeStr}] [${sym}] 고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정`;
             newStatus = 'trailing_profit';
           }
-        } else if (quantScore < 35) {
+        } else if (quantScore < 40) {
+          // ★ 엔진 개편 #2: 점수 40점 미만 → 매수 근거 소멸 매도 (기존 35점)
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 35)`;
+          closeReason = `[점수이탈] [${sessionLabel}] [${timeStr}] [${sym}] 10대 지표 ${metCount}/10 충족 (${quantScore}점 < 40점) → 매수 근거 소멸`;
           newStatus = 'score_exit';
+        } else if (quantScore < 50 && !scoring?.indicators?.candle?.vwapCross) {
+          // ★ 엔진 개편 #3: 점수 50점 미만 + VWAP 이탈 = 핵심 지표 훼손 → 선제적 매도
+          shouldClose = true;
+          closeReason = `[핵심지표훼손] [${sessionLabel}] [${timeStr}] [${sym}] 점수 ${quantScore}점 + VWAP 이탈 → 선제적 매도`;
+          newStatus = 'indicator_exit';
         } else if (pos.take_profit && price >= pos.take_profit) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 목표가 도달 익절`;
+          closeReason = `[목표익절] [${sessionLabel}] [${timeStr}] [${sym}] 목표가 도달 | ${metCount}/10 지표 충족 (${quantScore}점)`;
           newStatus = 'profit_taken';
         } else if (pos.stop_loss && price <= pos.stop_loss) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] ${pnlPct >= 0 ? '본절가 방어 매도 (MIH-2)' : '추격 손절 터치'}`;
+          closeReason = `[손절터치] [${sessionLabel}] [${timeStr}] [${sym}] ${pnlPct >= 0 ? '본절가 방어 매도' : '추격 손절'} | ${metCount}/10 지표 (${quantScore}점)`;
           newStatus = pnlPct >= 0 ? 'breakeven_exit' : 'trailing_stop';
         } else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 블랙리스트 조기 대응 (${pnlPct.toFixed(2)}%)`;
+          closeReason = `[블랙리스트] [${sessionLabel}] [${timeStr}] [${sym}] 블랙리스트 조기 대응 (${pnlPct.toFixed(2)}%)`;
           newStatus = 'early_exit';
         }
 
