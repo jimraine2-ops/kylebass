@@ -188,6 +188,35 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const aggression = (bullCount / 5) * 100;
   const aggrScore = aggression >= 80 && volInc >= 3 ? 10 : aggression >= 60 ? 7 : aggression >= 40 ? 4 : 2;
 
+  // ★ 수급 응축도 (Condensation) — 레이더 차트 연동
+  let condensation = 0;
+  // 박스권 체크
+  const recentHighs = highs.slice(-10);
+  const recentLows = lows.slice(-10);
+  const rangeHigh = Math.max(...recentHighs);
+  const rangeLow = Math.min(...recentLows);
+  const boxRange = rangeLow > 0 ? ((rangeHigh - rangeLow) / rangeLow) * 100 : 999;
+  if (boxRange < 5) condensation += 2.5;
+  // RSI 저점 반등
+  const rsiCurr = rsi[n] || 50;
+  const rsiPr = rsi[n - 1] || 50;
+  const rsiPr2 = rsi[n - 2] || 50;
+  if (rsiCurr > rsiPr && rsiPr >= rsiPr2 && rsiCurr >= 30 && rsiCurr <= 55) condensation += 2;
+  // 이평선 밀집
+  const ema5c = calculateEMA(closes, 5);
+  const emaSpreadC = Math.abs(ema9[n] - ema50[n]) / closes[n] * 100;
+  if (emaSpreadC < 1.5) condensation += 2;
+  // 거래량 감소
+  const avgVol5 = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, volumes.length);
+  if (avgVol20 > 0 && avgVol5 / avgVol20 < 0.8) condensation += 1.5;
+  // 에너지 응축
+  const priceStable = n >= 5 && Math.abs(closes[n] - closes[n - 5]) / closes[n - 5] * 100 < 2;
+  const ema5Rising = ema5c.length > 1 && ema5c[n] > ema5c[n - 1];
+  if (priceStable && ema5Rising) condensation += 2;
+  condensation = Math.min(10, Math.round(condensation * 10) / 10);
+  const condensationScore = Math.round(condensation);
+
   // 가중치: 1+1.5+2+2+1+1+1+1+1+1.5 = 13.0
   const rawScore = sentimentScore * 1.0 + rvolScore * 1.5 + candleScore * 2.0 + macdScore * 2.0
     + rsiScore * 1.0 + bbScore * 1.0 + emaAlignScore * 1.0 + gapScore * 1.0 + squeezeScore * 1.0 + aggrScore * 1.5;
@@ -210,6 +239,7 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
       gap: { score: gapScore, details: `갭 ${gapPct.toFixed(1)}%` },
       squeeze: { score: squeezeScore, details: squeezeScore >= 6 ? '스퀴즈 활성' : '스퀴즈 없음' },
       aggression: { score: aggrScore, details: `매수강도 ${aggression.toFixed(0)}%`, weight: '×1.5' },
+      condensation: { score: condensationScore, details: `응축도 ${condensation.toFixed(1)} | ${boxRange < 5 ? '박스권' : ''}${rsiCurr > rsiPr && rsiCurr >= 30 && rsiCurr <= 55 ? '|RSI반등' : ''}${emaSpreadC < 1.5 ? '|이평밀집' : ''}` },
     }
   };
 }
