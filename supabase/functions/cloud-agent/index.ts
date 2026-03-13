@@ -1105,10 +1105,15 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, sessionSlippage);
+      // ★ 선취매: 저거래량 시 1~2호가 위로 공격적 지정가 (확실한 물량 확보)
+      const isAccumEntry = (r as any).isAccumulationEntry;
+      const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.003) : sessionSlippage; // 최소 0.3% 상단 제시
+      const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
       const stopLoss = +(adjustedPrice * 0.982).toFixed(4);
-      const takeProfit = +(adjustedPrice * 1.05).toFixed(4);
-      const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
+      // ★ 선취매: 정규장 폭발 대비 기대수익률 1.5배 상향 (5% → 7.5%)
+      const tpMultiplier = isAccumEntry ? 1.075 : 1.05;
+      const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
+      const tier = isPyramiding ? 'PYRAMID' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
       const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 ×${spreadMul}` : '';
@@ -1116,12 +1121,13 @@ Deno.serve(async (req) => {
       const volRank = (r as any).volumeRank;
       const volRankTag = volRank <= 50 ? ` | Vol#${volRank}` : '';
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
+      const accumTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern})` : '';
       
       // ★ 엔진 개편: 지표 상세 근거 로그 ("10대 지표 중 N개 조건 충족(X점)으로 진입")
       const indDetails = Object.entries(r.scoring.indicators)
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
-      const logMsg = `[10대지표매수] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const logMsg = `[${isAccumEntry ? '선취매매수' : '10대지표매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${accumTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       await supabase.from('unified_trades').insert({
         symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,
