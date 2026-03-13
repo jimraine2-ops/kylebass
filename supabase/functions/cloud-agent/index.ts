@@ -141,17 +141,23 @@ function generateSyntheticCandles(quote: any, days = 40) {
   return { closes, highs, lows, opens, volumes };
 }
 
-// ===== Unified 10-Indicator Scoring (Weighted: RVOL×2, MACD×2, VWAP/Candle×2) =====
+// ===== Unified 10-Indicator Scoring (Weighted: RVOL×1.5, MACD×2, VWAP/Candle×2, 거래대금×1.5) =====
+// ★ 엔진 개편: 오직 10대 지표의 합산 점수와 진입 임계값(Threshold)에 의해서만 자동 매매 결정
 function score10Indicators(quote: any, closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[]) {
   const changePct = quote.dp || 0;
   const n = closes.length - 1;
   if (n < 5) return null;
 
+  // 1. 호재 감성 (Sentiment)
   const sentimentScore = changePct >= 5 ? 9 : changePct >= 3 ? 7 : changePct >= 1 ? 5 : changePct >= -1 ? 4 : 2;
+  
+  // 2. 상대 거래량 (RVOL) — ×1.5 가중치
   const currentVol = volumes[n];
   const avgVol = volumes.length >= 21 ? volumes.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 : currentVol;
   const rvol = avgVol > 0 ? currentVol / avgVol : 1;
   const rvolScore = rvol >= 3 ? 10 : rvol >= 2.5 ? 8 : rvol >= 2 ? 6 : rvol >= 1.5 ? 4 : 2;
+  
+  // 3. VWAP/캔들 패턴 — ×2 가중치
   const ema9 = calculateEMA(closes, 9);
   const ema21 = calculateEMA(closes, 21);
   const rsi = calculateRSI(closes, 14);
@@ -161,24 +167,44 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   if (ema9[n] > ema21[n] && closes[n] > ema9[n]) candleConfirms++;
   if (rsi[n] > 40 && rsi[n] < 70 && rsi[n] > (rsi[n-1]||50)) candleConfirms++;
   const candleScore = candleConfirms >= 2.5 ? 10 : candleConfirms >= 2 ? 7 : candleConfirms >= 1 ? 4 : 1;
+  const vwapCross = closes[n] > vwap;
+  
+  // 4. MACD — ×2 가중치
+  const ema12 = calculateEMA(closes, 12);
+  const ema26 = calculateEMA(closes, 26);
+  const macd = ema12[n] - ema26[n];
+  const macdPrev = n > 0 ? ema12[n-1] - ema26[n-1] : 0;
+  const macdScore = (macd > 0 && macd > macdPrev) ? 10 : (macd > 0) ? 7 : (macd > macdPrev) ? 4 : 2;
+  
+  // 5. RSI
+  const currentRSI = rsi[n];
+  const rsiScore = (currentRSI >= 50 && currentRSI <= 70) ? 8 : (currentRSI >= 40 && currentRSI < 50) ? 5 : (currentRSI > 70) ? 3 : 2;
+  
+  // 6. 볼린저 밴드 (ATR 기반 근사)
   const atr = calculateATR(highs, lows, closes, 14);
   const currentATR = atr[atr.length - 1];
   const ema20 = calculateEMA(closes, 20);
-  const keltnerUpper = ema20[n] + 2 * currentATR;
-  const atrScore = closes[n] > keltnerUpper ? 10 : closes[n] > ema20[n] + currentATR ? 7 : 4;
-  const recentHigh = Math.max(...highs.slice(-10));
-  const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
+  const bbUpper = ema20[n] + 2 * currentATR;
+  const bbLower = ema20[n] - 2 * currentATR;
+  const bbScore = closes[n] > bbUpper ? 10 : closes[n] > ema20[n] + currentATR ? 7 : closes[n] > ema20[n] ? 5 : closes[n] > bbLower ? 3 : 1;
+  
+  // 7. 이평선 정배열 (EMA alignment)
+  const ema50 = calculateEMA(closes, Math.min(50, closes.length));
+  const aligned = ema9[n] > ema21[n] && ema21[n] > ema50[n];
+  const emaAlignScore = aligned ? 9 : (ema9[n] > ema21[n]) ? 6 : 3;
+  
+  // 8. 갭 분석
   const gapPct = n > 0 ? ((opens[n] - closes[n-1]) / closes[n-1]) * 100 : 0;
   const gapScore = (gapPct >= 4 && gapPct <= 15) ? (closes[n] > opens[n] ? 10 : 5) : gapPct > 15 ? 2 : gapPct > 0 ? 3 : 1;
+  
+  // 9. 숏 스퀴즈
   const high20 = Math.max(...closes.slice(-20));
   let squeezeScore = 0;
   if (closes[n] >= high20) squeezeScore += 6;
   if (avgVol > 0 && currentVol / avgVol > 2) squeezeScore += 4;
   squeezeScore = Math.min(10, squeezeScore);
-  const allTimeHigh = Math.max(...highs);
-  const distToATH = ((allTimeHigh - closes[n]) / allTimeHigh) * 100;
-  const positionScore = distToATH <= 5 ? 10 : distToATH <= 10 ? 7 : distToATH <= 20 ? 4 : 2;
-  const sectorScore = changePct >= 5 ? 10 : changePct >= 3 ? 7 : changePct >= 1 ? 5 : 2;
+  
+  // 10. 거래대금 강도 (체결 강도 + 볼륨 가속) — ×1.5 가중치
   let bullCount = 0, volInc = 0;
   for (let i = Math.max(0, n - 4); i <= n; i++) {
     if (closes[i] > opens[i]) bullCount++;
@@ -186,34 +212,35 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   }
   const aggression = (bullCount / 5) * 100;
   const aggrScore = aggression >= 80 && volInc >= 3 ? 10 : aggression >= 60 ? 7 : aggression >= 40 ? 4 : 2;
-  const breakingHigh = closes[n] > Math.max(...highs.slice(Math.max(0, n - 5), n));
-  const preMarketScore = breakingHigh ? 8 : 3;
 
-  const ema12 = calculateEMA(closes, 12);
-  const ema26 = calculateEMA(closes, 26);
-  const macd = ema12[n] - ema26[n];
-  const macdPrev = n > 0 ? ema12[n-1] - ema26[n-1] : 0;
-  const macdScore = (macd > 0 && macd > macdPrev) ? 10 : (macd > 0) ? 7 : (macd > macdPrev) ? 4 : 2;
+  // ★ 가중치 적용: RVOL×1.5, 거래대금강도×1.5, MACD×2, VWAP/캔들×2
+  // 기본 10개 지표 × 10점 = 100점, 가중치 합계: 1+1.5+2+2+1+1+1+1+1+1.5 = 13.0
+  const rawScore = sentimentScore * 1.0 + rvolScore * 1.5 + candleScore * 2.0 + macdScore * 2.0 
+    + rsiScore * 1.0 + bbScore * 1.0 + emaAlignScore * 1.0 + gapScore * 1.0 + squeezeScore * 1.0 + aggrScore * 1.5;
+  const maxRawScore = 10 * 13.0; // 130
+  const totalScore = Math.round((rawScore / maxRawScore) * 100);
 
-  const rawScore = sentimentScore + (rvolScore * 2) + (candleScore * 2) + atrScore + gapScore
-    + squeezeScore + positionScore + sectorScore + aggrScore + preMarketScore + (macdScore * 2);
-  const totalScore = Math.round((rawScore / 140) * 100);
+  // ★ 충족 지표 수 계산 (점수 ≥ 5점이면 '충족')
+  const indicatorScores = [sentimentScore, rvolScore, candleScore, macdScore, rsiScore, bbScore, emaAlignScore, gapScore, squeezeScore, aggrScore];
+  const metCount = indicatorScores.filter(s => s >= 5).length;
+
+  const recentHigh = Math.max(...highs.slice(-10));
+  const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
 
   return {
-    totalScore, trailingStop, rvol, changePct,
+    totalScore, trailingStop, rvol, changePct, metCount,
+    vwap, bbLower, bbUpper,
     indicators: {
-      sentiment: { score: sentimentScore },
-      rvol: { score: rvolScore, rvol, weight: '×2' },
-      candle: { score: candleScore, vwapCross: closes[n] > vwap, weight: '×2' },
-      macd: { score: macdScore, macd: +macd.toFixed(4), weight: '×2' },
-      atr: { score: atrScore, atr: currentATR },
-      gap: { score: gapScore },
-      squeeze: { score: squeezeScore },
-      position: { score: positionScore },
-      sectorSynergy: { score: sectorScore },
-      aggression: { score: aggrScore },
-      preMarket: { score: preMarketScore },
-      confluence: { score: candleScore, vwapCross: closes[n] > vwap },
+      sentiment: { score: sentimentScore, details: `변동률 ${changePct.toFixed(2)}%` },
+      rvol: { score: rvolScore, rvol, weight: '×1.5', details: `RVOL ${rvol.toFixed(1)}x` },
+      candle: { score: candleScore, vwapCross, weight: '×2', details: `VWAP ${vwapCross ? '상단' : '하단'}` },
+      macd: { score: macdScore, macd: +macd.toFixed(4), weight: '×2', details: `MACD ${macd > 0 ? '양전' : '음전'}` },
+      rsi: { score: rsiScore, rsi: +currentRSI.toFixed(1), details: `RSI ${currentRSI.toFixed(1)}` },
+      bb: { score: bbScore, details: `BB ${closes[n] > bbUpper ? '상단돌파' : closes[n] > ema20[n] ? '중앙상단' : '하단'}` },
+      emaAlign: { score: emaAlignScore, aligned, details: `이평선 ${aligned ? '정배열' : '역배열'}` },
+      gap: { score: gapScore, details: `갭 ${gapPct.toFixed(1)}%` },
+      squeeze: { score: squeezeScore, details: `스퀴즈 ${squeezeScore >= 6 ? '활성' : '비활성'}` },
+      aggression: { score: aggrScore, weight: '×1.5', details: `체결강도 ${aggression.toFixed(0)}%` },
     }
   };
 }
