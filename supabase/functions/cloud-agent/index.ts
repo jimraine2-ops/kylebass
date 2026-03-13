@@ -1016,17 +1016,20 @@ Deno.serve(async (req) => {
           if (alreadyHolding && !isPyramiding) continue;
           if (openCount >= MAX_POSITIONS) continue;
 
-          // ★ 유동성 하한선: 거래대금 $10K 미만 종목 진입 차단
+          // ★ 유동성 하한선 & 수급 동기화
           const vlInfo = volumeLeaders.find(vl => vl.symbol === r.sym);
-          if (vlInfo && vlInfo.tradingValue < 10000) continue;
-
-          // ★ 엔진 개편: 수급 동기화 — 세션 평균 거래대금 미만 = 가짜 신호 차단
-          const sessionAvgTradingValue = volumeLeaders.length > 0 
-            ? volumeLeaders.reduce((sum, vl) => sum + vl.tradingValue, 0) / volumeLeaders.length 
-            : 0;
-          if (vlInfo && sessionAvgTradingValue > 0 && vlInfo.tradingValue < sessionAvgTradingValue * 0.5) {
-            // 거래대금이 세션 평균의 50% 미만 → '거래량 없는 반등' = 가짜 신호
-            continue;
+          const accumPattern = r.scoring.accumulation;
+          const isAccumCandidate = isLowVolumeSession && accumPattern?.isAccumulating;
+          
+          // ★ 선취매: 매집 패턴 감지 시 거래대금 필터 해제 (필승 패턴이면 거래량 제한 무시)
+          if (!isAccumCandidate) {
+            if (vlInfo && vlInfo.tradingValue < 10000) continue;
+            const sessionAvgTradingValue = volumeLeaders.length > 0 
+              ? volumeLeaders.reduce((sum, vl) => sum + vl.tradingValue, 0) / volumeLeaders.length 
+              : 0;
+            if (vlInfo && sessionAvgTradingValue > 0 && vlInfo.tradingValue < sessionAvgTradingValue * 0.5) {
+              continue;
+            }
           }
 
           // ★ 엔진 개편: 오직 10대 지표 점수 + 충족 수로 진입 판단
