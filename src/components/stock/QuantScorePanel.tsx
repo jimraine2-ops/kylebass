@@ -100,6 +100,7 @@ const INDICATOR_NAMES: Record<string, string> = {
   sectorSynergy: "섹터 시너지",
   aggression: "매수 어그레션",
   preMarket: "프리마켓 모멘텀",
+  condensation: "수급 응축도 📡",
 };
 
 export function QuantScorePanel({ symbol, currentPrice, fxRate }: Props): React.JSX.Element {
