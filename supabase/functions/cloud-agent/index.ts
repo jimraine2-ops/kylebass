@@ -141,9 +141,55 @@ function generateSyntheticCandles(quote: any, days = 40) {
   return { closes, highs, lows, opens, volumes };
 }
 
+// ===== Accumulation Pattern Detection (매집 패턴 포착) =====
+function detectAccumulation(closes: number[], highs: number[], lows: number[], volumes: number[], rsi: number[]): { isAccumulating: boolean; confidence: number; pattern: string } {
+  const n = closes.length - 1;
+  if (n < 10) return { isAccumulating: false, confidence: 0, pattern: 'insufficient_data' };
+
+  // 1. 박스권 횡보 체크: 최근 10봉의 고가-저가 범위가 좁으면 박스권
+  const recentHighs = highs.slice(-10);
+  const recentLows = lows.slice(-10);
+  const rangeHigh = Math.max(...recentHighs);
+  const rangeLow = Math.min(...recentLows);
+  const boxRange = rangeLow > 0 ? ((rangeHigh - rangeLow) / rangeLow) * 100 : 999;
+  const isBoxPattern = boxRange < 5; // 5% 이내 박스권
+
+  // 2. RSI 저점 고개 들기: RSI가 30~50 구간에서 상승 전환
+  const rsiCurrent = rsi[n] || 50;
+  const rsiPrev = rsi[n - 1] || 50;
+  const rsiPrev2 = rsi[n - 2] || 50;
+  const rsiRising = rsiCurrent > rsiPrev && rsiPrev >= rsiPrev2 && rsiCurrent >= 30 && rsiCurrent <= 55;
+
+  // 3. 이평선 밀집 (EMA 5, 10, 20이 좁은 범위에 수렴)
+  const ema5 = calculateEMA(closes, 5);
+  const ema10 = calculateEMA(closes, 10);
+  const ema20 = calculateEMA(closes, 20);
+  const emaSpread = Math.abs(ema5[n] - ema20[n]) / closes[n] * 100;
+  const emaConverging = emaSpread < 1.5; // 1.5% 이내 밀집
+
+  // 4. 거래량 감소 중 가격 유지 (매집 전형 패턴)
+  const avgVol5 = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, volumes.length);
+  const volContracting = avgVol20 > 0 && avgVol5 / avgVol20 < 0.8; // 거래량 20% 이상 감소
+
+  const signals = [isBoxPattern, rsiRising, emaConverging, volContracting].filter(Boolean).length;
+  const confidence = signals * 25;
+  const isAccumulating = signals >= 2; // 4개 중 2개 이상이면 매집 판정
+
+  let pattern = '';
+  if (isBoxPattern) pattern += '박스권|';
+  if (rsiRising) pattern += 'RSI반등|';
+  if (emaConverging) pattern += '이평밀집|';
+  if (volContracting) pattern += '거래량감소';
+  pattern = pattern.replace(/\|$/, '') || 'none';
+
+  return { isAccumulating, confidence, pattern };
+}
+
 // ===== Unified 10-Indicator Scoring (Weighted: RVOL×1.5, MACD×2, VWAP/Candle×2, 거래대금×1.5) =====
 // ★ 엔진 개편: 오직 10대 지표의 합산 점수와 진입 임계값(Threshold)에 의해서만 자동 매매 결정
-function score10Indicators(quote: any, closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[]) {
+// ★ 선취매 모드: 저거래량 시 체결강도/RSI/이평선 가중치 상향
+function score10Indicators(quote: any, closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[], isLowVolumeSession = false) {
   const changePct = quote.dp || 0;
   const n = closes.length - 1;
   if (n < 5) return null;
@@ -151,13 +197,13 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   // 1. 호재 감성 (Sentiment)
   const sentimentScore = changePct >= 5 ? 9 : changePct >= 3 ? 7 : changePct >= 1 ? 5 : changePct >= -1 ? 4 : 2;
   
-  // 2. 상대 거래량 (RVOL) — ×1.5 가중치
+  // 2. 상대 거래량 (RVOL)
   const currentVol = volumes[n];
   const avgVol = volumes.length >= 21 ? volumes.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 : currentVol;
   const rvol = avgVol > 0 ? currentVol / avgVol : 1;
   const rvolScore = rvol >= 3 ? 10 : rvol >= 2.5 ? 8 : rvol >= 2 ? 6 : rvol >= 1.5 ? 4 : 2;
   
-  // 3. VWAP/캔들 패턴 — ×2 가중치
+  // 3. VWAP/캔들 패턴
   const ema9 = calculateEMA(closes, 9);
   const ema21 = calculateEMA(closes, 21);
   const rsi = calculateRSI(closes, 14);
@@ -169,7 +215,7 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const candleScore = candleConfirms >= 2.5 ? 10 : candleConfirms >= 2 ? 7 : candleConfirms >= 1 ? 4 : 1;
   const vwapCross = closes[n] > vwap;
   
-  // 4. MACD — ×2 가중치
+  // 4. MACD
   const ema12 = calculateEMA(closes, 12);
   const ema26 = calculateEMA(closes, 26);
   const macd = ema12[n] - ema26[n];
@@ -178,7 +224,11 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   
   // 5. RSI
   const currentRSI = rsi[n];
-  const rsiScore = (currentRSI >= 50 && currentRSI <= 70) ? 8 : (currentRSI >= 40 && currentRSI < 50) ? 5 : (currentRSI > 70) ? 3 : 2;
+  // ★ 선취매: 저거래량 시 RSI 저점 반등(30~50)에 추가 보너스
+  let rsiScore = (currentRSI >= 50 && currentRSI <= 70) ? 8 : (currentRSI >= 40 && currentRSI < 50) ? 5 : (currentRSI > 70) ? 3 : 2;
+  if (isLowVolumeSession && currentRSI >= 30 && currentRSI <= 50 && rsi[n] > (rsi[n-1]||50)) {
+    rsiScore = Math.min(10, rsiScore + 3); // RSI 저점 고개 들기 보너스
+  }
   
   // 6. 볼린저 밴드 (ATR 기반 근사)
   const atr = calculateATR(highs, lows, closes, 14);
@@ -191,7 +241,12 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   // 7. 이평선 정배열 (EMA alignment)
   const ema50 = calculateEMA(closes, Math.min(50, closes.length));
   const aligned = ema9[n] > ema21[n] && ema21[n] > ema50[n];
-  const emaAlignScore = aligned ? 9 : (ema9[n] > ema21[n]) ? 6 : 3;
+  let emaAlignScore = aligned ? 9 : (ema9[n] > ema21[n]) ? 6 : 3;
+  // ★ 선취매: 저거래량 시 이평선 밀집 보너스
+  if (isLowVolumeSession) {
+    const emaSpread = Math.abs(ema9[n] - ema50[n]) / closes[n] * 100;
+    if (emaSpread < 1.5) emaAlignScore = Math.min(10, emaAlignScore + 2); // 이평선 밀집 보너스
+  }
   
   // 8. 갭 분석
   const gapPct = n > 0 ? ((opens[n] - closes[n-1]) / closes[n-1]) * 100 : 0;
@@ -204,28 +259,39 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   if (avgVol > 0 && currentVol / avgVol > 2) squeezeScore += 4;
   squeezeScore = Math.min(10, squeezeScore);
   
-  // 10. 거래대금 강도 (체결 강도 + 볼륨 가속) — ×1.5 가중치
+  // 10. 거래대금 강도 (체결 강도 + 볼륨 가속)
   let bullCount = 0, volInc = 0;
   for (let i = Math.max(0, n - 4); i <= n; i++) {
     if (closes[i] > opens[i]) bullCount++;
     if (i > 0 && volumes[i] > volumes[i - 1]) volInc++;
   }
-  // ★ 체결강도: 양봉비율 × 거래량가속 → 120%+ = 필승 후보
   const bullRatio = (bullCount / 5) * 100;
   const volAccel = volInc >= 3 ? 1.5 : volInc >= 2 ? 1.2 : 1.0;
   const aggression = Math.round(bullRatio * volAccel);
-  const aggrScore = aggression >= 150 ? 10 : aggression >= 120 ? 8 : aggression >= 80 ? 6 : aggression >= 60 ? 4 : 2;
+  let aggrScore = aggression >= 150 ? 10 : aggression >= 120 ? 8 : aggression >= 80 ? 6 : aggression >= 60 ? 4 : 2;
+  // ★ 선취매: 저거래량 시 체결강도 가중치 상향 (양봉비율 높으면 보너스)
+  if (isLowVolumeSession && bullRatio >= 60) {
+    aggrScore = Math.min(10, aggrScore + 2);
+  }
 
   // ★ 가중치 적용: RVOL×1.5, 거래대금강도×1.5, MACD×2, VWAP/캔들×2
-  // 기본 10개 지표 × 10점 = 100점, 가중치 합계: 1+1.5+2+2+1+1+1+1+1+1.5 = 13.0
-  const rawScore = sentimentScore * 1.0 + rvolScore * 1.5 + candleScore * 2.0 + macdScore * 2.0 
-    + rsiScore * 1.0 + bbScore * 1.0 + emaAlignScore * 1.0 + gapScore * 1.0 + squeezeScore * 1.0 + aggrScore * 1.5;
-  const maxRawScore = 10 * 13.0; // 130
+  // ★ 선취매 모드: 저거래량 시 RVOL 가중치 ↓, 체결강도/RSI/이평선 가중치 ↑
+  const rvolWeight = isLowVolumeSession ? 0.8 : 1.5;
+  const aggrWeight = isLowVolumeSession ? 2.0 : 1.5;
+  const rsiWeight = isLowVolumeSession ? 1.5 : 1.0;
+  const emaAlignWeight = isLowVolumeSession ? 1.5 : 1.0;
+
+  const rawScore = sentimentScore * 1.0 + rvolScore * rvolWeight + candleScore * 2.0 + macdScore * 2.0 
+    + rsiScore * rsiWeight + bbScore * 1.0 + emaAlignScore * emaAlignWeight + gapScore * 1.0 + squeezeScore * 1.0 + aggrScore * aggrWeight;
+  const maxRawScore = 10 * (1.0 + rvolWeight + 2.0 + 2.0 + rsiWeight + 1.0 + emaAlignWeight + 1.0 + 1.0 + aggrWeight);
   const totalScore = Math.round((rawScore / maxRawScore) * 100);
 
   // ★ 충족 지표 수 계산 (점수 ≥ 5점이면 '충족')
   const indicatorScores = [sentimentScore, rvolScore, candleScore, macdScore, rsiScore, bbScore, emaAlignScore, gapScore, squeezeScore, aggrScore];
   const metCount = indicatorScores.filter(s => s >= 5).length;
+
+  // ★ 매집 패턴 감지
+  const accumulation = detectAccumulation(closes, highs, lows, volumes, rsi);
 
   const recentHigh = Math.max(...highs.slice(-10));
   const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
@@ -233,17 +299,18 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   return {
     totalScore, trailingStop, rvol, changePct, metCount,
     vwap, bbLower, bbUpper,
+    accumulation,
     indicators: {
       sentiment: { score: sentimentScore, details: `변동률 ${changePct.toFixed(2)}%` },
-      rvol: { score: rvolScore, rvol, weight: '×1.5', details: `RVOL ${rvol.toFixed(1)}x` },
+      rvol: { score: rvolScore, rvol, weight: isLowVolumeSession ? '×0.8(선취매)' : '×1.5', details: `RVOL ${rvol.toFixed(1)}x` },
       candle: { score: candleScore, vwapCross, weight: '×2', details: `VWAP ${vwapCross ? '상단' : '하단'}` },
       macd: { score: macdScore, macd: +macd.toFixed(4), weight: '×2', details: `MACD ${macd > 0 ? '양전' : '음전'}` },
-      rsi: { score: rsiScore, rsi: +currentRSI.toFixed(1), details: `RSI ${currentRSI.toFixed(1)}` },
+      rsi: { score: rsiScore, rsi: +currentRSI.toFixed(1), weight: isLowVolumeSession ? '×1.5(선취매)' : '×1', details: `RSI ${currentRSI.toFixed(1)}` },
       bb: { score: bbScore, details: `BB ${closes[n] > bbUpper ? '상단돌파' : closes[n] > ema20[n] ? '중앙상단' : '하단'}` },
-      emaAlign: { score: emaAlignScore, aligned, details: `이평선 ${aligned ? '정배열' : '역배열'}` },
+      emaAlign: { score: emaAlignScore, aligned, weight: isLowVolumeSession ? '×1.5(선취매)' : '×1', details: `이평선 ${aligned ? '정배열' : '역배열'}` },
       gap: { score: gapScore, details: `갭 ${gapPct.toFixed(1)}%` },
       squeeze: { score: squeezeScore, details: `스퀴즈 ${squeezeScore >= 6 ? '활성' : '비활성'}` },
-      aggression: { score: aggrScore, weight: '×1.5', details: `체결강도 ${aggression.toFixed(0)}%` },
+      aggression: { score: aggrScore, weight: isLowVolumeSession ? '×2.0(선취매)' : '×1.5', details: `체결강도 ${aggression.toFixed(0)}%` },
     }
   };
 }
@@ -649,9 +716,10 @@ Deno.serve(async (req) => {
     const adaptedEntryThreshold = Math.max(rawAdapted, 55); // 절대 하한 55점
     const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0; // ★ RVOL 완화: 장외 1.5, 정규 2.0
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
+    const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
 
     if (entryRelax < 1.0) {
-      await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점 | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin}`, {});
+      await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점 | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin} | 선취매모드: ${isLowVolumeSession ? 'ON' : 'OFF'}`, {});
     }
 
     await addLog('unified', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 통합 진입 문턱: ${adaptedEntryThreshold}점 | ${sessionLabel} | 매수중단: ${marketBuyHalt ? 'YES' : 'NO'}`, {});
@@ -664,7 +732,7 @@ Deno.serve(async (req) => {
       const data = await getQuoteAndCandles(sym);
       if (!data) continue;
       const price = data.quote.c;
-      const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
+      const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
       const quantScore = scoring?.totalScore || 0;
       const metCount = scoring?.metCount || 0;
       lastScores.set(sym, quantScore);
@@ -762,10 +830,21 @@ Deno.serve(async (req) => {
 
         // 3. 이중 잠금 로직 (지표 무결성 중심)
         if (!shouldClose) {
+          // ★ 선취매 안전장치: 저거래량 세션에서 진입한 종목, 지표 45점 미만이면 즉시 본절 정리
+          const isPreMarketEntry = isLowVolumeSession && (pos.ai_reason || '').includes('선취매');
+          
           if (pnlPct <= -3.0 && !withinATR) {
             shouldClose = true;
             closeReason = `[추세이탈] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% + ATR범위 외 → 추세 전환`;
             newStatus = 'trend_break';
+          } else if (isPreMarketEntry && quantScore < 45 && pnlPct <= 0.3) {
+            // ★ 선취매 안전장치: 저거래량 환경에서 탈출이 어려우므로 즉시 본절 부근 정리
+            shouldClose = true;
+            closeReason = `[선취매안전] [${sessionLabel}] [${timeStr}] [${sym}] 저거래량 진입 종목 지표 ${quantScore}점(<45) → 본절 부근 즉시 정리`;
+            newStatus = 'premarket_safety';
+          } else if (isPreMarketEntry && indicatorsStrong && pnlPct > 0 && pnlPct < 2.0 && currentSession !== 'REGULAR') {
+            // ★ 선취매 홀딩: 소폭 상승해도 지표 유지 시 정규장까지 보유
+            await addLog('unified', 'hold', sym, `[선취매홀딩] ${sym} +${pnlPct.toFixed(2)}% 소폭 상승 BUT 지표 ${quantScore}점 양호 → 정규장 거래량 유입 대기 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           } else if (pnlPct <= -1.8) {
             if (indicatorsStrong && technicalSafe) {
               await addLog('unified', 'hold', sym, `[눌림목홀딩] ${sym} -${Math.abs(pnlPct).toFixed(2)}% BUT 지표 ${quantScore}점 + 기술안전 → 눌림목, 홀딩`, { quantScore, vwapCross, aboveBB });
@@ -908,7 +987,7 @@ Deno.serve(async (req) => {
             const price = data.quote.c;
             const capType = getCapType(price, sym);
             if (capType === 'small' && price < MIN_PRICE_USD) return null;
-            const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
+            const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
             if (!scoring) return null;
             lastScores.set(sym, scoring.totalScore);
             return { sym, price, scoring, capType, data };
@@ -939,25 +1018,38 @@ Deno.serve(async (req) => {
           const metCount = r.scoring.metCount || 0;
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
           const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
+          const accumPattern = r.scoring.accumulation;
+          const isAccumEntry = isLowVolumeSession && accumPattern?.isAccumulating;
           
-          // 최소 충족 조건: 10개 중 5개 이상 충족 + RVOL 기준 통과 + 체결강도 120%+
-          if (metCount < 5) continue;
-          if (rvol < adaptedRvolMin) continue;
+          // 최소 충족 조건: 10개 중 5개 이상 충족 (매집 패턴 시 4개로 완화)
+          const minMet = isAccumEntry ? 4 : 5;
+          if (metCount < minMet) continue;
+          
+          // ★ 선취매: 매집 패턴 감지 시 RVOL 요건 대폭 완화
+          const effectiveRvolMin = isAccumEntry ? 0.5 : adaptedRvolMin;
+          if (rvol < effectiveRvolMin) continue;
+          
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          if (aggrVal < 120) {
-            // 체결강도 120% 미만 → '무조건 익절 후보' 탈락
-            continue;
-          }
+          // ★ 선취매: 매집 패턴 시 체결강도 80%로 완화 (조용한 매집은 체결강도가 낮을 수 있음)
+          const minAggression = isAccumEntry ? 80 : 120;
+          if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
 
           // 수급 돌파/유동성 점수 계산
           (r as any).isVolumeBurst = rvol >= 2.0;
+          (r as any).isAccumulationEntry = isAccumEntry;
+          (r as any).accumPattern = accumPattern?.pattern || '';
           const tradingVal = vlInfo?.tradingValue || 0;
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
+
+          // ★ 선취매 알림 로그
+          if (isAccumEntry) {
+            await addLog('unified', 'scan', r.sym, `[선취매 포착] 저거래량 구간이지만 지표가 완벽한 ${r.sym}을 정규장 폭발 대비 미리 매집합니다. | 매집패턴: ${accumPattern?.pattern} (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore });
+          }
 
           candidates.push(r);
         }
@@ -1024,10 +1116,15 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, sessionSlippage);
+      // ★ 선취매: 저거래량 시 1~2호가 위로 공격적 지정가 (확실한 물량 확보)
+      const isAccumEntry = (r as any).isAccumulationEntry;
+      const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.003) : sessionSlippage; // 최소 0.3% 상단 제시
+      const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
       const stopLoss = +(adjustedPrice * 0.982).toFixed(4);
-      const takeProfit = +(adjustedPrice * 1.05).toFixed(4);
-      const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
+      // ★ 선취매: 정규장 폭발 대비 기대수익률 1.5배 상향 (5% → 7.5%)
+      const tpMultiplier = isAccumEntry ? 1.075 : 1.05;
+      const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
+      const tier = isPyramiding ? 'PYRAMID' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
       const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 ×${spreadMul}` : '';
@@ -1035,12 +1132,13 @@ Deno.serve(async (req) => {
       const volRank = (r as any).volumeRank;
       const volRankTag = volRank <= 50 ? ` | Vol#${volRank}` : '';
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
+      const accumTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern})` : '';
       
       // ★ 엔진 개편: 지표 상세 근거 로그 ("10대 지표 중 N개 조건 충족(X점)으로 진입")
       const indDetails = Object.entries(r.scoring.indicators)
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
-      const logMsg = `[10대지표매수] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const logMsg = `[${isAccumEntry ? '선취매매수' : '10대지표매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${accumTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       await supabase.from('unified_trades').insert({
         symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,
@@ -1061,7 +1159,7 @@ Deno.serve(async (req) => {
       for (const pos of refreshedOpenPos) {
         const data = await getQuoteAndCandles(pos.symbol);
         if (!data) continue;
-        const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
+        const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
         const currentScore = scoring?.totalScore || 0;
 
         // ★ 승률 강화: 교체매매 점수 차이 10→20점 (잦은 교체 = 잦은 패 → 차단)
