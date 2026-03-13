@@ -769,13 +769,7 @@ Deno.serve(async (req) => {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
         const capType = getCapType(price, sym);
 
-        // ===== 수익 구간 방어 =====
-        if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.002) {
-          const bs = +(pos.price * 1.002).toFixed(4);
-          await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
-          pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[본절보호] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (1.0% 트리거)`, {});
-        }
+        // ===== 수익 구간 트레일링 방어 (본절가는 아래 혁파 로직에서 처리) =====
         if (pnlPct >= 5 && pos.stop_loss < pos.price * 1.035) {
           const rs = +(pos.price * 1.035).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: rs }).eq('id', pos.id);
