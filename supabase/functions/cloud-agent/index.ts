@@ -210,8 +210,11 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
     if (closes[i] > opens[i]) bullCount++;
     if (i > 0 && volumes[i] > volumes[i - 1]) volInc++;
   }
-  const aggression = (bullCount / 5) * 100;
-  const aggrScore = aggression >= 80 && volInc >= 3 ? 10 : aggression >= 60 ? 7 : aggression >= 40 ? 4 : 2;
+  // ★ 체결강도: 양봉비율 × 거래량가속 → 120%+ = 필승 후보
+  const bullRatio = (bullCount / 5) * 100;
+  const volAccel = volInc >= 3 ? 1.5 : volInc >= 2 ? 1.2 : 1.0;
+  const aggression = Math.round(bullRatio * volAccel);
+  const aggrScore = aggression >= 150 ? 10 : aggression >= 120 ? 8 : aggression >= 80 ? 6 : aggression >= 60 ? 4 : 2;
 
   // ★ 가중치 적용: RVOL×1.5, 거래대금강도×1.5, MACD×2, VWAP/캔들×2
   // 기본 10개 지표 × 10점 = 100점, 가중치 합계: 1+1.5+2+2+1+1+1+1+1+1.5 = 13.0
@@ -619,8 +622,11 @@ Deno.serve(async (req) => {
       const spyChange = spyQuote?.dp || 0;
       const qqqChange = qqqQuote?.dp || 0;
 
-      // ★ 시장잠금 완전 비활성화 — QQQ/SPY 하락과 무관하게 항상 매수 허용
-      await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → 시장잠금 OFF, 진입 기준 ${baseEntryThreshold}점`, { spyChange, qqqChange });
+      // ★ QQQ 모멘텀 보너스: QQQ 상승 시 진입 점수에 보너스 부여
+      qqqTrendDown = qqqChange < -0.5;
+      const qqqBonus = qqqChange >= 1.0 ? 3 : qqqChange >= 0.3 ? 1 : 0;
+      if (qqqBonus > 0) baseEntryThreshold = Math.max(52, baseEntryThreshold - qqqBonus);
+      await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → QQQ보너스 -${qqqBonus}점, 진입기준 ${baseEntryThreshold}점`, { spyChange, qqqChange, qqqBonus });
     } catch { /* fallback */ }
 
     // --- Dynamic win-rate threshold ---
@@ -681,11 +687,11 @@ Deno.serve(async (req) => {
         const capType = getCapType(price, sym);
 
         // ===== 수익 구간 방어 =====
-        if (pnlPct >= 1.2 && pos.stop_loss < pos.price * 1.002) {
+        if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.002) {
           const bs = +(pos.price * 1.002).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[본절보호] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)}`, {});
+          await addLog('unified', 'defense', sym, `[본절보호] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (1.0% 트리거)`, {});
         }
         if (pnlPct >= 5 && pos.stop_loss < pos.price * 1.035) {
           const rs = +(pos.price * 1.035).toFixed(4);
@@ -861,6 +867,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ========== 일일 수익 목표 체크 (₩300,000) ==========
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const { data: todayClosedTrades } = await supabase
+      .from('unified_trades')
+      .select('pnl')
+      .not('status', 'eq', 'open')
+      .gte('closed_at', todayStart.toISOString());
+    const dailyPnl = (todayClosedTrades || []).reduce((sum, t) => sum + (t.pnl || 0), 0);
+    const DAILY_TARGET_KRW = 300000;
+    const dailyTargetHit = dailyPnl >= DAILY_TARGET_KRW;
+    if (dailyTargetHit) {
+      await addLog('unified', 'milestone', null, `🎉🏆 [일일 목표 달성!] 오늘 실현 수익 ${fmtKRWRaw(dailyPnl)} ≥ ₩300,000 — 목표 초과 달성!`, { dailyPnl });
+    } else {
+      await addLog('system', 'info', null, `[일일목표] 오늘 실현 PnL: ${fmtKRWRaw(dailyPnl)} / 목표 ₩300,000 (${(dailyPnl/DAILY_TARGET_KRW*100).toFixed(1)}%)`, { dailyPnl });
+    }
+
     // ========== UNIFIED ENTRY SCAN ==========
     // ★ 필승 로직: 시장 하락 또는 개장 직후 15분 뇌동매매 방지
     if (marketBuyHalt) {
@@ -917,9 +940,15 @@ Deno.serve(async (req) => {
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
           const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
           
-          // 최소 충족 조건: 10개 중 5개 이상 충족 + RVOL 기준 통과
+          // 최소 충족 조건: 10개 중 5개 이상 충족 + RVOL 기준 통과 + 체결강도 120%+
           if (metCount < 5) continue;
           if (rvol < adaptedRvolMin) continue;
+          const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
+          const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
+          if (aggrVal < 120) {
+            // 체결강도 120% 미만 → '무조건 익절 후보' 탈락
+            continue;
+          }
 
           if (isOpeningRush) continue;
 
@@ -949,8 +978,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sort: explosive → volume burst → liquidity → score
+    // Sort: session-specific → explosive → volume burst → liquidity → score
+    // ★ 세션별 최적화: 프리/데이 → 소형주 우선, 정규장 → 대형주 우선
+    const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
     candidates.sort((a, b) => {
+      // Session cap preference bonus
+      const aCapBonus = a.capType === sessionCapPreference ? 1 : 0;
+      const bCapBonus = b.capType === sessionCapPreference ? 1 : 0;
+      if (aCapBonus !== bCapBonus) return bCapBonus - aCapBonus;
       const aExp = (a as any).isExplosive ? 1 : 0;
       const bExp = (b as any).isExplosive ? 1 : 0;
       if (aExp !== bExp) return bExp - aExp;
