@@ -924,10 +924,28 @@ Deno.serve(async (req) => {
           await addLog('unified', 'defense', sym, `[승률100%설계] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (매수가+0.2%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
-        // 1. 익절 로직 — ★ 15% 타겟 조기매도 금지
-        if (pnlPct >= 3.0 && pnlPct < 15.0 && indicatorsOver60 && (isSuperTarget || quantScore >= 60)) {
+        // 1. 익절 로직 — ★ 전 종목 TP +15% 통일, 70점 이상 시 트레일링으로 20%+ 추격
+        if (pnlPct >= 15.0) {
+          // ★ 15% 도달: 지표 70점 이상이면 고점-1% 트레일링으로 20%+ 추격
+          const indicatorsOver70 = quantScore >= 70;
+          if (indicatorsOver70) {
+            const drop = ((peakPrice - price) / peakPrice) * 100;
+            if (drop >= 1.0) {
+              shouldClose = true;
+              closeReason = `[🏆15%+트레일링익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% (지표 ${quantScore}점) → 수익 극대화 확정`;
+              newStatus = 'trailing_profit';
+            } else {
+              await addLog('unified', 'hold', sym, `[🎯15%돌파→20%추격] ${sym} +${pnlPct.toFixed(2)}% 목표 도달! 지표 ${quantScore}점(≥70) 매우 강력 → 고점-1% 트레일링으로 20%+ 수익 추격 중`, { quantScore, pnlPct: +pnlPct.toFixed(2), peakPrice, drop });
+            }
+          } else {
+            // 15% 도달 + 지표 70 미만 → 즉시 전량 익절
+            shouldClose = true;
+            closeReason = `[🏆15%목표익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 목표 도달 (지표 ${quantScore}점<70) → 전량 수익 확정`;
+            newStatus = 'profit_taken';
+          }
+        } else if (pnlPct >= 3.0 && pnlPct < 15.0 && indicatorsOver60) {
           // ★ 조기 매도 금지: 3~15% 수익 구간에서 지표 60점 이상이면 무조건 홀딩
-          await addLog('unified', 'hold', sym, `[🎯15%홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 중이지만 지표 ${quantScore}점(≥60) → 15% 목표까지 강력 홀딩! 조기 매도 금지`, { quantScore, pnlPct: +pnlPct.toFixed(2), isSuperTarget });
+          await addLog('unified', 'hold', sym, `[🎯15%홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 중이지만 지표 ${quantScore}점(≥60) → 15% 목표까지 강력 홀딩! 조기 매도 금지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         } else if (pnlPct >= 3.0) {
           const drop = ((peakPrice - price) / peakPrice) * 100;
           const dropThreshold = isIronHold ? 1.0 : 0.5;
@@ -936,7 +954,7 @@ Deno.serve(async (req) => {
             closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 후 고점-${drop.toFixed(2)}% + 지표 약화(${quantScore}점) → 수익 확정`;
             newStatus = 'trailing_profit';
           } else if (drop >= dropThreshold && indicatorsStrong) {
-            await addLog('unified', 'hold', sym, `[Iron Hold] ${sym} +${pnlPct.toFixed(2)}% 고점-${drop.toFixed(2)}% BUT 지표 ${quantScore}점(≥55) 강력 유지 → 추가 상승 대기`, { quantScore, drop, isIronHold });
+            await addLog('unified', 'hold', sym, `[Iron Hold] ${sym} +${pnlPct.toFixed(2)}% 고점-${drop.toFixed(2)}% BUT 지표 ${quantScore}점(≥55) 강력 유지 → 15% 목표 추격 중`, { quantScore, drop, isIronHold });
           }
         } else if (peakPrice >= pos.price * 1.10) {
           const drop = ((peakPrice - price) / peakPrice) * 100;
@@ -946,18 +964,17 @@ Deno.serve(async (req) => {
             newStatus = 'trailing_profit';
           }
         } else if (pos.take_profit && price >= pos.take_profit) {
-          // ★ 목표가 도달: 지표 60점 이상이면 TP 상향 (15% 추가 추격)
-          if (indicatorsOver60) {
-            await addLog('unified', 'hold', sym, `[🎯목표돌파→15%추격] ${sym} 목표가 도달 BUT 지표 ${quantScore}점(≥60) → TP 3% 추가 상향`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-            const newTP = +(price * 1.03).toFixed(4);
-            await supabase.from('unified_trades').update({ take_profit: newTP }).eq('id', pos.id);
-          } else if (indicatorsStrong) {
-            await addLog('unified', 'hold', sym, `[목표돌파홀딩] ${sym} 목표가 도달 BUT 지표 ${quantScore}점(≥55) → TP 상향`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          // ★ 목표가(+15%) 도달: 지표 70점 이상이면 트레일링, 아니면 익절
+          const indicatorsOver70 = quantScore >= 70;
+          if (indicatorsOver70) {
+            await addLog('unified', 'hold', sym, `[🎯TP도달→20%추격] ${sym} TP 도달 + 지표 ${quantScore}점(≥70) → 고점-1% 트레일링 전환`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          } else if (indicatorsOver60) {
+            await addLog('unified', 'hold', sym, `[🎯TP도달→홀딩] ${sym} TP 도달 + 지표 ${quantScore}점(≥60) → TP 3% 추가 상향`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
             const newTP = +(price * 1.03).toFixed(4);
             await supabase.from('unified_trades').update({ take_profit: newTP }).eq('id', pos.id);
           } else {
             shouldClose = true;
-            closeReason = `[목표익절] [${sessionLabel}] [${timeStr}] [${sym}] 목표가 도달 + 지표 ${quantScore}점 → 수익 확정`;
+            closeReason = `[목표익절] [${sessionLabel}] [${timeStr}] [${sym}] +15% 목표가 도달 + 지표 ${quantScore}점 → 수익 확정`;
             newStatus = 'profit_taken';
           }
         }
@@ -1092,7 +1109,7 @@ Deno.serve(async (req) => {
         if (qty <= 0 || costKRW > balance) continue;
         const ap = applySessionSlippage(dip.price, 'buy', spreadMul, sessionSlippage);
         const sl = +(ap * 0.90).toFixed(4);
-        const tp = +(ap * 1.05).toFixed(4);
+        const tp = +(ap * 1.15).toFixed(4);
         const bb = Math.round(balance);
         const nb = balance - costKRW;
         const msg = `[역발상추매] [${sessionLabel}] [${timeStr}] ${dip.sym} ${dip.scoring.totalScore}점(${dip.scoring.metCount}/10) 눌림 추매 [${qty}주@${fmtKRW(ap)}|${fmtKRWRaw(costKRW)}] [잔고: ${fmtKRWRaw(bb)}→${fmtKRWRaw(nb)}]`;
@@ -1297,12 +1314,11 @@ Deno.serve(async (req) => {
       const isAccumEntry = (r as any).isAccumulationEntry;
       const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.005) : sessionSlippage; // 최소 0.5% 상단 제시
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
-      // ★ [혁파] 고정 손절 폐기: 초기 SL을 넉넉하게 설정 (지표 기반 매도로 전환)
-      const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망 (일시적 변동성을 견디고 대시세를 먹기 위함)
-      // ★ 슈퍼 패턴: 15% 목표가 / 선취매: 7.5% / 기본: 5%
+      // ★ [전략 동기화] 초기 SL -10% / TP +15% 통일
+      const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망
+      // ★ 전 종목 TP +15% 통일 (슈퍼/선취매 구분 없이)
+      const takeProfit = +(adjustedPrice * 1.15).toFixed(4);
       const isSuperEntry = (r as any).isSuperPattern;
-      const tpMultiplier = isSuperEntry ? 1.15 : isAccumEntry ? 1.075 : 1.05;
-      const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
       const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
