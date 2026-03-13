@@ -228,16 +228,27 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
       )}
 
       <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Shield className="w-3 h-3 text-destructive" />
-          SL: ₩{Math.round((pos.stop_loss || 0) * fxRate).toLocaleString('ko-KR')}
-          <span className="text-destructive font-mono font-bold">(-10%)</span>
-        </span>
-        <span className="flex items-center gap-1">
-          {isProfit ? <TrendingUp className="w-3 h-3 text-stock-up" /> : <TrendingDown className="w-3 h-3 text-stock-down" />}
-          TP: ₩{Math.round((pos.take_profit || 0) * fxRate).toLocaleString('ko-KR')}
-          <span className="text-stock-up font-mono font-bold">(+15%)</span>
-        </span>
+        {(() => {
+          const slPct = pos.price > 0 ? ((pos.stop_loss || 0) / pos.price - 1) * 100 : 0;
+          const tpPct = pos.price > 0 ? ((pos.take_profit || 0) / pos.price - 1) * 100 : 0;
+          const slAboveEntry = slPct > 0;
+          return (
+            <>
+              <span className="flex items-center gap-1">
+                <Shield className={cn("w-3 h-3", slAboveEntry ? 'text-stock-up' : 'text-destructive')} />
+                SL: ₩{Math.round((pos.stop_loss || 0) * fxRate).toLocaleString('ko-KR')}
+                <span className={cn("font-mono font-bold", slAboveEntry ? 'text-stock-up' : 'text-destructive')}>
+                  ({slPct >= 0 ? '+' : ''}{slPct.toFixed(1)}%)
+                </span>
+              </span>
+              <span className="flex items-center gap-1">
+                <TrendingUp className="w-3 h-3 text-stock-up" />
+                TP: ₩{Math.round((pos.take_profit || 0) * fxRate).toLocaleString('ko-KR')}
+                <span className="text-stock-up font-mono font-bold">(+{tpPct.toFixed(0)}%)</span>
+              </span>
+            </>
+          );
+        })()}
         {pos.entry_score && score !== null && score !== pos.entry_score && (
           <span className="text-muted-foreground">
             진입 {pos.entry_score}점 → 현재 {score}점
