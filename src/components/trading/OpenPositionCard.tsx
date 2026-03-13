@@ -231,10 +231,12 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         <span className="flex items-center gap-1">
           <Shield className="w-3 h-3 text-destructive" />
           SL: ₩{Math.round((pos.stop_loss || 0) * fxRate).toLocaleString('ko-KR')}
+          <span className="text-destructive font-mono font-bold">(-10%)</span>
         </span>
         <span className="flex items-center gap-1">
           {isProfit ? <TrendingUp className="w-3 h-3 text-stock-up" /> : <TrendingDown className="w-3 h-3 text-stock-down" />}
           TP: ₩{Math.round((pos.take_profit || 0) * fxRate).toLocaleString('ko-KR')}
+          <span className="text-stock-up font-mono font-bold">(+15%)</span>
         </span>
         {pos.entry_score && score !== null && score !== pos.entry_score && (
           <span className="text-muted-foreground">

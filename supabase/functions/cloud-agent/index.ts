@@ -1314,12 +1314,11 @@ Deno.serve(async (req) => {
       const isAccumEntry = (r as any).isAccumulationEntry;
       const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.005) : sessionSlippage; // 최소 0.5% 상단 제시
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
-      // ★ [혁파] 고정 손절 폐기: 초기 SL을 넉넉하게 설정 (지표 기반 매도로 전환)
-      const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망 (일시적 변동성을 견디고 대시세를 먹기 위함)
-      // ★ 슈퍼 패턴: 15% 목표가 / 선취매: 7.5% / 기본: 5%
-      const isSuperEntry = (r as any).isSuperPattern;
-      const tpMultiplier = isSuperEntry ? 1.15 : isAccumEntry ? 1.075 : 1.05;
-      const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
+      // ★ [전략 동기화] 초기 SL -10% / TP +15% 통일
+      const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망
+      // ★ 전 종목 TP +15% 통일 (슈퍼/선취매 구분 없이)
+      const takeProfit = +(adjustedPrice * 1.15).toFixed(4);
+      const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
