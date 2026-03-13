@@ -210,8 +210,11 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
     if (closes[i] > opens[i]) bullCount++;
     if (i > 0 && volumes[i] > volumes[i - 1]) volInc++;
   }
-  const aggression = (bullCount / 5) * 100;
-  const aggrScore = aggression >= 80 && volInc >= 3 ? 10 : aggression >= 60 ? 7 : aggression >= 40 ? 4 : 2;
+  // ★ 체결강도: 양봉비율 × 거래량가속 → 120%+ = 필승 후보
+  const bullRatio = (bullCount / 5) * 100;
+  const volAccel = volInc >= 3 ? 1.5 : volInc >= 2 ? 1.2 : 1.0;
+  const aggression = Math.round(bullRatio * volAccel);
+  const aggrScore = aggression >= 150 ? 10 : aggression >= 120 ? 8 : aggression >= 80 ? 6 : aggression >= 60 ? 4 : 2;
 
   // ★ 가중치 적용: RVOL×1.5, 거래대금강도×1.5, MACD×2, VWAP/캔들×2
   // 기본 10개 지표 × 10점 = 100점, 가중치 합계: 1+1.5+2+2+1+1+1+1+1+1.5 = 13.0
