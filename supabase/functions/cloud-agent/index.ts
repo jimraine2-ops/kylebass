@@ -857,9 +857,17 @@ Deno.serve(async (req) => {
             shouldClose = true;
             closeReason = `[선취매안전] [${sessionLabel}] [${timeStr}] [${sym}] 저거래량 진입 종목 지표 ${quantScore}점(<45) → 본절 부근 즉시 정리`;
             newStatus = 'premarket_safety';
-          } else if (isPreMarketEntry && indicatorsStrong && pnlPct > 0 && pnlPct < 2.0 && currentSession !== 'REGULAR') {
-            // ★ 선취매 홀딩: 소폭 상승해도 지표 유지 시 정규장까지 보유
-            await addLog('unified', 'hold', sym, `[선취매홀딩] ${sym} +${pnlPct.toFixed(2)}% 소폭 상승 BUT 지표 ${quantScore}점 양호 → 정규장 거래량 유입 대기 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          } else if (isPreMarketEntry && quantScore >= 55 && pnlPct > 0 && pnlPct < 2.0 && currentSession !== 'REGULAR') {
+            // ★ 선취매 홀딩 강화: 10대 지표 55점 이상 유지 → 정규장까지 무조건 보유 (조기 매도 금지)
+            await addLog('unified', 'hold', sym, `[선취매홀딩] ${sym} +${pnlPct.toFixed(2)}% 소폭 상승 BUT 지표 ${quantScore}점(≥55) 완벽 유지 → 정규장 거래량 폭발 대기 홀딩 | 조기 매도 금지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          } else if (isPreMarketEntry && quantScore >= 55 && pnlPct >= 1.0) {
+            // ★ 본절가 방어: 선취매 종목 +1.0% 도달 시 즉시 SL을 매수가로 상향 (리스크 0)
+            if (pos.stop_loss < pos.price * 1.002) {
+              const safeSL = +(pos.price * 1.002).toFixed(4);
+              await supabase.from('unified_trades').update({ stop_loss: safeSL }).eq('id', pos.id);
+              pos.stop_loss = safeSL;
+              await addLog('unified', 'defense', sym, `[선취매본절방어] ${sym} +${pnlPct.toFixed(2)}% 도달 → SL=${fmtKRW(safeSL)} (매수가+0.2%)로 즉시 상향, 리스크 0`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+            }
           } else if (pnlPct <= -1.8) {
             if (indicatorsStrong && technicalSafe) {
               await addLog('unified', 'hold', sym, `[눌림목홀딩] ${sym} -${Math.abs(pnlPct).toFixed(2)}% BUT 지표 ${quantScore}점 + 기술안전 → 눌림목, 홀딩`, { quantScore, vwapCross, aboveBB });

@@ -11,6 +11,7 @@ const INDICATOR_LABELS: Record<string, string> = {
   gap: '갭 분석',
   squeeze: '숏 스퀴즈',
   aggression: '체결 강도',
+  condensation: '수급 응축도',
 };
 
 export { INDICATOR_LABELS };
@@ -22,14 +23,21 @@ export function RadarChartCard({ indicators }: { indicators: any }) {
     fullMark: 10,
   }));
 
+  // 수급 응축도가 높으면(≥7) 발산 직전 상태 표시
+  const condensationScore = indicators?.condensation?.score || 0;
+  const isAboutToExplode = condensationScore >= 7;
+
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer width="100%" height={300}>
       <RadarChart data={data}>
         <PolarGrid stroke="hsl(var(--border))" />
-        <PolarAngleAxis dataKey="indicator" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+        <PolarAngleAxis dataKey="indicator" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} />
         <PolarRadiusAxis angle={30} domain={[0, 10]} tick={{ fontSize: 9 }} />
-        <Radar name="점수" dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.3} strokeWidth={2} />
-        <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+        <Radar name="점수" dataKey="score" stroke={isAboutToExplode ? "hsl(var(--warning))" : "hsl(var(--primary))"} fill={isAboutToExplode ? "hsl(var(--warning))" : "hsl(var(--primary))"} fillOpacity={isAboutToExplode ? 0.4 : 0.3} strokeWidth={2} />
+        <Tooltip 
+          contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} 
+          formatter={(value: number, name: string) => [`${value}/10`, name]}
+        />
       </RadarChart>
     </ResponsiveContainer>
   );
