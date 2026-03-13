@@ -1166,7 +1166,8 @@ Deno.serve(async (req) => {
       const isAccumEntry = (r as any).isAccumulationEntry;
       const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.005) : sessionSlippage; // 최소 0.5% 상단 제시
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
-      const stopLoss = +(adjustedPrice * 0.982).toFixed(4);
+      // ★ [혁파] 고정 손절 폐기: 초기 SL을 넉넉하게 설정 (지표 기반 매도로 전환)
+      const stopLoss = +(adjustedPrice * 0.95).toFixed(4); // -5% 안전망 (실질적으로 지표 40점 미만에서 매도)
       // ★ 선취매: 정규장 폭발 대비 기대수익률 1.5배 상향 (5% → 7.5%)
       const tpMultiplier = isAccumEntry ? 1.075 : 1.05;
       const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
