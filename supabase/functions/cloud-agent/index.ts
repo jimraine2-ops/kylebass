@@ -142,9 +142,9 @@ function generateSyntheticCandles(quote: any, days = 40) {
 }
 
 // ===== Accumulation Pattern Detection (매집 패턴 포착) =====
-function detectAccumulation(closes: number[], highs: number[], lows: number[], volumes: number[], rsi: number[]): { isAccumulating: boolean; confidence: number; pattern: string } {
+function detectAccumulation(closes: number[], highs: number[], lows: number[], volumes: number[], rsi: number[]): { isAccumulating: boolean; confidence: number; pattern: string; condensation: number } {
   const n = closes.length - 1;
-  if (n < 10) return { isAccumulating: false, confidence: 0, pattern: 'insufficient_data' };
+  if (n < 10) return { isAccumulating: false, confidence: 0, pattern: 'insufficient_data', condensation: 0 };
 
   // 1. 박스권 횡보 체크: 최근 10봉의 고가-저가 범위가 좁으면 박스권
   const recentHighs = highs.slice(-10);
@@ -154,7 +154,7 @@ function detectAccumulation(closes: number[], highs: number[], lows: number[], v
   const boxRange = rangeLow > 0 ? ((rangeHigh - rangeLow) / rangeLow) * 100 : 999;
   const isBoxPattern = boxRange < 5; // 5% 이내 박스권
 
-  // 2. RSI 저점 고개 들기: RSI가 30~50 구간에서 상승 전환
+  // 2. RSI 저점 고개 들기: RSI가 30~55 구간에서 상승 전환
   const rsiCurrent = rsi[n] || 50;
   const rsiPrev = rsi[n - 1] || 50;
   const rsiPrev2 = rsi[n - 2] || 50;
@@ -172,18 +172,32 @@ function detectAccumulation(closes: number[], highs: number[], lows: number[], v
   const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, volumes.length);
   const volContracting = avgVol20 > 0 && avgVol5 / avgVol20 < 0.8; // 거래량 20% 이상 감소
 
-  const signals = [isBoxPattern, rsiRising, emaConverging, volContracting].filter(Boolean).length;
-  const confidence = signals * 25;
-  const isAccumulating = signals >= 2; // 4개 중 2개 이상이면 매집 판정
+  // 5. 에너지 응축도: 가격이 하락하지 않으면서 지표가 조용히 상승
+  const priceStable = n >= 5 && Math.abs(closes[n] - closes[n - 5]) / closes[n - 5] * 100 < 2;
+  const emaRising = ema5[n] > ema5[n - 1] && ema10[n] > ema10[n - 1];
+
+  const signals = [isBoxPattern, rsiRising, emaConverging, volContracting, priceStable && emaRising].filter(Boolean).length;
+  const confidence = Math.min(100, signals * 20);
+  const isAccumulating = signals >= 2; // 5개 중 2개 이상이면 매집 판정
+
+  // ★ 수급 응축도 점수 (0~10): 레이더 차트 연동용
+  let condensation = 0;
+  if (isBoxPattern) condensation += 2.5;
+  if (rsiRising) condensation += 2;
+  if (emaConverging) condensation += 2;
+  if (volContracting) condensation += 1.5;
+  if (priceStable && emaRising) condensation += 2;
+  condensation = Math.min(10, Math.round(condensation * 10) / 10);
 
   let pattern = '';
   if (isBoxPattern) pattern += '박스권|';
   if (rsiRising) pattern += 'RSI반등|';
   if (emaConverging) pattern += '이평밀집|';
-  if (volContracting) pattern += '거래량감소';
+  if (volContracting) pattern += '거래량감소|';
+  if (priceStable && emaRising) pattern += '에너지응축';
   pattern = pattern.replace(/\|$/, '') || 'none';
 
-  return { isAccumulating, confidence, pattern };
+  return { isAccumulating, confidence, pattern, condensation };
 }
 
 // ===== Unified 10-Indicator Scoring (Weighted: RVOL×1.5, MACD×2, VWAP/Candle×2, 거래대금×1.5) =====
