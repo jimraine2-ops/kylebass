@@ -158,15 +158,48 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
       <Card className="border-primary/20">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📋 MIH(마켓 인사이트 허브) 승률 극대화 엔진 v2</p>
-          <p>✅ 진입: [합산 점수 ≥ 60] AND [RVOL ≥ 200%] AND [호재 {'>'} 0] AND [현재가 {'>'} VWAP] → 수급 확인 후 매수</p>
-          <p>🛡️ 본절보호: +1.5% 도달 시 손절가 → 매수가+0.2%(수수료) 자동 상향 | +3% 시 +1.5% 확보</p>
-          <p>🚫 시장필터: QQQ 하락 추세 감지 시 모든 매수 진입 일시 중단</p>
-          <p>📉 동적손절: VWAP 또는 볼린저 하단 이탈 시 즉시 매도 (고정 -2.5% 백스톱 유지)</p>
+          <p className="font-medium text-foreground">📋 전문 트레이너 모드 — 무조건 익절 시스템 v3</p>
+          <p>✅ 진입: [합산 ≥ 55점] AND [체결강도 ≥ 120%] AND [5/10 지표 충족] AND [RVOL ≥ 2.0] → 무조건 익절 후보만 편입</p>
+          <p>🛡️ 본절보호: +1.0% 도달 즉시 SL → 매수가+0.2% 상향 | 마이너스 마감 원천 차단</p>
+          <p>📊 QQQ 모멘텀: 나스닥 상승 시 진입 점수 보너스 부여 (승률 극대화)</p>
+          <p>📉 지표우선 동적방어: 점수 유지 시 눌림목 홀딩 | ATR 기반 추세이탈만 손절</p>
           <p>📈 피라미딩: 80점 돌파 시 +5% 추가 매수 | +2% 시 50% 1차 익절</p>
-          <p className="text-primary font-medium">☁️ ₩100만 통합 잔고 운용 — 고품질 진입만 허용</p>
+          <p>🏆 세션최적화: 프리/데이 → 소형주, 정규장 → 대형주 우선</p>
+          <p className="text-primary font-medium">💰 일일 목표 ₩300,000 — 달성 시 축하 알림 ☁️</p>
         </CardContent>
       </Card>
+
+      {/* ★ 일일 목표 달성 축하 배너 */}
+      {dailyTargetHit ? (
+        <Card className="border-stock-up/50 bg-stock-up/10">
+          <CardContent className="p-4 flex items-center gap-3">
+            <span className="text-3xl">🏆🎉</span>
+            <div>
+              <p className="text-lg font-bold text-stock-up">오늘의 목표 달성! 🎊</p>
+              <p className="text-sm text-muted-foreground">
+                오늘 실현 수익: <span className="font-bold font-mono text-stock-up">₩{todayPnl.toLocaleString('ko-KR')}</span> / 목표 ₩300,000
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-primary/20">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-muted-foreground">💰 일일 목표 진행률</span>
+              <span className="text-xs font-mono font-bold">
+                ₩{todayPnl.toLocaleString('ko-KR')} / ₩300,000 ({dailyProgress.toFixed(1)}%)
+              </span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2">
+              <div
+                className={`h-2 rounded-full transition-all ${dailyProgress >= 80 ? 'bg-stock-up' : dailyProgress >= 40 ? 'bg-warning' : 'bg-primary'}`}
+                style={{ width: `${dailyProgress}%` }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ★ 자금 운용률 경고 배너 */}
       {(() => {
