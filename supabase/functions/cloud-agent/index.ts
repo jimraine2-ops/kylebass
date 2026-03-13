@@ -732,7 +732,7 @@ Deno.serve(async (req) => {
       const data = await getQuoteAndCandles(sym);
       if (!data) continue;
       const price = data.quote.c;
-      const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
+      const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
       const quantScore = scoring?.totalScore || 0;
       const metCount = scoring?.metCount || 0;
       lastScores.set(sym, quantScore);
