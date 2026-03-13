@@ -3,14 +3,14 @@ import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Responsi
 const INDICATOR_LABELS: Record<string, string> = {
   sentiment: '호재 감성',
   rvol: '상대 거래량',
-  candle: '캔들 패턴',
-  atr: '변동성(ATR)',
+  candle: 'VWAP/캔들',
+  macd: 'MACD',
+  rsi: 'RSI',
+  bb: '볼린저 밴드',
+  emaAlign: '이평선 정배열',
   gap: '갭 분석',
   squeeze: '숏 스퀴즈',
-  position: '가격 위치',
-  sectorSynergy: '섹터 동조화',
   aggression: '체결 강도',
-  preMarket: '프리마켓',
 };
 
 export { INDICATOR_LABELS };
