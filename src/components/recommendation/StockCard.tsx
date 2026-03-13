@@ -98,6 +98,11 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
                 {stock.reason && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">📌 {stock.reason}</p>
                 )}
+                {showHoldingStatus && (
+                  <p className="text-[10px] text-stock-up mt-0.5 font-medium">
+                    🛡️ 지표 양호({stock.totalScore}점) - 홀딩 중
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
