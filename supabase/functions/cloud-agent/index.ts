@@ -325,6 +325,7 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
       gap: { score: gapScore, details: `갭 ${gapPct.toFixed(1)}%` },
       squeeze: { score: squeezeScore, details: `스퀴즈 ${squeezeScore >= 6 ? '활성' : '비활성'}` },
       aggression: { score: aggrScore, weight: isLowVolumeSession ? '×2.0(선취매)' : '×1.5', details: `체결강도 ${aggression.toFixed(0)}%` },
+      condensation: { score: Math.round(accumulation.condensation), details: `응축도 ${accumulation.condensation.toFixed(1)} | ${accumulation.pattern}` },
     }
   };
 }
