@@ -49,6 +49,11 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
     const tradingValueUSD = volume * price;
     const rvol = stock.indicators?.rvol?.rvol || 0;
 
+    // ★ 홀딩 근거 표시: 가격 하락 중이지만 지표 양호
+    const isPriceDown = changePct < 0;
+    const scoreStrong = stock.totalScore >= 55;
+    const showHoldingStatus = isPriceDown && scoreStrong;
+
     return (
       <Card
         ref={ref}
@@ -92,6 +97,11 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
                 </div>
                 {stock.reason && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">📌 {stock.reason}</p>
+                )}
+                {showHoldingStatus && (
+                  <p className="text-[10px] text-stock-up mt-0.5 font-medium">
+                    🛡️ 지표 양호({stock.totalScore}점) - 홀딩 중
+                  </p>
                 )}
               </div>
             </div>

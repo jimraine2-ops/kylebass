@@ -650,47 +650,58 @@ Deno.serve(async (req) => {
 
     await addLog('unified', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 통합 진입 문턱: ${adaptedEntryThreshold}점 | ${sessionLabel} | 매수중단: ${marketBuyHalt ? 'YES' : 'NO'}`, {});
 
-    // ========== EXIT CHECKS (통합) ==========
+    // ========== EXIT CHECKS (지표 우선형 동적 방어 전략) ==========
     const symbolsToCheck = [...new Set((openPos || []).map((p: any) => p.symbol))];
+    const dipBuyCandidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small'; pos: any }[] = [];
+
     for (const sym of symbolsToCheck) {
       const data = await getQuoteAndCandles(sym);
       if (!data) continue;
       const price = data.quote.c;
       const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes);
       const quantScore = scoring?.totalScore || 0;
+      const metCount = scoring?.metCount || 0;
       lastScores.set(sym, quantScore);
 
       if (price < MIN_PRICE_USD) {
-        await addLog('unified', 'warning', sym, `[통합] [${timeStr}] ⚠️ ${sym} 초저가 경고: ${fmtKRW(price)}`, {});
+        await addLog('unified', 'warning', sym, `[${timeStr}] ⚠️ ${sym} 초저가 경고: ${fmtKRW(price)}`, {});
       }
+
+      const n = data.closes.length - 1;
+      const atrArr = calculateATR(data.highs, data.lows, data.closes, 14);
+      const currentATR = atrArr[atrArr.length - 1] || 0;
+      const ema20 = calculateEMA(data.closes, 20);
+      const vwap = scoring?.vwap || calculateVWAP(data.highs.slice(-20), data.lows.slice(-20), data.closes.slice(-20), data.volumes.slice(-20));
+      const bbLower = scoring?.bbLower || ((ema20[n] || price) - 2 * currentATR);
+      const vwapCross = scoring?.indicators?.candle?.vwapCross ?? (price > vwap);
+      const aboveBB = price > bbLower;
 
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
+        const capType = getCapType(price, sym);
 
-        // ★★★ 초공격형: 본절가 보호 (+1.2%에서 즉시 본절가+0.2% 수수료 상향 → '패' 원천 차단)
+        // ===== 수익 구간 방어 =====
         if (pnlPct >= 1.2 && pos.stop_loss < pos.price * 1.002) {
-          const breakevenStop = +(pos.price * 1.002).toFixed(4); // +0.2% 수수료 포함
-          await supabase.from('unified_trades').update({ stop_loss: breakevenStop }).eq('id', pos.id);
-          pos.stop_loss = breakevenStop;
-          await addLog('unified', 'defense', sym, `[초공격-본절보호] ${sym} 수익률 ${pnlPct.toFixed(2)}% ≥ 1.2% → 본절가(+수수료) 상향: ${fmtKRW(breakevenStop)} | '패' 원천 차단`, {});
+          const bs = +(pos.price * 1.002).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
+          pos.stop_loss = bs;
+          await addLog('unified', 'defense', sym, `[본절보호] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)}`, {});
         }
-
-        // ★ 초공격형 트레일링: 수익 구간별 손절가 계속 상향 (55점 진입 → 60/70점 급등 시 수익 극대화)
         if (pnlPct >= 5 && pos.stop_loss < pos.price * 1.035) {
-          const reinforcedStop = +(pos.price * 1.035).toFixed(4);
-          await supabase.from('unified_trades').update({ stop_loss: reinforcedStop }).eq('id', pos.id);
-          pos.stop_loss = reinforcedStop;
-          await addLog('unified', 'defense', sym, `[초공격-5%방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +3.5% 상향: ${fmtKRW(reinforcedStop)} | 수익 락인`, {});
+          const rs = +(pos.price * 1.035).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: rs }).eq('id', pos.id);
+          pos.stop_loss = rs;
+          await addLog('unified', 'defense', sym, `[5%방어] ${sym} → SL +3.5%`, {});
         } else if (pnlPct >= 3 && pos.stop_loss < pos.price * 1.02) {
-          const reinforcedStop = +(pos.price * 1.02).toFixed(4);
-          await supabase.from('unified_trades').update({ stop_loss: reinforcedStop }).eq('id', pos.id);
-          pos.stop_loss = reinforcedStop;
-          await addLog('unified', 'defense', sym, `[초공격-3%방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +2.0% 상향: ${fmtKRW(reinforcedStop)} | 수익 락인`, {});
+          const rs = +(pos.price * 1.02).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: rs }).eq('id', pos.id);
+          pos.stop_loss = rs;
+          await addLog('unified', 'defense', sym, `[3%방어] ${sym} → SL +2.0%`, {});
         } else if (pnlPct >= 2 && pos.stop_loss < pos.price * 1.01) {
-          const reinforcedStop = +(pos.price * 1.01).toFixed(4);
-          await supabase.from('unified_trades').update({ stop_loss: reinforcedStop }).eq('id', pos.id);
-          pos.stop_loss = reinforcedStop;
-          await addLog('unified', 'defense', sym, `[초공격-2%방어] ${sym} 수익률 ${pnlPct.toFixed(2)}% → 손절가 +1.0% 상향: ${fmtKRW(reinforcedStop)}`, {});
+          const rs = +(pos.price * 1.01).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: rs }).eq('id', pos.id);
+          pos.stop_loss = rs;
+          await addLog('unified', 'defense', sym, `[2%방어] ${sym} → SL +1.0%`, {});
         }
 
         const peakPrice = Math.max(pos.peak_price || pos.price, price);
@@ -698,72 +709,89 @@ Deno.serve(async (req) => {
           await supabase.from('unified_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
         }
 
-        // ★ 엔진 개편: 지표 기반 동적 손절 (VWAP/볼린저 하단 이탈 → 즉시 매도)
-        const n = data.closes.length - 1;
-        const vwap = scoring?.vwap || calculateVWAP(data.highs.slice(-20), data.lows.slice(-20), data.closes.slice(-20), data.volumes.slice(-20));
-        const ema20 = calculateEMA(data.closes, 20);
-        const atr = calculateATR(data.highs, data.lows, data.closes, 14);
-        const currentATR = atr[atr.length - 1] || 0;
-        const bbLower = scoring?.bbLower || ((ema20[n] || price) - 2 * currentATR);
-        const dynamicFloor = Math.max(vwap, bbLower);
-
-        // ★ 지표 충족 수 기반 보조 판단
-        const metCount = scoring?.metCount || 0;
+        // ===== 지표 우선형 동적 방어 =====
+        const indicatorsStrong = quantScore >= 55;
+        const technicalSafe = vwapCross || aboveBB;
+        const withinATR = price > (pos.price - 2.0 * currentATR);
 
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ 엔진 개편 #1: VWAP/BB 이탈 동적 손절
-        if (price < dynamicFloor && pnlPct < 0) {
-          shouldClose = true;
-          closeReason = `[지표손절] [${sessionLabel}] [${timeStr}] [${sym}] VWAP(${fmtKRW(vwap)})/BB하단(${fmtKRW(bbLower)}) 이탈 | 10대 지표 ${metCount}/10 충족 (${quantScore}점) → 손실 ${pnlPct.toFixed(2)}%에서 조기 탈출`;
-          newStatus = 'dynamic_stop';
-        } else if (pnlPct <= -1.8) {
-          shouldClose = true;
-          closeReason = `[고정손절] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 -1.8% 도달 (${pnlPct.toFixed(2)}%) | ${metCount}/10 지표 충족 (${quantScore}점)`;
-          newStatus = 'stopped';
-        } else if (pnlPct >= 3.0) {
-          const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
-          if (dropFromPeak >= 0.5) {
-            const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
+        // 1. 익절 로직 (최우선)
+        if (pnlPct >= 3.0) {
+          const drop = ((peakPrice - price) / peakPrice) * 100;
+          if (drop >= 0.5) {
             shouldClose = true;
-            closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +3% 달성 후 고점 대비 -${dropFromPeak.toFixed(2)}% → 수익 ${lockedPnl}% 확정`;
+            closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +3% 후 고점-${drop.toFixed(2)}% → 수익 ${((price-pos.price)/pos.price*100).toFixed(2)}% 확정`;
             newStatus = 'trailing_profit';
           }
         } else if (peakPrice >= pos.price * 1.10) {
-          const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
-          if (dropFromPeak >= 3) {
-            const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
+          const drop = ((peakPrice - price) / peakPrice) * 100;
+          if (drop >= 3) {
             shouldClose = true;
-            closeReason = `[대형익절] [${sessionLabel}] [${timeStr}] [${sym}] 고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정`;
+            closeReason = `[대형익절] [${sessionLabel}] [${timeStr}] [${sym}] 고점-${drop.toFixed(1)}% → 수익 확정`;
             newStatus = 'trailing_profit';
           }
-        } else if (quantScore < 40) {
-          // ★ 엔진 개편 #2: 점수 40점 미만 → 매수 근거 소멸 매도 (기존 35점)
-          shouldClose = true;
-          closeReason = `[점수이탈] [${sessionLabel}] [${timeStr}] [${sym}] 10대 지표 ${metCount}/10 충족 (${quantScore}점 < 40점) → 매수 근거 소멸`;
-          newStatus = 'score_exit';
-        } else if (quantScore < 50 && !scoring?.indicators?.candle?.vwapCross) {
-          // ★ 엔진 개편 #3: 점수 50점 미만 + VWAP 이탈 = 핵심 지표 훼손 → 선제적 매도
-          shouldClose = true;
-          closeReason = `[핵심지표훼손] [${sessionLabel}] [${timeStr}] [${sym}] 점수 ${quantScore}점 + VWAP 이탈 → 선제적 매도`;
-          newStatus = 'indicator_exit';
         } else if (pos.take_profit && price >= pos.take_profit) {
           shouldClose = true;
-          closeReason = `[목표익절] [${sessionLabel}] [${timeStr}] [${sym}] 목표가 도달 | ${metCount}/10 지표 충족 (${quantScore}점)`;
+          closeReason = `[목표익절] [${sessionLabel}] [${timeStr}] [${sym}] 목표가 도달 (${quantScore}점)`;
           newStatus = 'profit_taken';
-        } else if (pos.stop_loss && price <= pos.stop_loss) {
-          shouldClose = true;
-          closeReason = `[손절터치] [${sessionLabel}] [${timeStr}] [${sym}] ${pnlPct >= 0 ? '본절가 방어 매도' : '추격 손절'} | ${metCount}/10 지표 (${quantScore}점)`;
-          newStatus = pnlPct >= 0 ? 'breakeven_exit' : 'trailing_stop';
-        } else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0) {
-          shouldClose = true;
-          closeReason = `[블랙리스트] [${sessionLabel}] [${timeStr}] [${sym}] 블랙리스트 조기 대응 (${pnlPct.toFixed(2)}%)`;
-          newStatus = 'early_exit';
         }
 
-        // Partial exit at +2% (50%)
+        // 2. SL 터치 — 지표 강하면 홀딩
+        if (!shouldClose && pos.stop_loss && price <= pos.stop_loss) {
+          if (pnlPct >= 0) {
+            shouldClose = true;
+            closeReason = `[본절방어] [${sessionLabel}] [${timeStr}] [${sym}] 본절가 터치 (${quantScore}점)`;
+            newStatus = 'breakeven_exit';
+          } else if (indicatorsStrong && technicalSafe && withinATR) {
+            await addLog('unified', 'hold', sym, `[지표홀딩] ${sym} -${Math.abs(pnlPct).toFixed(2)}% BUT 지표 양호(${quantScore}점) + VWAP/BB 안전 → 개미털기, 홀딩`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2) });
+          } else {
+            shouldClose = true;
+            closeReason = `[손절터치] [${sessionLabel}] [${timeStr}] [${sym}] SL + 지표 약화(${quantScore}점) | ATR${withinATR?'내':'외'}`;
+            newStatus = 'trailing_stop';
+          }
+        }
+
+        // 3. 이중 잠금 로직 (지표 무결성 중심)
+        if (!shouldClose) {
+          if (pnlPct <= -3.0 && !withinATR) {
+            shouldClose = true;
+            closeReason = `[추세이탈] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% + ATR범위 외 → 추세 전환`;
+            newStatus = 'trend_break';
+          } else if (pnlPct <= -1.8) {
+            if (indicatorsStrong && technicalSafe) {
+              await addLog('unified', 'hold', sym, `[눌림목홀딩] ${sym} -${Math.abs(pnlPct).toFixed(2)}% BUT 지표 ${quantScore}점 + 기술안전 → 눌림목, 홀딩`, { quantScore, vwapCross, aboveBB });
+            } else {
+              shouldClose = true;
+              closeReason = `[동적손절] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% + 지표(${quantScore}점) 약화 → 매도`;
+              newStatus = 'dynamic_stop';
+            }
+          } else if (quantScore < 40) {
+            shouldClose = true;
+            closeReason = `[점수이탈] [${sessionLabel}] [${timeStr}] [${sym}] ${metCount}/10 (${quantScore}점<40) → 매수 근거 소멸`;
+            newStatus = 'score_exit';
+          } else if (quantScore < 45 && !vwapCross) {
+            shouldClose = true;
+            closeReason = `[복합위험] [${sessionLabel}] [${timeStr}] [${sym}] ${quantScore}점(<45) + VWAP이탈 → 선제 매도`;
+            newStatus = 'indicator_exit';
+          } else if (quantScore < 45 && vwapCross) {
+            await addLog('unified', 'warning', sym, `[1차경고] ${sym} ${quantScore}점(<45) ⚠️ 주의 — VWAP유지로 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          } else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0 && !indicatorsStrong) {
+            shouldClose = true;
+            closeReason = `[블랙리스트] [${sessionLabel}] [${timeStr}] [${sym}] + 지표 미달(${quantScore}점)`;
+            newStatus = 'early_exit';
+          }
+        }
+
+        // ★ 역발상 추매 후보: 지표 65+인데 가격만 하락
+        if (!shouldClose && pnlPct < -0.5 && pnlPct > -2.0 && quantScore >= 65 && technicalSafe) {
+          dipBuyCandidates.push({ sym, price, scoring, capType, pos });
+          await addLog('unified', 'scan', sym, `[역발상추매후보] ${sym} 지표 ${quantScore}점(${metCount}/10) 가격 -${Math.abs(pnlPct).toFixed(2)}% → 추매 검토`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+        }
+
+        // Partial exit at +2%
         if (!shouldClose && pnlPct >= 2) {
           const partialExits = pos.partial_exits || [];
           const hasFirst = partialExits.some((e: any) => e.type === 'first_partial');
@@ -780,13 +808,13 @@ Deno.serve(async (req) => {
               const newBal = balance + sellValue;
               await supabase.from('unified_wallet').update({ balance: newBal, updated_at: now.toISOString() }).eq('id', wallet.id);
               balance = newBal;
-              await addLog('unified', 'exit', sym, `[통합] ${sym} 1차 50% 익절 (${pnlPct.toFixed(1)}%) | 매도대금: ${fmtKRWRaw(sellValue)} | PnL: ${fmtKRWRaw(partialPnl)}`, {});
+              await addLog('unified', 'exit', sym, `[50%익절] ${sym} +${pnlPct.toFixed(1)}% | PnL: ${fmtKRWRaw(partialPnl)}`, {});
             }
           }
         }
 
         if (shouldClose) {
-          await addLog('unified', 'exit_attempt', sym, `[매도시도] ${sym} ${newStatus} 조건 충족 — 매도 명령 발행 중...`, { price, pnlPct: +pnlPct.toFixed(2), newStatus });
+          await addLog('unified', 'exit_attempt', sym, `[매도시도] ${sym} ${newStatus}`, { price, pnlPct: +pnlPct.toFixed(2), newStatus, quantScore });
           const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
           const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
           const pnlKRW = saleProceeds - buyCost;
@@ -795,7 +823,7 @@ Deno.serve(async (req) => {
           await supabase.from('unified_trades').update({
             status: newStatus, close_price: price, pnl: pnlKRW,
             closed_at: now.toISOString(),
-            ai_reason: `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 매도대금: ${fmtKRWRaw(saleProceeds)} → [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`,
+            ai_reason: `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`,
           }).eq('id', pos.id);
           await supabase.from('unified_wallet').update({ balance: newBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
           balance = newBalance;
@@ -803,6 +831,34 @@ Deno.serve(async (req) => {
         }
       }
       await new Promise(r => setTimeout(r, 200));
+    }
+
+    // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
+    if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS) {
+      dipBuyCandidates.sort((a, b) => b.scoring.totalScore - a.scoring.totalScore);
+      for (const dip of dipBuyCandidates.slice(0, 2)) {
+        const maxKRW = balance * 0.05;
+        const priceKRW = toKRW(dip.price);
+        const qty = Math.floor(maxKRW / priceKRW);
+        const costKRW = Math.floor(qty * priceKRW);
+        if (qty <= 0 || costKRW > balance) continue;
+        const ap = applySessionSlippage(dip.price, 'buy', spreadMul, sessionSlippage);
+        const sl = +(ap * 0.97).toFixed(4);
+        const tp = +(ap * 1.05).toFixed(4);
+        const bb = Math.round(balance);
+        const nb = balance - costKRW;
+        const msg = `[역발상추매] [${sessionLabel}] [${timeStr}] ${dip.sym} ${dip.scoring.totalScore}점(${dip.scoring.metCount}/10) 눌림 추매 [${qty}주@${fmtKRW(ap)}|${fmtKRWRaw(costKRW)}] [잔고: ${fmtKRWRaw(bb)}→${fmtKRWRaw(nb)}]`;
+        await supabase.from('unified_trades').insert({
+          symbol: dip.sym, side: 'buy', quantity: qty, price: ap,
+          stop_loss: sl, take_profit: tp, status: 'open',
+          cap_type: dip.capType, entry_score: dip.scoring.totalScore,
+          ai_reason: msg, ai_confidence: dip.scoring.totalScore,
+        });
+        await supabase.from('unified_wallet').update({ balance: nb, updated_at: now.toISOString() }).eq('id', wallet.id);
+        balance = nb;
+        openCount++;
+        await addLog('unified', 'buy', dip.sym, msg, { type: 'dip_buy', score: dip.scoring.totalScore });
+      }
     }
 
     // ========== UNIFIED ENTRY SCAN ==========
