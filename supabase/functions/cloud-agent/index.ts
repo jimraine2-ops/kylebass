@@ -141,17 +141,23 @@ function generateSyntheticCandles(quote: any, days = 40) {
   return { closes, highs, lows, opens, volumes };
 }
 
-// ===== Unified 10-Indicator Scoring (Weighted: RVOL×2, MACD×2, VWAP/Candle×2) =====
+// ===== Unified 10-Indicator Scoring (Weighted: RVOL×1.5, MACD×2, VWAP/Candle×2, 거래대금×1.5) =====
+// ★ 엔진 개편: 오직 10대 지표의 합산 점수와 진입 임계값(Threshold)에 의해서만 자동 매매 결정
 function score10Indicators(quote: any, closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[]) {
   const changePct = quote.dp || 0;
   const n = closes.length - 1;
   if (n < 5) return null;
 
+  // 1. 호재 감성 (Sentiment)
   const sentimentScore = changePct >= 5 ? 9 : changePct >= 3 ? 7 : changePct >= 1 ? 5 : changePct >= -1 ? 4 : 2;
+  
+  // 2. 상대 거래량 (RVOL) — ×1.5 가중치
   const currentVol = volumes[n];
   const avgVol = volumes.length >= 21 ? volumes.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 : currentVol;
   const rvol = avgVol > 0 ? currentVol / avgVol : 1;
   const rvolScore = rvol >= 3 ? 10 : rvol >= 2.5 ? 8 : rvol >= 2 ? 6 : rvol >= 1.5 ? 4 : 2;
+  
+  // 3. VWAP/캔들 패턴 — ×2 가중치
   const ema9 = calculateEMA(closes, 9);
   const ema21 = calculateEMA(closes, 21);
   const rsi = calculateRSI(closes, 14);
@@ -161,24 +167,44 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   if (ema9[n] > ema21[n] && closes[n] > ema9[n]) candleConfirms++;
   if (rsi[n] > 40 && rsi[n] < 70 && rsi[n] > (rsi[n-1]||50)) candleConfirms++;
   const candleScore = candleConfirms >= 2.5 ? 10 : candleConfirms >= 2 ? 7 : candleConfirms >= 1 ? 4 : 1;
+  const vwapCross = closes[n] > vwap;
+  
+  // 4. MACD — ×2 가중치
+  const ema12 = calculateEMA(closes, 12);
+  const ema26 = calculateEMA(closes, 26);
+  const macd = ema12[n] - ema26[n];
+  const macdPrev = n > 0 ? ema12[n-1] - ema26[n-1] : 0;
+  const macdScore = (macd > 0 && macd > macdPrev) ? 10 : (macd > 0) ? 7 : (macd > macdPrev) ? 4 : 2;
+  
+  // 5. RSI
+  const currentRSI = rsi[n];
+  const rsiScore = (currentRSI >= 50 && currentRSI <= 70) ? 8 : (currentRSI >= 40 && currentRSI < 50) ? 5 : (currentRSI > 70) ? 3 : 2;
+  
+  // 6. 볼린저 밴드 (ATR 기반 근사)
   const atr = calculateATR(highs, lows, closes, 14);
   const currentATR = atr[atr.length - 1];
   const ema20 = calculateEMA(closes, 20);
-  const keltnerUpper = ema20[n] + 2 * currentATR;
-  const atrScore = closes[n] > keltnerUpper ? 10 : closes[n] > ema20[n] + currentATR ? 7 : 4;
-  const recentHigh = Math.max(...highs.slice(-10));
-  const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
+  const bbUpper = ema20[n] + 2 * currentATR;
+  const bbLower = ema20[n] - 2 * currentATR;
+  const bbScore = closes[n] > bbUpper ? 10 : closes[n] > ema20[n] + currentATR ? 7 : closes[n] > ema20[n] ? 5 : closes[n] > bbLower ? 3 : 1;
+  
+  // 7. 이평선 정배열 (EMA alignment)
+  const ema50 = calculateEMA(closes, Math.min(50, closes.length));
+  const aligned = ema9[n] > ema21[n] && ema21[n] > ema50[n];
+  const emaAlignScore = aligned ? 9 : (ema9[n] > ema21[n]) ? 6 : 3;
+  
+  // 8. 갭 분석
   const gapPct = n > 0 ? ((opens[n] - closes[n-1]) / closes[n-1]) * 100 : 0;
   const gapScore = (gapPct >= 4 && gapPct <= 15) ? (closes[n] > opens[n] ? 10 : 5) : gapPct > 15 ? 2 : gapPct > 0 ? 3 : 1;
+  
+  // 9. 숏 스퀴즈
   const high20 = Math.max(...closes.slice(-20));
   let squeezeScore = 0;
   if (closes[n] >= high20) squeezeScore += 6;
   if (avgVol > 0 && currentVol / avgVol > 2) squeezeScore += 4;
   squeezeScore = Math.min(10, squeezeScore);
-  const allTimeHigh = Math.max(...highs);
-  const distToATH = ((allTimeHigh - closes[n]) / allTimeHigh) * 100;
-  const positionScore = distToATH <= 5 ? 10 : distToATH <= 10 ? 7 : distToATH <= 20 ? 4 : 2;
-  const sectorScore = changePct >= 5 ? 10 : changePct >= 3 ? 7 : changePct >= 1 ? 5 : 2;
+  
+  // 10. 거래대금 강도 (체결 강도 + 볼륨 가속) — ×1.5 가중치
   let bullCount = 0, volInc = 0;
   for (let i = Math.max(0, n - 4); i <= n; i++) {
     if (closes[i] > opens[i]) bullCount++;
@@ -186,34 +212,35 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   }
   const aggression = (bullCount / 5) * 100;
   const aggrScore = aggression >= 80 && volInc >= 3 ? 10 : aggression >= 60 ? 7 : aggression >= 40 ? 4 : 2;
-  const breakingHigh = closes[n] > Math.max(...highs.slice(Math.max(0, n - 5), n));
-  const preMarketScore = breakingHigh ? 8 : 3;
 
-  const ema12 = calculateEMA(closes, 12);
-  const ema26 = calculateEMA(closes, 26);
-  const macd = ema12[n] - ema26[n];
-  const macdPrev = n > 0 ? ema12[n-1] - ema26[n-1] : 0;
-  const macdScore = (macd > 0 && macd > macdPrev) ? 10 : (macd > 0) ? 7 : (macd > macdPrev) ? 4 : 2;
+  // ★ 가중치 적용: RVOL×1.5, 거래대금강도×1.5, MACD×2, VWAP/캔들×2
+  // 기본 10개 지표 × 10점 = 100점, 가중치 합계: 1+1.5+2+2+1+1+1+1+1+1.5 = 13.0
+  const rawScore = sentimentScore * 1.0 + rvolScore * 1.5 + candleScore * 2.0 + macdScore * 2.0 
+    + rsiScore * 1.0 + bbScore * 1.0 + emaAlignScore * 1.0 + gapScore * 1.0 + squeezeScore * 1.0 + aggrScore * 1.5;
+  const maxRawScore = 10 * 13.0; // 130
+  const totalScore = Math.round((rawScore / maxRawScore) * 100);
 
-  const rawScore = sentimentScore + (rvolScore * 2) + (candleScore * 2) + atrScore + gapScore
-    + squeezeScore + positionScore + sectorScore + aggrScore + preMarketScore + (macdScore * 2);
-  const totalScore = Math.round((rawScore / 140) * 100);
+  // ★ 충족 지표 수 계산 (점수 ≥ 5점이면 '충족')
+  const indicatorScores = [sentimentScore, rvolScore, candleScore, macdScore, rsiScore, bbScore, emaAlignScore, gapScore, squeezeScore, aggrScore];
+  const metCount = indicatorScores.filter(s => s >= 5).length;
+
+  const recentHigh = Math.max(...highs.slice(-10));
+  const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
 
   return {
-    totalScore, trailingStop, rvol, changePct,
+    totalScore, trailingStop, rvol, changePct, metCount,
+    vwap, bbLower, bbUpper,
     indicators: {
-      sentiment: { score: sentimentScore },
-      rvol: { score: rvolScore, rvol, weight: '×2' },
-      candle: { score: candleScore, vwapCross: closes[n] > vwap, weight: '×2' },
-      macd: { score: macdScore, macd: +macd.toFixed(4), weight: '×2' },
-      atr: { score: atrScore, atr: currentATR },
-      gap: { score: gapScore },
-      squeeze: { score: squeezeScore },
-      position: { score: positionScore },
-      sectorSynergy: { score: sectorScore },
-      aggression: { score: aggrScore },
-      preMarket: { score: preMarketScore },
-      confluence: { score: candleScore, vwapCross: closes[n] > vwap },
+      sentiment: { score: sentimentScore, details: `변동률 ${changePct.toFixed(2)}%` },
+      rvol: { score: rvolScore, rvol, weight: '×1.5', details: `RVOL ${rvol.toFixed(1)}x` },
+      candle: { score: candleScore, vwapCross, weight: '×2', details: `VWAP ${vwapCross ? '상단' : '하단'}` },
+      macd: { score: macdScore, macd: +macd.toFixed(4), weight: '×2', details: `MACD ${macd > 0 ? '양전' : '음전'}` },
+      rsi: { score: rsiScore, rsi: +currentRSI.toFixed(1), details: `RSI ${currentRSI.toFixed(1)}` },
+      bb: { score: bbScore, details: `BB ${closes[n] > bbUpper ? '상단돌파' : closes[n] > ema20[n] ? '중앙상단' : '하단'}` },
+      emaAlign: { score: emaAlignScore, aligned, details: `이평선 ${aligned ? '정배열' : '역배열'}` },
+      gap: { score: gapScore, details: `갭 ${gapPct.toFixed(1)}%` },
+      squeeze: { score: squeezeScore, details: `스퀴즈 ${squeezeScore >= 6 ? '활성' : '비활성'}` },
+      aggression: { score: aggrScore, weight: '×1.5', details: `체결강도 ${aggression.toFixed(0)}%` },
     }
   };
 }
@@ -671,37 +698,37 @@ Deno.serve(async (req) => {
           await supabase.from('unified_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
         }
 
-        // ★ MIH Phase 4: 동적 손절 (VWAP/볼린저 하단 이탈 감지)
+        // ★ 엔진 개편: 지표 기반 동적 손절 (VWAP/볼린저 하단 이탈 → 즉시 매도)
         const n = data.closes.length - 1;
-        const vwap = calculateVWAP(data.highs.slice(-20), data.lows.slice(-20), data.closes.slice(-20), data.volumes.slice(-20));
+        const vwap = scoring?.vwap || calculateVWAP(data.highs.slice(-20), data.lows.slice(-20), data.closes.slice(-20), data.volumes.slice(-20));
         const ema20 = calculateEMA(data.closes, 20);
         const atr = calculateATR(data.highs, data.lows, data.closes, 14);
         const currentATR = atr[atr.length - 1] || 0;
-        const bbLower = (ema20[n] || price) - 2 * currentATR; // 볼린저 하단 근사
-        const dynamicFloor = Math.max(vwap, bbLower); // VWAP와 BB 하단 중 높은 값
+        const bbLower = scoring?.bbLower || ((ema20[n] || price) - 2 * currentATR);
+        const dynamicFloor = Math.max(vwap, bbLower);
+
+        // ★ 지표 충족 수 기반 보조 판단
+        const metCount = scoring?.metCount || 0;
 
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ Phase 4: VWAP/BB 이탈 동적 손절 (고정 -2.5% 대신)
+        // ★ 엔진 개편 #1: VWAP/BB 이탈 동적 손절
         if (price < dynamicFloor && pnlPct < 0) {
           shouldClose = true;
-          const dynamicLossPct = pnlPct.toFixed(2);
-          closeReason = `[MIH-4 동적손절] [${sessionLabel}] [${timeStr}] [${sym}] VWAP(${fmtKRW(vwap)})/BB하단(${fmtKRW(bbLower)}) 이탈 → 손실 ${dynamicLossPct}%에서 조기 탈출`;
+          closeReason = `[지표손절] [${sessionLabel}] [${timeStr}] [${sym}] VWAP(${fmtKRW(vwap)})/BB하단(${fmtKRW(bbLower)}) 이탈 | 10대 지표 ${metCount}/10 충족 (${quantScore}점) → 손실 ${pnlPct.toFixed(2)}%에서 조기 탈출`;
           newStatus = 'dynamic_stop';
         } else if (pnlPct <= -1.8) {
-          // ★ 승률 강화: 고정 손절 -2.5% → -1.8% (큰 손실 방지, 작은 패배만 허용)
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 실행 (-1.8% 도달: ${pnlPct.toFixed(2)}%)`;
+          closeReason = `[고정손절] [${sessionLabel}] [${timeStr}] [${sym}] 최대 손절 -1.8% 도달 (${pnlPct.toFixed(2)}%) | ${metCount}/10 지표 충족 (${quantScore}점)`;
           newStatus = 'stopped';
         } else if (pnlPct >= 3.0) {
-          // ★★★ 필승 로직 #3: 3% 수익 달성 후 고점 대비 0.5% 하락 시 즉시 익절
           const dropFromPeak = ((peakPrice - price) / peakPrice) * 100;
           if (dropFromPeak >= 0.5) {
             const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
             shouldClose = true;
-            closeReason = `[필승-추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +3% 달성 후 고점 대비 -${dropFromPeak.toFixed(2)}% 하락 → 수익 ${lockedPnl}% 확정`;
+            closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +3% 달성 후 고점 대비 -${dropFromPeak.toFixed(2)}% → 수익 ${lockedPnl}% 확정`;
             newStatus = 'trailing_profit';
           }
         } else if (peakPrice >= pos.price * 1.10) {
@@ -709,24 +736,30 @@ Deno.serve(async (req) => {
           if (dropFromPeak >= 3) {
             const lockedPnl = ((price - pos.price) / pos.price * 100).toFixed(2);
             shouldClose = true;
-            closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 대형 추격익절 (고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정)`;
+            closeReason = `[대형익절] [${sessionLabel}] [${timeStr}] [${sym}] 고점 ${fmtKRW(peakPrice)} 대비 -${dropFromPeak.toFixed(1)}% → 수익 ${lockedPnl}% 확정`;
             newStatus = 'trailing_profit';
           }
-        } else if (quantScore < 35) {
+        } else if (quantScore < 40) {
+          // ★ 엔진 개편 #2: 점수 40점 미만 → 매수 근거 소멸 매도 (기존 35점)
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 매수 근거 소멸 (점수 ${quantScore}점 < 35)`;
+          closeReason = `[점수이탈] [${sessionLabel}] [${timeStr}] [${sym}] 10대 지표 ${metCount}/10 충족 (${quantScore}점 < 40점) → 매수 근거 소멸`;
           newStatus = 'score_exit';
+        } else if (quantScore < 50 && !scoring?.indicators?.candle?.vwapCross) {
+          // ★ 엔진 개편 #3: 점수 50점 미만 + VWAP 이탈 = 핵심 지표 훼손 → 선제적 매도
+          shouldClose = true;
+          closeReason = `[핵심지표훼손] [${sessionLabel}] [${timeStr}] [${sym}] 점수 ${quantScore}점 + VWAP 이탈 → 선제적 매도`;
+          newStatus = 'indicator_exit';
         } else if (pos.take_profit && price >= pos.take_profit) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 목표가 도달 익절`;
+          closeReason = `[목표익절] [${sessionLabel}] [${timeStr}] [${sym}] 목표가 도달 | ${metCount}/10 지표 충족 (${quantScore}점)`;
           newStatus = 'profit_taken';
         } else if (pos.stop_loss && price <= pos.stop_loss) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] ${pnlPct >= 0 ? '본절가 방어 매도 (MIH-2)' : '추격 손절 터치'}`;
+          closeReason = `[손절터치] [${sessionLabel}] [${timeStr}] [${sym}] ${pnlPct >= 0 ? '본절가 방어 매도' : '추격 손절'} | ${metCount}/10 지표 (${quantScore}점)`;
           newStatus = pnlPct >= 0 ? 'breakeven_exit' : 'trailing_stop';
         } else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && pnlPct >= -1.0) {
           shouldClose = true;
-          closeReason = `[통합] [${sessionLabel}] [${timeStr}] [${sym}] 블랙리스트 조기 대응 (${pnlPct.toFixed(2)}%)`;
+          closeReason = `[블랙리스트] [${sessionLabel}] [${timeStr}] [${sym}] 블랙리스트 조기 대응 (${pnlPct.toFixed(2)}%)`;
           newStatus = 'early_exit';
         }
 
@@ -810,26 +843,32 @@ Deno.serve(async (req) => {
           if (alreadyHolding && !isPyramiding) continue;
           if (openCount >= MAX_POSITIONS) continue;
 
-          // ★ 유동성 하한선: 거래대금 $10K 미만 종목 진입 차단 (호가 공백 방지)
+          // ★ 유동성 하한선: 거래대금 $10K 미만 종목 진입 차단
           const vlInfo = volumeLeaders.find(vl => vl.symbol === r.sym);
           if (vlInfo && vlInfo.tradingValue < 10000) continue;
 
-          // Session-adaptive filters
-          const sentimentOk = (r.scoring.indicators.sentiment.score || 0) > 0;
-          const rvolOk = (r.scoring.indicators.rvol.rvol || 0) >= adaptedRvolMin;
-          const vwapOk = (r.scoring.indicators.candle.score || 0) >= adaptedVwapMin;
-          const filtersPassed = [sentimentOk, rvolOk, vwapOk].filter(Boolean).length;
-          const minFilters = entryRelax < 1.0 ? 2 : 3;
-          if (filtersPassed < minFilters) continue;
+          // ★ 엔진 개편: 수급 동기화 — 세션 평균 거래대금 미만 = 가짜 신호 차단
+          const sessionAvgTradingValue = volumeLeaders.length > 0 
+            ? volumeLeaders.reduce((sum, vl) => sum + vl.tradingValue, 0) / volumeLeaders.length 
+            : 0;
+          if (vlInfo && sessionAvgTradingValue > 0 && vlInfo.tradingValue < sessionAvgTradingValue * 0.5) {
+            // 거래대금이 세션 평균의 50% 미만 → '거래량 없는 반등' = 가짜 신호
+            continue;
+          }
 
+          // ★ 엔진 개편: 오직 10대 지표 점수 + 충족 수로 진입 판단
+          const metCount = r.scoring.metCount || 0;
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
+          const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
+          
+          // 최소 충족 조건: 10개 중 5개 이상 충족 + RVOL 기준 통과
+          if (metCount < 5) continue;
           if (rvol < adaptedRvolMin) continue;
 
           if (isOpeningRush) continue;
 
-          // ★ 수급 돌파 플래그: RVOL 200% 이상 폭증 (직전 대비)
+          // 수급 돌파/유동성 점수 계산
           (r as any).isVolumeBurst = rvol >= 2.0;
-          // ★ 유동성 점수: 상승률 + 거래대금 합산
           const tradingVal = vlInfo?.tradingValue || 0;
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
@@ -841,8 +880,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 급등 예상 패턴 감지 (Explosive Growth Predictive Engine)
-    // 수급 폭발(RVOL≥5 + VWAP상단) + 변동성 돌파(BB squeeze) + 모멘텀 가속(MACD 0선돌파) 
+    // ★ 급등 예상 패턴 감지
     for (const c of candidates) {
       const ind = c.scoring.indicators;
       const rvolExplosive = (ind.rvol?.rvol || 0) >= 5 && (ind.candle?.vwapCross === true);
@@ -851,20 +889,18 @@ Deno.serve(async (req) => {
       const explosiveSignals = [rvolExplosive, bbSqueeze, macdAccel].filter(Boolean).length;
       (c as any).isExplosive = explosiveSignals >= 2;
       if ((c as any).isExplosive) {
-        await addLog('unified', 'scan', c.sym, `[🔥급등예상] ${c.sym} 폭발 신호 ${explosiveSignals}/3 감지 (RVOL:${(ind.rvol?.rvol||0).toFixed(1)}x | Squeeze:${ind.squeeze?.score} | MACD:${ind.macd?.score}) → 우선 진입`, { explosiveSignals });
+        await addLog('unified', 'scan', c.sym, `[🔥급등예상] ${c.sym} 폭발 신호 ${explosiveSignals}/3 (RVOL:${(ind.rvol?.rvol||0).toFixed(1)}x | Squeeze:${ind.squeeze?.score} | MACD:${ind.macd?.score}) → 우선 진입`, { explosiveSignals });
       }
     }
 
-    // Sort: explosive first → volume burst → liquidity score → quant score
+    // Sort: explosive → volume burst → liquidity → score
     candidates.sort((a, b) => {
       const aExp = (a as any).isExplosive ? 1 : 0;
       const bExp = (b as any).isExplosive ? 1 : 0;
       if (aExp !== bExp) return bExp - aExp;
-      // ★ 수급 돌파 종목 우선
       const aVB = (a as any).isVolumeBurst ? 1 : 0;
       const bVB = (b as any).isVolumeBurst ? 1 : 0;
       if (aVB !== bVB) return bVB - aVB;
-      // ★ 유동성 점수(상승률+거래대금) 합산순
       const aLiq = (a as any).liquidityScore || 0;
       const bLiq = (b as any).liquidityScore || 0;
       if (Math.abs(aLiq - bLiq) > 5) return bLiq - aLiq;
@@ -876,16 +912,16 @@ Deno.serve(async (req) => {
         const volRank = (c as any).volumeRank;
         const volTag = volRank <= 20 ? ` Vol#${volRank}` : '';
         const burstTag = (c as any).isVolumeBurst ? '🔥' : '';
-        return `${burstTag}${c.sym}(${c.scoring.totalScore}점/${c.capType}${volTag})`;
+        return `${burstTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
       }).join(', ');
-      await addLog('unified', 'scan', null, `[통합스캔] [${timeStr}] 매수 후보 ${candidates.length}개 (수급+점수순): ${summary}`, {});
+      await addLog('unified', 'scan', null, `[10대지표스캔] [${timeStr}] 매수 후보 ${candidates.length}개 (점수순): ${summary}`, {});
     }
 
     for (const r of candidates) {
       if (openCount >= MAX_POSITIONS) break;
       const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
       const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
-      const positionPct = isPyramiding ? 0.05 : 0.10; // 10% per position (₩4000만)
+      const positionPct = isPyramiding ? 0.05 : 0.10;
 
       const maxKRW = balance * positionPct;
       const priceKRW = toKRW(r.price);
@@ -893,22 +929,27 @@ Deno.serve(async (req) => {
       const costKRW = Math.floor(qty * priceKRW);
 
       if (qty <= 0 || costKRW > balance) {
-        await addLog('unified', 'hold', r.sym, `[통합] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ⚠️ 잔고 부족 | 필요: ${fmtKRWRaw(costKRW)} | 잔고: ${fmtKRWRaw(Math.round(balance))}`, {});
+        await addLog('unified', 'hold', r.sym, `[${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ⚠️ 잔고 부족`, {});
         continue;
       }
 
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, sessionSlippage);
-      const stopLoss = +(adjustedPrice * 0.982).toFixed(4); // -1.8% 손절
-      const takeProfit = +(adjustedPrice * 1.05).toFixed(4); // ★ 초공격형: 5% 목표 (트레일링으로 추가 수익)
+      const stopLoss = +(adjustedPrice * 0.982).toFixed(4);
+      const takeProfit = +(adjustedPrice * 1.05).toFixed(4);
       const tier = isPyramiding ? 'PYRAMID' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
-      const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 보정 ×${spreadMul}` : '';
+      const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 ×${spreadMul}` : '';
       const capLabel = r.capType === 'large' ? '대형' : '소형';
       const volRank = (r as any).volumeRank;
       const volRankTag = volRank <= 50 ? ` | Vol#${volRank}` : '';
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
-      const logMsg = `[통합] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 [${capLabel}] 자율 매수 [${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      
+      // ★ 엔진 개편: 지표 상세 근거 로그 ("10대 지표 중 N개 조건 충족(X점)으로 진입")
+      const indDetails = Object.entries(r.scoring.indicators)
+        .map(([k, v]: [string, any]) => `${k}:${v.score}`)
+        .join('|');
+      const logMsg = `[10대지표매수] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       await supabase.from('unified_trades').insert({
         symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,
@@ -920,7 +961,7 @@ Deno.serve(async (req) => {
       await supabase.from('unified_wallet').update({ balance: newBuyBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
       balance = newBuyBalance;
       openCount++;
-      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, qty, costKRW, capType: r.capType });
+      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators });
     }
 
     // ========== AUTO-REPLACEMENT ==========

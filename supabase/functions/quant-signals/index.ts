@@ -127,17 +127,20 @@ function generateSyntheticCandles(quote: any, days = 40) {
   return { closes, highs, lows, opens, volumes };
 }
 
-// ===== 10-Indicator Scoring (Weighted: RVOL×2, MACD×2, VWAP/Candle×2) =====
+// ===== 10-Indicator Scoring (Weighted: RVOL×1.5, MACD×2, VWAP/Candle×2, 거래대금강도×1.5) =====
 function score10Indicators(quote: any, closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[]) {
   const changePct = quote.dp || 0;
   const n = closes.length - 1;
   if (n < 5) return null;
 
+  // 1. 호재 감성
   const sentimentScore = changePct >= 5 ? 9 : changePct >= 3 ? 7 : changePct >= 1 ? 5 : changePct >= -1 ? 4 : 2;
+  // 2. RVOL (×1.5)
   const currentVol = volumes[n];
   const avgVol = volumes.length >= 21 ? volumes.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 : currentVol;
   const rvol = avgVol > 0 ? currentVol / avgVol : 1;
   const rvolScore = rvol >= 3 ? 10 : rvol >= 2.5 ? 8 : rvol >= 2 ? 6 : rvol >= 1.5 ? 4 : 2;
+  // 3. VWAP/캔들 (×2)
   const ema9 = calculateEMA(closes, 9);
   const ema21 = calculateEMA(closes, 21);
   const rsi = calculateRSI(closes, 14);
@@ -147,24 +150,36 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   if (ema9[n] > ema21[n] && closes[n] > ema9[n]) candleConfirms++;
   if (rsi[n] > 40 && rsi[n] < 70 && rsi[n] > (rsi[n - 1] || 50)) candleConfirms++;
   const candleScore = candleConfirms >= 2.5 ? 10 : candleConfirms >= 2 ? 7 : candleConfirms >= 1 ? 4 : 1;
+  // 4. MACD (×2)
+  const ema12 = calculateEMA(closes, 12);
+  const ema26 = calculateEMA(closes, 26);
+  const macd = ema12[n] - ema26[n];
+  const macdPrev = n > 0 ? ema12[n-1] - ema26[n-1] : 0;
+  const macdScore = (macd > 0 && macd > macdPrev) ? 10 : (macd > 0) ? 7 : (macd > macdPrev) ? 4 : 2;
+  // 5. RSI
+  const currentRSI = rsi[n];
+  const rsiScore = (currentRSI >= 50 && currentRSI <= 70) ? 8 : (currentRSI >= 40 && currentRSI < 50) ? 5 : (currentRSI > 70) ? 3 : 2;
+  // 6. 볼린저 밴드
   const atr = calculateATR(highs, lows, closes, 14);
   const currentATR = atr[atr.length - 1];
   const ema20 = calculateEMA(closes, 20);
-  const keltnerUpper = ema20[n] + 2 * currentATR;
-  const atrScore = closes[n] > keltnerUpper ? 10 : closes[n] > ema20[n] + currentATR ? 7 : 4;
-  const recentHigh = Math.max(...highs.slice(-10));
-  const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
+  const bbUpper = ema20[n] + 2 * currentATR;
+  const bbLower = ema20[n] - 2 * currentATR;
+  const bbScore = closes[n] > bbUpper ? 10 : closes[n] > ema20[n] + currentATR ? 7 : closes[n] > ema20[n] ? 5 : closes[n] > bbLower ? 3 : 1;
+  // 7. 이평선 정배열
+  const ema50 = calculateEMA(closes, Math.min(50, closes.length));
+  const aligned = ema9[n] > ema21[n] && ema21[n] > ema50[n];
+  const emaAlignScore = aligned ? 9 : (ema9[n] > ema21[n]) ? 6 : 3;
+  // 8. 갭 분석
   const gapPct = n > 0 ? ((opens[n] - closes[n - 1]) / closes[n - 1]) * 100 : 0;
   const gapScore = (gapPct >= 4 && gapPct <= 15) ? (closes[n] > opens[n] ? 10 : 5) : gapPct > 15 ? 2 : gapPct > 0 ? 3 : 1;
+  // 9. 숏 스퀴즈
   const high20 = Math.max(...closes.slice(-20));
   let squeezeScore = 0;
   if (closes[n] >= high20) squeezeScore += 6;
   if (avgVol > 0 && currentVol / avgVol > 2) squeezeScore += 4;
   squeezeScore = Math.min(10, squeezeScore);
-  const allTimeHigh = Math.max(...highs);
-  const distToATH = ((allTimeHigh - closes[n]) / allTimeHigh) * 100;
-  const positionScore = distToATH <= 5 ? 10 : distToATH <= 10 ? 7 : distToATH <= 20 ? 4 : 2;
-  const sectorScore = changePct >= 5 ? 10 : changePct >= 3 ? 7 : changePct >= 1 ? 5 : 2;
+  // 10. 체결 강도 (×1.5)
   let bullCount = 0, volInc = 0;
   for (let i = Math.max(0, n - 4); i <= n; i++) {
     if (closes[i] > opens[i]) bullCount++;
@@ -172,47 +187,40 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   }
   const aggression = (bullCount / 5) * 100;
   const aggrScore = aggression >= 80 && volInc >= 3 ? 10 : aggression >= 60 ? 7 : aggression >= 40 ? 4 : 2;
-  const breakingHigh = closes[n] > Math.max(...highs.slice(Math.max(0, n - 5), n));
-  const preMarketScore = breakingHigh ? 8 : 3;
 
-  // ★ MACD Indicator (EMA12 - EMA26 crossover)
-  const ema12 = calculateEMA(closes, 12);
-  const ema26 = calculateEMA(closes, 26);
-  const macd = ema12[n] - ema26[n];
-  const macdPrev = n > 0 ? ema12[n-1] - ema26[n-1] : 0;
-  const macdScore = (macd > 0 && macd > macdPrev) ? 10 : (macd > 0) ? 7 : (macd > macdPrev) ? 4 : 2;
+  // 가중치: 1+1.5+2+2+1+1+1+1+1+1.5 = 13.0
+  const rawScore = sentimentScore * 1.0 + rvolScore * 1.5 + candleScore * 2.0 + macdScore * 2.0
+    + rsiScore * 1.0 + bbScore * 1.0 + emaAlignScore * 1.0 + gapScore * 1.0 + squeezeScore * 1.0 + aggrScore * 1.5;
+  const maxRawScore = 10 * 13.0;
+  const totalScore = Math.round((rawScore / maxRawScore) * 100);
 
-  // ★★★ 가중치 최적화: RVOL×2, MACD×2, VWAP/Candle×2 (Max raw=140, normalized to 100)
-  const rawScore = sentimentScore + (rvolScore * 2) + (candleScore * 2) + atrScore + gapScore
-    + squeezeScore + positionScore + sectorScore + aggrScore + preMarketScore + (macdScore * 2);
-  const totalScore = Math.round((rawScore / 140) * 100);
+  const recentHigh = Math.max(...highs.slice(-10));
+  const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
 
   return {
     totalScore, trailingStop, rvol, currentVol, avgVol,
     indicators: {
       sentiment: { score: sentimentScore, details: `모멘텀 ${changePct.toFixed(1)}%` },
-      rvol: { score: rvolScore, details: `RVOL: ${rvol.toFixed(1)}x`, rvol, rawValue: rvol, currentVol, avgVol, weight: '×2' },
+      rvol: { score: rvolScore, details: `RVOL: ${rvol.toFixed(1)}x`, rvol, rawValue: rvol, currentVol, avgVol, weight: '×1.5' },
       candle: { score: candleScore, details: `트리플컨펌`, vwapCross: closes[n] > vwap, weight: '×2' },
       macd: { score: macdScore, details: `MACD: ${macd.toFixed(4)}`, macd: +macd.toFixed(4), weight: '×2' },
-      atr: { score: atrScore, details: `ATR: ${currentATR.toFixed(4)}`, atr: currentATR, trailingStop },
+      rsi: { score: rsiScore, details: `RSI: ${currentRSI.toFixed(1)}`, rsi: +currentRSI.toFixed(1) },
+      bb: { score: bbScore, details: `BB ${closes[n] > bbUpper ? '상단돌파' : closes[n] > ema20[n] ? '중앙상단' : '하단'}` },
+      emaAlign: { score: emaAlignScore, details: `이평선 ${aligned ? '정배열' : '역배열'}`, aligned },
       gap: { score: gapScore, details: `갭 ${gapPct.toFixed(1)}%` },
       squeeze: { score: squeezeScore, details: squeezeScore >= 6 ? '스퀴즈 활성' : '스퀴즈 없음' },
-      position: { score: positionScore, details: `ATH대비 ${distToATH.toFixed(1)}%` },
-      sectorSynergy: { score: sectorScore, details: `상대강도` },
-      aggression: { score: aggrScore, details: `매수강도 ${aggression.toFixed(0)}%` },
-      preMarket: { score: preMarketScore, details: breakingHigh ? '고점돌파' : '돌파X' },
-      confluence: { score: candleScore, vwapCross: closes[n] > vwap },
+      aggression: { score: aggrScore, details: `매수강도 ${aggression.toFixed(0)}%`, weight: '×1.5' },
     }
   };
 }
 
 function getTopReason(indicators: any): string {
-  const entries = Object.entries(indicators).filter(([k]) => k !== 'confluence') as [string, any][];
+  const entries = Object.entries(indicators) as [string, any][];
   entries.sort((a, b) => b[1].score - a[1].score);
   const labels: Record<string, string> = {
-    sentiment: '호재', rvol: 'RVOL', candle: '캔들패턴', atr: 'ATR',
-    gap: '갭분석', squeeze: '스퀴즈', position: '가격위치',
-    sectorSynergy: '섹터', aggression: '체결강도', preMarket: '프리마켓'
+    sentiment: '호재', rvol: 'RVOL', candle: 'VWAP/캔들', macd: 'MACD',
+    rsi: 'RSI', bb: '볼린저', emaAlign: '정배열', gap: '갭분석',
+    squeeze: '스퀴즈', aggression: '체결강도'
   };
   return entries.slice(0, 2).map(([k, v]) => `${labels[k] || k}(${v.score})`).join(' + ');
 }
