@@ -1036,21 +1036,19 @@ Deno.serve(async (req) => {
           const metCount = r.scoring.metCount || 0;
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
           const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
-          const accumPattern = r.scoring.accumulation;
-          const isAccumEntry = isLowVolumeSession && accumPattern?.isAccumulating;
+          const isAccumEntry = isAccumCandidate;
           
-          // 최소 충족 조건: 10개 중 5개 이상 충족 (매집 패턴 시 4개로 완화)
-          const minMet = isAccumEntry ? 4 : 5;
+          // 최소 충족 조건: 10개 중 5개 이상 충족 (매집 패턴 시 3개로 완화 — 에너지 응축 포함)
+          const minMet = isAccumEntry ? 3 : 5;
           if (metCount < minMet) continue;
           
-          // ★ 선취매: 매집 패턴 감지 시 RVOL 요건 대폭 완화
-          const effectiveRvolMin = isAccumEntry ? 0.5 : adaptedRvolMin;
-          if (rvol < effectiveRvolMin) continue;
+          // ★ 선취매: 매집 패턴 감지 시 RVOL 요건 완전 해제 (필승 패턴 = 거래량 무관)
+          if (!isAccumEntry && rvol < adaptedRvolMin) continue;
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          // ★ 선취매: 매집 패턴 시 체결강도 80%로 완화 (조용한 매집은 체결강도가 낮을 수 있음)
-          const minAggression = isAccumEntry ? 80 : 120;
+          // ★ 선취매: 매집 패턴 시 체결강도 60%로 완화 (조용한 매집은 양봉비율만으로 판단)
+          const minAggression = isAccumEntry ? 60 : 120;
           if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
@@ -1059,14 +1057,15 @@ Deno.serve(async (req) => {
           (r as any).isVolumeBurst = rvol >= 2.0;
           (r as any).isAccumulationEntry = isAccumEntry;
           (r as any).accumPattern = accumPattern?.pattern || '';
+          (r as any).accumCondensation = accumPattern?.condensation || 0;
           const tradingVal = vlInfo?.tradingValue || 0;
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
 
-          // ★ 선취매 알림 로그
+          // ★ 선취매 알림 로그 (강화)
           if (isAccumEntry) {
-            await addLog('unified', 'scan', r.sym, `[선취매 포착] 저거래량 구간이지만 지표가 완벽한 ${r.sym}을 정규장 폭발 대비 미리 매집합니다. | 매집패턴: ${accumPattern?.pattern} (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore });
+            await addLog('unified', 'scan', r.sym, `[데이장 선취매] 지표 완벽 확인. 정규장 폭발을 대비해 ${r.sym}을 미리 매수합니다. | 매집패턴: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation });
           }
 
           candidates.push(r);
