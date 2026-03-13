@@ -1202,7 +1202,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 급등 예상 패턴 감지
+    // ★ 급등 예상 패턴 + 슈퍼 패턴(15% 타겟) 감지
     for (const c of candidates) {
       const ind = c.scoring.indicators;
       const rvolExplosive = (ind.rvol?.rvol || 0) >= 5 && (ind.candle?.vwapCross === true);
@@ -1212,6 +1212,14 @@ Deno.serve(async (req) => {
       (c as any).isExplosive = explosiveSignals >= 2;
       if ((c as any).isExplosive) {
         await addLog('unified', 'scan', c.sym, `[🔥급등예상] ${c.sym} 폭발 신호 ${explosiveSignals}/3 (RVOL:${(ind.rvol?.rvol||0).toFixed(1)}x | Squeeze:${ind.squeeze?.score} | MACD:${ind.macd?.score}) → 우선 진입`, { explosiveSignals });
+      }
+
+      // ★ 슈퍼 패턴 (15% 수익 타겟): BB스퀴즈돌파 + OBV매집 + ADX≥25 중 2개 이상
+      const superPat = c.scoring.superPattern;
+      (c as any).isSuperPattern = superPat?.isSuperPattern || false;
+      (c as any).superPatternSignals = superPat?.signals || [];
+      if ((c as any).isSuperPattern) {
+        await addLog('unified', 'scan', c.sym, `[🎯15%타겟] ${c.sym} 슈퍼 패턴 감지! [${superPat.signals.join('+')}] 신뢰도 ${superPat.confidence}% → 15% 수익 목표 설정`, { superPattern: superPat });
       }
     }
 
