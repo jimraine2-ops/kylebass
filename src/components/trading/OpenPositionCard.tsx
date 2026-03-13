@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, Shield, ArrowUp, ArrowDown, Activity, Radar } from "lucide-react";
+import { TrendingUp, TrendingDown, Shield, ArrowUp, ArrowDown, Activity, Radar, ShieldCheck } from "lucide-react";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,64 @@ function getScoreLabel(score: number): string {
   return '매도 검토';
 }
 
+// ★ AI 홀딩 판단 메시지 & 익절 예상 확률 계산
+function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: string; color: string; winProb: number } | null {
+  if (score === null) return null;
+  
+  // 익절 예상 확률: 지표 점수 기반 (55점=75%, 70점=90%, 40점=30%)
+  let winProb = 0;
+  if (score >= 70) winProb = 90;
+  else if (score >= 65) winProb = 85;
+  else if (score >= 60) winProb = 80;
+  else if (score >= 55) winProb = 75;
+  else if (score >= 50) winProb = 60;
+  else if (score >= 45) winProb = 45;
+  else if (score >= 40) winProb = 30;
+  else winProb = 15;
+  
+  // 수익 중이면 확률 보너스
+  if (pnlPct >= 2) winProb = Math.min(98, winProb + 10);
+  else if (pnlPct >= 1) winProb = Math.min(95, winProb + 5);
+  
+  // 가격 하락 중이지만 지표 양호 → 홀딩 권장 메시지
+  if (pnlPct < 0 && score >= 50) {
+    return {
+      message: `[AI 판단: 홀딩 권장 - 지표 양호] 눌림목 구간, 반등 대기`,
+      color: 'text-stock-up',
+      winProb,
+    };
+  }
+  if (pnlPct < 0 && score >= 40 && score < 50) {
+    return {
+      message: `[AI 판단: 주의 관찰 중] 지표 약화, 추세 감시`,
+      color: 'text-warning',
+      winProb,
+    };
+  }
+  if (pnlPct < 0 && score < 40) {
+    return {
+      message: `[AI 판단: 매도 검토] 추세 이탈 위험`,
+      color: 'text-destructive',
+      winProb,
+    };
+  }
+  if (pnlPct >= 0 && score >= 55) {
+    return {
+      message: `[AI 판단: 강력 보유] 추가 상승 기대`,
+      color: 'text-stock-up',
+      winProb,
+    };
+  }
+  if (pnlPct >= 0 && score >= 45) {
+    return {
+      message: `[AI 판단: 보유 유지] 안정 구간`,
+      color: 'text-primary',
+      winProb,
+    };
+  }
+  return { message: '', color: 'text-muted-foreground', winProb };
+}
+
 export function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice, fxRate = 1350, liveScore, prevScore, onOpenModal }: OpenPositionCardProps) {
   const displayPrice = livePrice ?? pos.currentPrice ?? pos.price;
   const investmentKRW = Math.round(pos.price * pos.quantity * fxRate);
@@ -57,13 +115,18 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
   const scoreChanged = score !== null && prevScore !== null && prevScore !== undefined ? score - prevScore : 0;
   const isDanger = score !== null && score < 40;
 
+  // ★ AI 홀딩 판단 & 익절 확률
+  const aiJudgment = getAIHoldingJudgment(score, unrealizedPnlPct);
+  const isHoldingRecommended = !isProfit && score !== null && score >= 50;
+
   return (
     <div
       className={cn(
         "p-3 rounded-lg bg-muted/50 border space-y-2 transition-all",
         onSelect && 'cursor-pointer hover:border-primary/40',
         isSelected ? 'border-primary ring-1 ring-primary/20' : 'border-border',
-        isDanger && 'animate-pulse border-destructive/60 bg-destructive/5'
+        isDanger && 'animate-pulse border-destructive/60 bg-destructive/5',
+        isHoldingRecommended && 'border-stock-up/40 bg-stock-up/5'
       )}
       onClick={onSelect}
     >
@@ -94,6 +157,18 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
             </span>
           )}
 
+          {/* ★ 익절 예상 확률 */}
+          {aiJudgment && aiJudgment.winProb > 0 && (
+            <Badge variant="outline" className={cn(
+              "text-[10px] px-2 py-0.5 gap-1 font-mono border",
+              aiJudgment.winProb >= 70 ? 'border-stock-up/40 text-stock-up bg-stock-up/10' :
+              aiJudgment.winProb >= 50 ? 'border-primary/40 text-primary bg-primary/10' :
+              'border-warning/40 text-warning bg-warning/10'
+            )}>
+              🎯 익절확률 {aiJudgment.winProb}%
+            </Badge>
+          )}
+
           <Badge variant="outline" className="text-[10px]">
             신뢰도: {pos.ai_confidence}%
           </Badge>
@@ -112,6 +187,23 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
           </div>
         </div>
       </div>
+
+      {/* ★ AI 홀딩 판단 메시지 */}
+      {aiJudgment && aiJudgment.message && (
+        <div className={cn("flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded", 
+          isHoldingRecommended ? 'bg-stock-up/10' : isDanger ? 'bg-destructive/10' : 'bg-muted'
+        )}>
+          {isHoldingRecommended ? (
+            <ShieldCheck className="w-3.5 h-3.5 text-stock-up shrink-0" />
+          ) : isDanger ? (
+            <Shield className="w-3.5 h-3.5 text-destructive shrink-0" />
+          ) : (
+            <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+          )}
+          <span className={aiJudgment.color}>{aiJudgment.message}</span>
+        </div>
+      )}
+
       <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1">
           <Shield className="w-3 h-3 text-destructive" />
@@ -128,7 +220,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         )}
         {isDanger && (
           <span className="text-destructive font-bold animate-pulse">
-            ⚠️ 지표 악화 — 조기 매도 검토 중
+            ⚠️ 지표 추세 이탈 — 40점 미만 시 자동 매도
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
