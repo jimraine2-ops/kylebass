@@ -830,10 +830,21 @@ Deno.serve(async (req) => {
 
         // 3. 이중 잠금 로직 (지표 무결성 중심)
         if (!shouldClose) {
+          // ★ 선취매 안전장치: 저거래량 세션에서 진입한 종목, 지표 45점 미만이면 즉시 본절 정리
+          const isPreMarketEntry = isLowVolumeSession && (pos.ai_reason || '').includes('선취매');
+          
           if (pnlPct <= -3.0 && !withinATR) {
             shouldClose = true;
             closeReason = `[추세이탈] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% + ATR범위 외 → 추세 전환`;
             newStatus = 'trend_break';
+          } else if (isPreMarketEntry && quantScore < 45 && pnlPct <= 0.3) {
+            // ★ 선취매 안전장치: 저거래량 환경에서 탈출이 어려우므로 즉시 본절 부근 정리
+            shouldClose = true;
+            closeReason = `[선취매안전] [${sessionLabel}] [${timeStr}] [${sym}] 저거래량 진입 종목 지표 ${quantScore}점(<45) → 본절 부근 즉시 정리`;
+            newStatus = 'premarket_safety';
+          } else if (isPreMarketEntry && indicatorsStrong && pnlPct > 0 && pnlPct < 2.0 && currentSession !== 'REGULAR') {
+            // ★ 선취매 홀딩: 소폭 상승해도 지표 유지 시 정규장까지 보유
+            await addLog('unified', 'hold', sym, `[선취매홀딩] ${sym} +${pnlPct.toFixed(2)}% 소폭 상승 BUT 지표 ${quantScore}점 양호 → 정규장 거래량 유입 대기 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           } else if (pnlPct <= -1.8) {
             if (indicatorsStrong && technicalSafe) {
               await addLog('unified', 'hold', sym, `[눌림목홀딩] ${sym} -${Math.abs(pnlPct).toFixed(2)}% BUT 지표 ${quantScore}점 + 기술안전 → 눌림목, 홀딩`, { quantScore, vwapCross, aboveBB });
