@@ -1279,10 +1279,11 @@ Deno.serve(async (req) => {
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
       // ★ [혁파] 고정 손절 폐기: 초기 SL을 넉넉하게 설정 (지표 기반 매도로 전환)
       const stopLoss = +(adjustedPrice * 0.95).toFixed(4); // -5% 안전망 (실질적으로 지표 40점 미만에서 매도)
-      // ★ 선취매: 정규장 폭발 대비 기대수익률 1.5배 상향 (5% → 7.5%)
-      const tpMultiplier = isAccumEntry ? 1.075 : 1.05;
+      // ★ 슈퍼 패턴: 15% 목표가 / 선취매: 7.5% / 기본: 5%
+      const isSuperEntry = (r as any).isSuperPattern;
+      const tpMultiplier = isSuperEntry ? 1.15 : isAccumEntry ? 1.075 : 1.05;
       const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
-      const tier = isPyramiding ? 'PYRAMID' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
+      const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
       const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 ×${spreadMul}` : '';
@@ -1291,12 +1292,13 @@ Deno.serve(async (req) => {
       const volRankTag = volRank <= 50 ? ` | Vol#${volRank}` : '';
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
       const condensationTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)})` : '';
+      const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟` : '';
       
       // ★ 엔진 개편: 지표 상세 근거 로그
       const indDetails = Object.entries(r.scoring.indicators)
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
-      const logMsg = `[${isAccumEntry ? '데이장 선취매' : '10대지표매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${condensationTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const logMsg = `[${isSuperEntry ? '🎯15%슈퍼매수' : isAccumEntry ? '데이장 선취매' : '10대지표매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${condensationTag}${superTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       await supabase.from('unified_trades').insert({
         symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,
@@ -1308,7 +1310,7 @@ Deno.serve(async (req) => {
       await supabase.from('unified_wallet').update({ balance: newBuyBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
       balance = newBuyBalance;
       openCount++;
-      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators });
+      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry });
     }
 
     // ========== AUTO-REPLACEMENT ==========
