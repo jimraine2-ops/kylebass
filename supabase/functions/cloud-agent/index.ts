@@ -401,10 +401,18 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const recentHigh = Math.max(...highs.slice(-10));
   const trailingStop = +(recentHigh - 2.0 * currentATR).toFixed(4);
 
-  return {
+    // ★ ADX & OBV & 슈퍼 패턴 감지
+    const adxValue = calculateADX(highs, lows, closes, 14);
+    const obvData = detectOBVDivergence(closes, volumes);
+    const superPattern = detectSuperPattern(closes, highs, lows, volumes, adxValue);
+
+    return {
     totalScore, trailingStop, rvol, changePct, metCount,
     vwap, bbLower, bbUpper,
     accumulation,
+    adx: adxValue,
+    obv: obvData,
+    superPattern,
     indicators: {
       sentiment: { score: sentimentScore, details: `변동률 ${changePct.toFixed(2)}%` },
       rvol: { score: rvolScore, rvol, weight: isLowVolumeSession ? '×0.8(선취매)' : '×1.5', details: `RVOL ${rvol.toFixed(1)}x` },
