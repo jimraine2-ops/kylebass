@@ -1,6 +1,7 @@
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { TopBar } from "./TopBar";
+import { TradeNotificationListener } from "@/components/trading/TradeNotificationListener";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
