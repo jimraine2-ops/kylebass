@@ -725,9 +725,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Fill 80 active slots — Volume Leaders 우선 유입
-    const LARGE_SLOTS = 30;
-    const SMALL_SLOTS = 50;
+    // Step 2: Fill 150 active slots — ★ 확장: 60 대형 + 90 소형 = 150개 슬롯
+    const LARGE_SLOTS = 60;
+    const SMALL_SLOTS = 90;
 
     const currentLarge: string[] = [];
     const currentSmall: string[] = [];
@@ -737,27 +737,36 @@ Deno.serve(async (req) => {
     }
 
     // ★ Volume Leader 우선 유입: 거래대금 상위 종목을 먼저 슬롯에 배치
-    const volumeLeaderSymbols = new Set(volumeLeaders.slice(0, 60).map(v => v.symbol));
+    const volumeLeaderSymbols = new Set(volumeLeaders.slice(0, 100).map(v => v.symbol));
     
     // Fill from volume leaders first
     for (const vl of volumeLeaders) {
       if (currentLarge.length >= LARGE_SLOTS && currentSmall.length >= SMALL_SLOTS) break;
       const sym = vl.symbol;
       if (activeUnifiedList.has(sym)) continue;
-      
-      // 유동성 하한선: 거래대금 $10K 미만 제외 (호가 공백 방지)
       if (vl.tradingValue < 10000) continue;
       
       if (LARGE_SET.has(sym) && currentLarge.length < LARGE_SLOTS) {
         activeUnifiedList.add(sym);
         currentLarge.push(sym);
-      } else if (SMALL_SET.has(sym) && currentSmall.length < SMALL_SLOTS) {
+      } else if ((SMALL_SET.has(sym) || !LARGE_SET.has(sym)) && currentSmall.length < SMALL_SLOTS) {
         activeUnifiedList.add(sym);
         currentSmall.push(sym);
       }
     }
 
-    // Fill remaining slots with rotation (기존 로직 유지)
+    // ★ 전 종목 확장: 동적 발견 종목에서도 슬롯 충전
+    const dynSymbols = discoveredSymbols.length > 0 ? discoveredSymbols : [];
+    const dynStart = (cycleCount * 50) % Math.max(1, dynSymbols.length);
+    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(50, dynSymbols.length); i++) {
+      const sym = dynSymbols[(dynStart + i) % dynSymbols.length];
+      if (!activeUnifiedList.has(sym)) {
+        activeUnifiedList.add(sym);
+        currentSmall.push(sym);
+      }
+    }
+
+    // Fill remaining slots with rotation (기존 풀)
     const largeArr = Array.from(LARGE_SET);
     const largeStart = (cycleCount * LARGE_SLOTS) % largeArr.length;
     for (let i = 0; currentLarge.length < LARGE_SLOTS && i < largeArr.length; i++) {
