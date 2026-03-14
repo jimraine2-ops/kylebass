@@ -878,7 +878,7 @@ Deno.serve(async (req) => {
     // --- Market Trend Guard (비활성화: 시장잠금 OFF) ---
     let marketBearish = false;
     let marketBuyHalt = false;
-    let baseEntryThreshold = 55; // ★ 초공격형: 진입 문턱 55점
+    let baseEntryThreshold = 65; // ★ 필승형: 진입 문턱 65점 (확실한 대시세 초입만 진입)
     let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
@@ -888,10 +888,10 @@ Deno.serve(async (req) => {
       const spyChange = spyQuote?.dp || 0;
       const qqqChange = qqqQuote?.dp || 0;
 
-      // ★ QQQ 모멘텀 보너스: QQQ 상승 시 진입 점수에 보너스 부여
+      // ★ QQQ 모멘텀 보너스: QQQ 강세 시만 소폭 완화
       qqqTrendDown = qqqChange < -0.5;
-      const qqqBonus = qqqChange >= 1.0 ? 3 : qqqChange >= 0.3 ? 1 : 0;
-      if (qqqBonus > 0) baseEntryThreshold = Math.max(52, baseEntryThreshold - qqqBonus);
+      const qqqBonus = qqqChange >= 1.5 ? 3 : qqqChange >= 0.5 ? 1 : 0;
+      if (qqqBonus > 0) baseEntryThreshold = Math.max(62, baseEntryThreshold - qqqBonus);
       await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → QQQ보너스 -${qqqBonus}점, 진입기준 ${baseEntryThreshold}점`, { spyChange, qqqChange, qqqBonus });
     } catch { /* fallback */ }
 
@@ -906,14 +906,14 @@ Deno.serve(async (req) => {
     const recentTotal = (recentTrades || []).length;
     const recentWinRate = recentTotal > 0 ? (recentWins / recentTotal) * 100 : 50;
 
-    // Win-rate adjustment (초공격형: 극단적 저승률에서만 소폭 상향)
-    if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 60);
-    else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 57);
+    // Win-rate adjustment: 극단적 저승률에서만 소폭 상향
+    if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 70);
+    else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 67);
 
-    // Session adaptation — ★ 초공격형: 최소 55점 강제 하한선
+    // Session adaptation — ★ 필승형: 최소 65점 강제 하한선 (장외에서도 65점 이하 진입 금지)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 55); // 절대 하한 55점
-    const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0; // ★ RVOL 완화: 장외 1.5, 정규 2.0
+    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // 절대 하한 65점
+    const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
 
