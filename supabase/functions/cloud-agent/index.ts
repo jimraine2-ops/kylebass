@@ -198,38 +198,64 @@ function detectOBVDivergence(closes: number[], volumes: number[]): { obvRising: 
   return { obvRising, priceSideways, score: Math.min(10, score) };
 }
 
-// ===== 슈퍼 패턴 감지 (15% 수익 타겟 종목) =====
-function detectSuperPattern(closes: number[], highs: number[], lows: number[], volumes: number[], adx: number): { isSuperPattern: boolean; signals: string[]; confidence: number } {
+// ===== 슈퍼 패턴 감지 (15% 수익 보장형 '대시세 초입' 종목) =====
+function detectSuperPattern(closes: number[], highs: number[], lows: number[], volumes: number[], adx: number): { isSuperPattern: boolean; signals: string[]; confidence: number; resistanceThin: boolean } {
   const n = closes.length - 1;
-  if (n < 20) return { isSuperPattern: false, signals: [], confidence: 0 };
+  if (n < 20) return { isSuperPattern: false, signals: [], confidence: 0, resistanceThin: false };
   const signals: string[] = [];
   
-  // 1. BB Squeeze Breakout: 밴드 수축 후 상단 돌파
+  // 1. ★ 에너지 응축 패턴: BB 극도 수축 + 거래대금 300%↑ + 상단 돌파
   const ema20 = calculateEMA(closes, 20);
   const atr = calculateATR(highs, lows, closes, 14);
   const bbWidth5 = atr.slice(-5).reduce((a,b)=>a+b,0) / 5;
   const bbWidth20 = atr.slice(-20).reduce((a,b)=>a+b,0) / 20;
-  const isSqueeze = bbWidth20 > 0 && bbWidth5 / bbWidth20 < 0.7; // 밴드 30% 이상 수축
+  const isSqueeze = bbWidth20 > 0 && bbWidth5 / bbWidth20 < 0.6; // 밴드 40% 이상 수축 (강화)
   const bbUpper = ema20[n] + 2 * atr[n];
-  const bbBreakout = closes[n] > bbUpper && volumes[n] > (volumes.slice(-20).reduce((a,b)=>a+b,0)/20) * 1.5;
-  if (isSqueeze && bbBreakout) signals.push('BB스퀴즈돌파');
+  const avgVol20 = volumes.slice(-20).reduce((a,b)=>a+b,0) / 20;
+  const rvol = avgVol20 > 0 ? volumes[n] / avgVol20 : 1;
+  const bbBreakout = closes[n] > bbUpper && rvol >= 1.5;
+  const energyCondensation = isSqueeze && rvol >= 3.0; // 극도 수축 + 거래량 300%↑
+  if (energyCondensation && bbBreakout) signals.push('에너지응축폭발');
+  else if (isSqueeze && bbBreakout) signals.push('BB스퀴즈돌파');
   else if (bbBreakout) signals.push('BB상단돌파');
   
-  // 2. OBV 매집 (가격 횡보 + OBV 우상향)
+  // 2. ★ 매집 확인: 가격 변동 적으나 체결강도 150%↑ + OBV/MFI 급등
   const obv = detectOBVDivergence(closes, volumes);
-  if (obv.priceSideways && obv.obvRising) signals.push('OBV매집');
+  // 체결강도 계산 (양봉비율 × 거래량 가속)
+  let bullCount = 0;
+  for (let i = Math.max(0, n - 9); i <= n; i++) {
+    if (closes[i] > (i > 0 ? closes[i-1] : closes[i])) bullCount++;
+  }
+  const aggressionRatio = (bullCount / Math.min(10, n + 1)) * 100;
+  const isStrongAggression = aggressionRatio >= 60 && rvol >= 1.5; // 체결강도 150%↑ 근사
+  if (obv.priceSideways && obv.obvRising && isStrongAggression) signals.push('세력매집확인');
+  else if (obv.priceSideways && obv.obvRising) signals.push('OBV매집');
   
   // 3. ADX 추세 강도 (≥ 25)
   if (adx >= 25) signals.push(`ADX${Math.round(adx)}`);
   
-  // 4. 거래량 폭발 (RVOL ≥ 3)
-  const avgVol20 = volumes.slice(-20).reduce((a,b)=>a+b,0) / 20;
-  const rvol = avgVol20 > 0 ? volumes[n] / avgVol20 : 1;
+  // 4. 거래량 폭발 (RVOL ≥ 3 → 300%)
   if (rvol >= 3) signals.push(`RVOL${rvol.toFixed(1)}x`);
   
+  // 5. ★ 상승 여력 분석: 전고점까지 매물대가 얇은지 확인
+  // 최근 20봉 최고점 vs 현재가 → 15% 이상 여유 공간이면 '매물대 얇음'
+  const recentHigh20 = Math.max(...highs.slice(-20));
+  const allTimeHigh = Math.max(...highs);
+  const distToHigh = allTimeHigh > 0 ? ((allTimeHigh - closes[n]) / closes[n]) * 100 : 0;
+  const resistanceThin = distToHigh >= 15 || closes[n] >= recentHigh20; // 전고점까지 15%+ 여유 or 신고가
+  if (resistanceThin) signals.push('매물대얇음');
+  
+  // 6. ★ 골든크로스 + RSI 상승 추세
+  const ema9 = calculateEMA(closes, 9);
+  const ema21 = calculateEMA(closes, 21);
+  const rsi = calculateRSI(closes, 14);
+  const goldenCross = n > 1 && ema9[n] > ema21[n] && ema9[n-1] <= ema21[n-1];
+  const rsiMomentum = rsi[n] > 50 && rsi[n] > (rsi[n-1] || 50) && rsi[n] < 75;
+  if (goldenCross && rsiMomentum) signals.push('골든크로스+RSI상승');
+  
   const isSuperPattern = signals.length >= 2; // 2개 이상 충족 시 슈퍼 패턴
-  const confidence = Math.min(100, signals.length * 25);
-  return { isSuperPattern, signals, confidence };
+  const confidence = Math.min(100, signals.length * 20);
+  return { isSuperPattern, signals, confidence, resistanceThin };
 }
 
 // ===== Accumulation Pattern Detection (매집 패턴 포착) =====
