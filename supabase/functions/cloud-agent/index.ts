@@ -970,8 +970,11 @@ Deno.serve(async (req) => {
             newStatus = 'profit_taken';
           }
         } else if (pnlPct >= 3.0 && pnlPct < 15.0 && indicatorsOver60) {
-          // ★ 조기 매도 금지: 3~15% 수익 구간에서 지표 60점 이상이면 무조건 홀딩
-          await addLog('unified', 'hold', sym, `[🎯15%홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 중이지만 지표 ${quantScore}점(≥60) → 15% 목표까지 강력 홀딩! 조기 매도 금지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          // ★ 철벽 홀딩: 3~15% 수익 구간에서 지표 60점 이상이면 잔파도(5~8%) 완전 무시, 절대 매도 금지
+          await addLog('unified', 'hold', sym, `[🛡️철벽홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 중 | 지표 ${quantScore}점(≥60) → 15% 목표까지 잔파도 무시! 조기 매도 절대 금지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+        } else if (pnlPct >= 1.0 && pnlPct < 15.0 && quantScore >= 55) {
+          // ★ 홀딩 유지: 1~3% 수익 + 지표 55점 이상 → 15% 향해 계속 전진
+          await addLog('unified', 'hold', sym, `[🎯15%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥55) → 목표가까지 홀딩 유지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         } else if (pnlPct >= 3.0) {
           const drop = ((peakPrice - price) / peakPrice) * 100;
           const dropThreshold = isIronHold ? 1.0 : 0.5;
