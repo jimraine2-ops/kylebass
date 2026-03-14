@@ -690,13 +690,10 @@ Deno.serve(async (req) => {
     // ========== SESSION TRANSITION RESET ==========
     const currentSession = sessionInfo.session;
     if (lastSessionType && lastSessionType !== currentSession) {
-      // 세션 전환 감지 → 스캔 리스트 초기화 (보유 종목은 유지)
-      const heldBefore = new Set((openPos || []).map((p: any) => p.symbol));
+      // 세션 전환 감지 → 스캔 리스트 초기화 (보유 종목은 나중에 재추가)
       const resetCount = activeUnifiedList.size;
       activeUnifiedList.clear();
-      // 보유 종목은 계속 유지
-      for (const s of heldBefore) activeUnifiedList.add(s);
-      await addLog('system', 'info', null, `[세션전환] ${lastSessionType} → ${currentSession} | 스캔 리스트 리셋 (${resetCount}개 초기화, 보유 ${heldBefore.size}개 유지) — 새 수급 기반 종목 유입 시작`, {});
+      await addLog('system', 'info', null, `[세션전환] ${lastSessionType} → ${currentSession} | 스캔 리스트 리셋 (${resetCount}개 초기화) — 새 수급 기반 종목 유입 시작`, {});
     }
     lastSessionType = currentSession;
 
