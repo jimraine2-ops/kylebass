@@ -534,6 +534,46 @@ const SMALL_CAP_UNIVERSE = [
 const LARGE_SET = new Set(LARGE_CAP_UNIVERSE);
 const SMALL_SET = new Set(SMALL_CAP_UNIVERSE.filter(s => !LARGE_SET.has(s)));
 
+// ===== Dynamic Discovery: Finnhub 전 종목 심볼 확장 =====
+let discoveredSymbols: string[] = [];
+let lastDiscoveryTime = 0;
+const DISCOVERY_INTERVAL_MS = 30 * 60 * 1000; // 30분마다 갱신
+
+async function discoverAllUSStocks(): Promise<string[]> {
+  const now = Date.now();
+  if (discoveredSymbols.length > 0 && (now - lastDiscoveryTime) < DISCOVERY_INTERVAL_MS) {
+    return discoveredSymbols;
+  }
+  try {
+    const token = getToken();
+    if (!token) return [];
+    // Finnhub US stock symbols
+    const res = await fetch(`${FINNHUB_BASE}/stock/symbol?exchange=US&token=${token}`);
+    if (!res.ok) return discoveredSymbols;
+    const symbols = await res.json();
+    if (!Array.isArray(symbols)) return discoveredSymbols;
+    // Filter: only common stocks (type=Common Stock), exclude OTC/penny shell
+    discoveredSymbols = symbols
+      .filter((s: any) => s.type === 'Common Stock' && s.symbol && !s.symbol.includes('.'))
+      .map((s: any) => s.symbol as string)
+      .filter((s: string) => !LARGE_SET.has(s) && !SMALL_SET.has(s)); // 기존 풀과 중복 제거
+    lastDiscoveryTime = now;
+    return discoveredSymbols;
+  } catch {
+    return discoveredSymbols;
+  }
+}
+
+// ===== Score Surge Detection (점수 급상승 감지) =====
+const previousScores: Map<string, number> = new Map();
+function detectScoreSurge(symbol: string, currentScore: number): { isSurge: boolean; prevScore: number; delta: number } {
+  const prev = previousScores.get(symbol) || 0;
+  const delta = currentScore - prev;
+  previousScores.set(symbol, currentScore);
+  // 20점 이상 급상승 = 급등 예상 1순위
+  return { isSurge: delta >= 20 && currentScore >= 60, prevScore: prev, delta };
+}
+
 // ===== Dynamic Active List Management =====
 const activeUnifiedList: Set<string> = new Set();
 const lastScores: Map<string, number> = new Map();
