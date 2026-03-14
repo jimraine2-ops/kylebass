@@ -700,7 +700,7 @@ Deno.serve(async (req) => {
     }
     lastSessionType = currentSession;
 
-    // ========== UNIFIED DYNAMIC UNIVERSE ROTATION (Volume Leader Priority) ==========
+    // ========== UNIFIED DYNAMIC UNIVERSE ROTATION (★ 전 종목 확장 스캔) ==========
     const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
 
     // Step 0: Fetch Volume Leaders for current session (거래대금 상위 종목 우선 유입)
