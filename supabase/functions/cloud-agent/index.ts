@@ -1280,12 +1280,13 @@ Deno.serve(async (req) => {
         await addLog('unified', 'scan', c.sym, `[🔥급등예상] ${c.sym} 폭발 신호 ${explosiveSignals}/3 (RVOL:${(ind.rvol?.rvol||0).toFixed(1)}x | Squeeze:${ind.squeeze?.score} | MACD:${ind.macd?.score}) → 우선 진입`, { explosiveSignals });
       }
 
-      // ★ 슈퍼 패턴 (15% 수익 타겟): BB스퀴즈돌파 + OBV매집 + ADX≥25 중 2개 이상
+      // ★ 슈퍼 패턴 (15% 수익 보장형): 에너지응축 + 세력매집 + ADX≥25 + 매물대얇음 중 2개 이상
       const superPat = c.scoring.superPattern;
       (c as any).isSuperPattern = superPat?.isSuperPattern || false;
       (c as any).superPatternSignals = superPat?.signals || [];
       if ((c as any).isSuperPattern) {
-        await addLog('unified', 'scan', c.sym, `[🎯15%타겟] ${c.sym} 슈퍼 패턴 감지! [${superPat.signals.join('+')}] 신뢰도 ${superPat.confidence}% → 15% 수익 목표 설정`, { superPattern: superPat });
+        const resistanceTag = superPat.resistanceThin ? '✅매물대 얇음(15%+ 슈팅 가능)' : '⚠️매물대 존재';
+        await addLog('unified', 'scan', c.sym, `[🎯15%보장타겟] ${c.sym} 슈퍼 패턴 감지! [${superPat.signals.join('+')}] 신뢰도 ${superPat.confidence}% | ${resistanceTag} → 15% 수익 목표 집중 투자 대상`, { superPattern: superPat });
       }
     }
 
