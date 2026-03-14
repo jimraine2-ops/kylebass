@@ -1324,7 +1324,10 @@ Deno.serve(async (req) => {
       if (openCount >= MAX_POSITIONS) break;
       const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
       const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
-      const positionPct = isPyramiding ? 0.05 : 0.10;
+      const isSuperEntry = (r as any).isSuperPattern;
+      
+      // ★ 집중 투자: 슈퍼 패턴 종목은 20% 비중, 일반 10%, 피라미딩 5%
+      const positionPct = isPyramiding ? 0.05 : isSuperEntry ? 0.20 : 0.10;
 
       const maxKRW = balance * positionPct;
       const priceKRW = toKRW(r.price);
@@ -1344,7 +1347,6 @@ Deno.serve(async (req) => {
       const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망
       // ★ 전 종목 TP +15% 통일 (슈퍼/선취매 구분 없이)
       const takeProfit = +(adjustedPrice * 1.15).toFixed(4);
-      const isSuperEntry = (r as any).isSuperPattern;
       const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
@@ -1354,13 +1356,18 @@ Deno.serve(async (req) => {
       const volRankTag = volRank <= 50 ? ` | Vol#${volRank}` : '';
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
       const condensationTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)})` : '';
-      const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟` : '';
+      const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟 집중투자(${(positionPct*100).toFixed(0)}%)` : '';
       
       // ★ 엔진 개편: 지표 상세 근거 로그
       const indDetails = Object.entries(r.scoring.indicators)
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
       const logMsg = `[${isSuperEntry ? '🎯15%슈퍼매수' : isAccumEntry ? '데이장 선취매' : '10대지표매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${condensationTag}${superTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+
+      // ★ 슈퍼 패턴 알림: "15% 익절이 보장된 슈퍼 패턴 종목 매수 완료"
+      if (isSuperEntry) {
+        await addLog('unified', 'milestone', r.sym, `🎯 [15% 익절 보장형 슈퍼 패턴] ${r.sym} 매수 완료! [${(r as any).superPatternSignals.join('+')}] | 15% 목표까지 자율 주행 홀딩 개시. 잔파도(5~8%) 완전 무시, -10% 안전망 유지.`, { superPattern: r.scoring.superPattern, score: r.scoring.totalScore, allocation: `${(positionPct*100).toFixed(0)}%` });
+      }
 
       await supabase.from('unified_trades').insert({
         symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,
