@@ -534,6 +534,46 @@ const SMALL_CAP_UNIVERSE = [
 const LARGE_SET = new Set(LARGE_CAP_UNIVERSE);
 const SMALL_SET = new Set(SMALL_CAP_UNIVERSE.filter(s => !LARGE_SET.has(s)));
 
+// ===== Dynamic Discovery: Finnhub 전 종목 심볼 확장 =====
+let discoveredSymbols: string[] = [];
+let lastDiscoveryTime = 0;
+const DISCOVERY_INTERVAL_MS = 30 * 60 * 1000; // 30분마다 갱신
+
+async function discoverAllUSStocks(): Promise<string[]> {
+  const now = Date.now();
+  if (discoveredSymbols.length > 0 && (now - lastDiscoveryTime) < DISCOVERY_INTERVAL_MS) {
+    return discoveredSymbols;
+  }
+  try {
+    const token = getToken();
+    if (!token) return [];
+    // Finnhub US stock symbols
+    const res = await fetch(`${FINNHUB_BASE}/stock/symbol?exchange=US&token=${token}`);
+    if (!res.ok) return discoveredSymbols;
+    const symbols = await res.json();
+    if (!Array.isArray(symbols)) return discoveredSymbols;
+    // Filter: only common stocks (type=Common Stock), exclude OTC/penny shell
+    discoveredSymbols = symbols
+      .filter((s: any) => s.type === 'Common Stock' && s.symbol && !s.symbol.includes('.'))
+      .map((s: any) => s.symbol as string)
+      .filter((s: string) => !LARGE_SET.has(s) && !SMALL_SET.has(s)); // 기존 풀과 중복 제거
+    lastDiscoveryTime = now;
+    return discoveredSymbols;
+  } catch {
+    return discoveredSymbols;
+  }
+}
+
+// ===== Score Surge Detection (점수 급상승 감지) =====
+const previousScores: Map<string, number> = new Map();
+function detectScoreSurge(symbol: string, currentScore: number): { isSurge: boolean; prevScore: number; delta: number } {
+  const prev = previousScores.get(symbol) || 0;
+  const delta = currentScore - prev;
+  previousScores.set(symbol, currentScore);
+  // 20점 이상 급상승 = 급등 예상 1순위
+  return { isSurge: delta >= 20 && currentScore >= 60, prevScore: prev, delta };
+}
+
 // ===== Dynamic Active List Management =====
 const activeUnifiedList: Set<string> = new Set();
 const lastScores: Map<string, number> = new Map();
@@ -546,15 +586,17 @@ function getCapType(price: number, symbol: string): 'large' | 'small' {
   return price >= 10 ? 'large' : 'small';
 }
 
-// ===== Volume Leader Fetcher (Finnhub) =====
+// ===== Volume Leader Fetcher (Finnhub) — ★ 전 종목 확장 =====
 async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: string; volume: number; changePct: number; tradingValue: number }[]> {
-  // Use market movers / active stocks approach
   const leaders: { symbol: string; volume: number; changePct: number; tradingValue: number }[] = [];
   
-  // Fetch quotes for a batch of known liquid symbols and rank by volume
-  const allSymbols = [...Array.from(LARGE_SET), ...Array.from(SMALL_SET)];
-  // Sample 100 symbols per cycle for volume ranking
-  const sampleSize = 100;
+  // ★ 전 종목 스캔: 기존 풀 + 동적 발견 종목에서 200개 랜덤 샘플링
+  const allKnown = [...Array.from(LARGE_SET), ...Array.from(SMALL_SET)];
+  const dynamicPool = discoveredSymbols.length > 0 ? discoveredSymbols : [];
+  const allSymbols = [...allKnown, ...dynamicPool];
+  
+  // ★ 확장 샘플: 200개로 증가 (기존 100 → 200)
+  const sampleSize = 200;
   const cycleOffset = Math.floor(Math.random() * allSymbols.length);
   const sample: string[] = [];
   for (let i = 0; i < Math.min(sampleSize, allSymbols.length); i++) {
@@ -567,10 +609,10 @@ async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: strin
     const results = await Promise.all(batch.map(sym => finnhubFetch(`/quote?symbol=${sym}`).then(q => q ? { symbol: sym, quote: q } : null)));
     for (const r of results) {
       if (!r || !r.quote || !r.quote.c) continue;
-      const vol = r.quote.v || 0; // today's volume (may be 0 in extended hours)
+      const vol = r.quote.v || 0;
       const price = r.quote.c;
       const changePct = r.quote.dp || 0;
-      const tradingValue = vol * price; // USD trading value
+      const tradingValue = vol * price;
       leaders.push({ symbol: r.symbol, volume: vol, changePct, tradingValue });
     }
     if (i + 5 < sample.length) await new Promise(r => setTimeout(r, 200));
@@ -628,7 +670,15 @@ Deno.serve(async (req) => {
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
     const entryRelax = sessionInfo.entryRelax;
-    const sessionRvolMin = 2.0; // ★ 초공격형: RVOL 기준 3.0→2.0 (거래 빈도 극대화)
+    const sessionRvolMin = 2.0;
+
+    // ★ 전 종목 동적 발견: Finnhub에서 미국 상장 전 종목 심볼 갱신
+    try {
+      const discovered = await discoverAllUSStocks();
+      if (discovered.length > 0) {
+        await addLog('system', 'scan', null, `[🌐전종목스캔] Finnhub 전 종목 심볼 ${discovered.length}개 동적 발견 (기존 ${LARGE_SET.size}+${SMALL_SET.size} + 신규 ${discovered.length} = ${LARGE_SET.size + SMALL_SET.size + discovered.length}개 전수조사 풀)`, {});
+      }
+    } catch { /* non-critical */ }
     const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
 
     // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
@@ -650,7 +700,7 @@ Deno.serve(async (req) => {
     }
     lastSessionType = currentSession;
 
-    // ========== UNIFIED DYNAMIC UNIVERSE ROTATION (Volume Leader Priority) ==========
+    // ========== UNIFIED DYNAMIC UNIVERSE ROTATION (★ 전 종목 확장 스캔) ==========
     const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
 
     // Step 0: Fetch Volume Leaders for current session (거래대금 상위 종목 우선 유입)
@@ -675,9 +725,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Fill 80 active slots — Volume Leaders 우선 유입
-    const LARGE_SLOTS = 30;
-    const SMALL_SLOTS = 50;
+    // Step 2: Fill 150 active slots — ★ 확장: 60 대형 + 90 소형 = 150개 슬롯
+    const LARGE_SLOTS = 60;
+    const SMALL_SLOTS = 90;
 
     const currentLarge: string[] = [];
     const currentSmall: string[] = [];
@@ -687,27 +737,36 @@ Deno.serve(async (req) => {
     }
 
     // ★ Volume Leader 우선 유입: 거래대금 상위 종목을 먼저 슬롯에 배치
-    const volumeLeaderSymbols = new Set(volumeLeaders.slice(0, 60).map(v => v.symbol));
+    const volumeLeaderSymbols = new Set(volumeLeaders.slice(0, 100).map(v => v.symbol));
     
     // Fill from volume leaders first
     for (const vl of volumeLeaders) {
       if (currentLarge.length >= LARGE_SLOTS && currentSmall.length >= SMALL_SLOTS) break;
       const sym = vl.symbol;
       if (activeUnifiedList.has(sym)) continue;
-      
-      // 유동성 하한선: 거래대금 $10K 미만 제외 (호가 공백 방지)
       if (vl.tradingValue < 10000) continue;
       
       if (LARGE_SET.has(sym) && currentLarge.length < LARGE_SLOTS) {
         activeUnifiedList.add(sym);
         currentLarge.push(sym);
-      } else if (SMALL_SET.has(sym) && currentSmall.length < SMALL_SLOTS) {
+      } else if ((SMALL_SET.has(sym) || !LARGE_SET.has(sym)) && currentSmall.length < SMALL_SLOTS) {
         activeUnifiedList.add(sym);
         currentSmall.push(sym);
       }
     }
 
-    // Fill remaining slots with rotation (기존 로직 유지)
+    // ★ 전 종목 확장: 동적 발견 종목에서도 슬롯 충전
+    const dynSymbols = discoveredSymbols.length > 0 ? discoveredSymbols : [];
+    const dynStart = (cycleCount * 50) % Math.max(1, dynSymbols.length);
+    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(50, dynSymbols.length); i++) {
+      const sym = dynSymbols[(dynStart + i) % dynSymbols.length];
+      if (!activeUnifiedList.has(sym)) {
+        activeUnifiedList.add(sym);
+        currentSmall.push(sym);
+      }
+    }
+
+    // Fill remaining slots with rotation (기존 풀)
     const largeArr = Array.from(LARGE_SET);
     const largeStart = (cycleCount * LARGE_SLOTS) % largeArr.length;
     for (let i = 0; currentLarge.length < LARGE_SLOTS && i < largeArr.length; i++) {
@@ -819,7 +878,7 @@ Deno.serve(async (req) => {
     // --- Market Trend Guard (비활성화: 시장잠금 OFF) ---
     let marketBearish = false;
     let marketBuyHalt = false;
-    let baseEntryThreshold = 55; // ★ 초공격형: 진입 문턱 55점
+    let baseEntryThreshold = 65; // ★ 필승형: 진입 문턱 65점 (확실한 대시세 초입만 진입)
     let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
@@ -829,10 +888,10 @@ Deno.serve(async (req) => {
       const spyChange = spyQuote?.dp || 0;
       const qqqChange = qqqQuote?.dp || 0;
 
-      // ★ QQQ 모멘텀 보너스: QQQ 상승 시 진입 점수에 보너스 부여
+      // ★ QQQ 모멘텀 보너스: QQQ 강세 시만 소폭 완화
       qqqTrendDown = qqqChange < -0.5;
-      const qqqBonus = qqqChange >= 1.0 ? 3 : qqqChange >= 0.3 ? 1 : 0;
-      if (qqqBonus > 0) baseEntryThreshold = Math.max(52, baseEntryThreshold - qqqBonus);
+      const qqqBonus = qqqChange >= 1.5 ? 3 : qqqChange >= 0.5 ? 1 : 0;
+      if (qqqBonus > 0) baseEntryThreshold = Math.max(62, baseEntryThreshold - qqqBonus);
       await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → QQQ보너스 -${qqqBonus}점, 진입기준 ${baseEntryThreshold}점`, { spyChange, qqqChange, qqqBonus });
     } catch { /* fallback */ }
 
@@ -847,14 +906,14 @@ Deno.serve(async (req) => {
     const recentTotal = (recentTrades || []).length;
     const recentWinRate = recentTotal > 0 ? (recentWins / recentTotal) * 100 : 50;
 
-    // Win-rate adjustment (초공격형: 극단적 저승률에서만 소폭 상향)
-    if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 60);
-    else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 57);
+    // Win-rate adjustment: 극단적 저승률에서만 소폭 상향
+    if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 70);
+    else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 67);
 
-    // Session adaptation — ★ 초공격형: 최소 55점 강제 하한선
+    // Session adaptation — ★ 필승형: 최소 65점 강제 하한선 (장외에서도 65점 이하 진입 금지)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 55); // 절대 하한 55점
-    const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0; // ★ RVOL 완화: 장외 1.5, 정규 2.0
+    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // 절대 하한 65점
+    const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
 
@@ -950,9 +1009,31 @@ Deno.serve(async (req) => {
           await addLog('unified', 'defense', sym, `[승률100%설계] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (매수가+0.2%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
-        // 1. 익절 로직 — ★ 전 종목 TP +15% 통일, 70점 이상 시 트레일링으로 20%+ 추격
-        if (pnlPct >= 15.0) {
-          // ★ 15% 도달: 지표 70점 이상이면 고점-1% 트레일링으로 20%+ 추격
+        // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
+        if (pnlPct >= 30.0) {
+          // ★ 30%+ 대시세: 지표 65점 이상이면 고점-2% 트레일링으로 50%까지 추격
+          if (quantScore >= 65) {
+            const drop = ((peakPrice - price) / peakPrice) * 100;
+            if (drop >= 2.0) {
+              shouldClose = true;
+              closeReason = `[🏆30%+대시세익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% (지표 ${quantScore}점) → 대시세 수익 확정`;
+              newStatus = 'mega_profit';
+            } else {
+              await addLog('unified', 'hold', sym, `[🚀50%추격] ${sym} +${pnlPct.toFixed(2)}% 대시세 진행 중! 지표 ${quantScore}점(≥65) → 고점-2% 트레일링으로 50%까지 추격`, { quantScore, pnlPct: +pnlPct.toFixed(2), peakPrice, drop });
+            }
+          } else {
+            // 30%+ 지표 65 미만 → 고점-1.5% 트레일링
+            const drop = ((peakPrice - price) / peakPrice) * 100;
+            if (drop >= 1.5) {
+              shouldClose = true;
+              closeReason = `[�    🏆30%트레일링] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% → 대시세 수익 확정`;
+              newStatus = 'mega_profit';
+            } else {
+              await addLog('unified', 'hold', sym, `[🚀30%+추격] ${sym} +${pnlPct.toFixed(2)}% | 고점-${drop.toFixed(2)}% → 트레일링 유지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+            }
+          }
+        } else if (pnlPct >= 15.0) {
+          // ★ 15% 도달: 지표 70점 이상이면 고점-1% 트레일링으로 30%+ 추격
           const indicatorsOver70 = quantScore >= 70;
           if (indicatorsOver70) {
             const drop = ((peakPrice - price) / peakPrice) * 100;
@@ -961,19 +1042,28 @@ Deno.serve(async (req) => {
               closeReason = `[🏆15%+트레일링익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% (지표 ${quantScore}점) → 수익 극대화 확정`;
               newStatus = 'trailing_profit';
             } else {
-              await addLog('unified', 'hold', sym, `[🎯15%돌파→20%추격] ${sym} +${pnlPct.toFixed(2)}% 목표 도달! 지표 ${quantScore}점(≥70) 매우 강력 → 고점-1% 트레일링으로 20%+ 수익 추격 중`, { quantScore, pnlPct: +pnlPct.toFixed(2), peakPrice, drop });
+              await addLog('unified', 'hold', sym, `[🎯15%돌파→30%추격] ${sym} +${pnlPct.toFixed(2)}% 목표 도달! 지표 ${quantScore}점(≥70) → 고점-1% 트레일링으로 30~50% 대시세 추격 중`, { quantScore, pnlPct: +pnlPct.toFixed(2), peakPrice, drop });
+            }
+          } else if (quantScore >= 60) {
+            // 15%+, 지표 60~69 → 고점-1.5% 트레일링
+            const drop = ((peakPrice - price) / peakPrice) * 100;
+            if (drop >= 1.5) {
+              shouldClose = true;
+              closeReason = `[🏆15%트레일링] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% → 수익 확정`;
+              newStatus = 'trailing_profit';
+            } else {
+              await addLog('unified', 'hold', sym, `[🎯15%→30%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥60) → 트레일링 유지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
             }
           } else {
-            // 15% 도달 + 지표 70 미만 → 즉시 전량 익절
+            // 15% 도달 + 지표 60 미만 → 즉시 전량 익절
             shouldClose = true;
-            closeReason = `[🏆15%목표익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 목표 도달 (지표 ${quantScore}점<70) → 전량 수익 확정`;
+            closeReason = `[🏆15%목표익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 목표 도달 (지표 ${quantScore}점<60) → 전량 수익 확정`;
             newStatus = 'profit_taken';
           }
         } else if (pnlPct >= 3.0 && pnlPct < 15.0 && indicatorsOver60) {
-          // ★ 철벽 홀딩: 3~15% 수익 구간에서 지표 60점 이상이면 잔파도(5~8%) 완전 무시, 절대 매도 금지
+          // ★ 철벽 홀딩: 3~15% 수익 구간에서 지표 60점 이상이면 잔파도(5~8%) 완전 무시
           await addLog('unified', 'hold', sym, `[🛡️철벽홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 중 | 지표 ${quantScore}점(≥60) → 15% 목표까지 잔파도 무시! 조기 매도 절대 금지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         } else if (pnlPct >= 1.0 && pnlPct < 15.0 && quantScore >= 55) {
-          // ★ 홀딩 유지: 1~3% 수익 + 지표 55점 이상 → 15% 향해 계속 전진
           await addLog('unified', 'hold', sym, `[🎯15%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥55) → 목표가까지 홀딩 유지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         } else if (pnlPct >= 3.0) {
           const drop = ((peakPrice - price) / peakPrice) * 100;
@@ -983,7 +1073,7 @@ Deno.serve(async (req) => {
             closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 후 고점-${drop.toFixed(2)}% + 지표 약화(${quantScore}점) → 수익 확정`;
             newStatus = 'trailing_profit';
           } else if (drop >= dropThreshold && indicatorsStrong) {
-            await addLog('unified', 'hold', sym, `[Iron Hold] ${sym} +${pnlPct.toFixed(2)}% 고점-${drop.toFixed(2)}% BUT 지표 ${quantScore}점(≥55) 강력 유지 → 15% 목표 추격 중`, { quantScore, drop, isIronHold });
+            await addLog('unified', 'hold', sym, `[Iron Hold] ${sym} +${pnlPct.toFixed(2)}% 고점-${drop.toFixed(2)}% BUT 지표 ${quantScore}점(≥55) → 15% 추격 중`, { quantScore, drop, isIronHold });
           }
         } else if (peakPrice >= pos.price * 1.10) {
           const drop = ((peakPrice - price) / peakPrice) * 100;
@@ -993,13 +1083,12 @@ Deno.serve(async (req) => {
             newStatus = 'trailing_profit';
           }
         } else if (pos.take_profit && price >= pos.take_profit) {
-          // ★ 목표가(+15%) 도달: 지표 70점 이상이면 트레일링, 아니면 익절
           const indicatorsOver70 = quantScore >= 70;
           if (indicatorsOver70) {
-            await addLog('unified', 'hold', sym, `[🎯TP도달→20%추격] ${sym} TP 도달 + 지표 ${quantScore}점(≥70) → 고점-1% 트레일링 전환`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+            await addLog('unified', 'hold', sym, `[🎯TP도달→30%추격] ${sym} TP 도달 + 지표 ${quantScore}점(≥70) → 고점-1% 트레일링 전환, 30~50% 대시세 추격`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           } else if (indicatorsOver60) {
-            await addLog('unified', 'hold', sym, `[🎯TP도달→홀딩] ${sym} TP 도달 + 지표 ${quantScore}점(≥60) → TP 3% 추가 상향`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-            const newTP = +(price * 1.03).toFixed(4);
+            await addLog('unified', 'hold', sym, `[🎯TP도달→홀딩] ${sym} TP 도달 + 지표 ${quantScore}점(≥60) → TP 5% 추가 상향`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+            const newTP = +(price * 1.05).toFixed(4);
             await supabase.from('unified_trades').update({ take_profit: newTP }).eq('id', pos.id);
           } else {
             shouldClose = true;
@@ -1290,15 +1379,26 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sort: session-specific → explosive → volume burst → liquidity → score
-    // ★ 세션별 최적화: 프리/데이 → 소형주 우선, 정규장 → 대형주 우선
+    // ★ Score Surge Detection: 점수 급상승 종목 알림
+    for (const c of candidates) {
+      const surge = detectScoreSurge(c.sym, c.scoring.totalScore);
+      if (surge.isSurge) {
+        (c as any).isScoreSurge = true;
+        await addLog('unified', 'milestone', c.sym, `🚨 [급등 예상 종목 포착] ${c.sym} 점수 급상승! ${surge.prevScore}점 → ${c.scoring.totalScore}점 (+${surge.delta}점) | 60점 이상 돌파 → 즉시 매수 검토 대상`, { prevScore: surge.prevScore, currentScore: c.scoring.totalScore, delta: surge.delta });
+      }
+    }
+
+    // Sort: score surge → super pattern → explosive → volume burst → liquidity → score
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
     candidates.sort((a, b) => {
+      // ★ 점수 급상승 종목 1순위
+      const aSurge = (a as any).isScoreSurge ? 3 : 0;
+      const bSurge = (b as any).isScoreSurge ? 3 : 0;
+      if (aSurge !== bSurge) return bSurge - aSurge;
       // ★ 슈퍼 패턴(15% 타겟) 최우선
       const aSP = (a as any).isSuperPattern ? 2 : 0;
       const bSP = (b as any).isSuperPattern ? 2 : 0;
       if (aSP !== bSP) return bSP - aSP;
-      // Session cap preference bonus
       const aCapBonus = a.capType === sessionCapPreference ? 1 : 0;
       const bCapBonus = b.capType === sessionCapPreference ? 1 : 0;
       if (aCapBonus !== bCapBonus) return bCapBonus - aCapBonus;
@@ -1314,26 +1414,31 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    if (candidates.length > 0) {
-      const summary = candidates.slice(0, 10).map(c => {
+    // ★ 집중 투자: 후보를 상위 5개로 제한 (분산은 소액 자산의 적)
+    const topCandidates = candidates.slice(0, 5);
+
+    if (topCandidates.length > 0) {
+      const summary = topCandidates.map((c, i) => {
         const volRank = (c as any).volumeRank;
         const volTag = volRank <= 20 ? ` Vol#${volRank}` : '';
         const burstTag = (c as any).isVolumeBurst ? '🔥' : '';
-        return `${burstTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
+        const surgeTag = (c as any).isScoreSurge ? '🚨급상승' : '';
+        return `${i+1}.${burstTag}${surgeTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
       }).join(', ');
-      await addLog('unified', 'scan', null, `[10대지표스캔] [${timeStr}] 매수 후보 ${candidates.length}개 (점수순): ${summary}`, {});
+      await addLog('unified', 'scan', null, `[🌐전종목스캔] [${timeStr}] 매수 후보 ${candidates.length}개 중 TOP ${topCandidates.length}개 집중 투자: ${summary}`, {});
     }
 
-    for (const r of candidates) {
+    for (const r of topCandidates) {
       if (openCount >= MAX_POSITIONS) break;
       const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
       const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
       const isSuperEntry = (r as any).isSuperPattern;
+      const isScoreSurge = (r as any).isScoreSurge;
       
-      // ★ 집중 투자: 슈퍼 패턴 종목은 20% 비중, 일반 10%, 피라미딩 5%
-      const positionPct = isPyramiding ? 0.05 : isSuperEntry ? 0.20 : 0.10;
-
-      const maxKRW = balance * positionPct;
+      // ★ 집중 투자: 슈퍼/급상승 = ₩5,000,000 고정, 일반 = 잔고의 20%, 피라미딩 = 5%
+      const CONCENTRATED_KRW = 5000000; // ₩500만원 집중 투입
+      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0 : 0.20; // 0 = fixed amount
+      const maxKRW = positionPct === 0 ? Math.min(CONCENTRATED_KRW, balance * 0.33) : balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
       const costKRW = Math.floor(qty * priceKRW);
@@ -1431,7 +1536,7 @@ Deno.serve(async (req) => {
       total_cycles: (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 통합 엔진 사이클 완료 — 전체 스캔 (대형 ${LARGE_SET.size}개 + 소형 ${SMALL_SET.size}개 풀)`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🌐 전 종목 필승 엔진 사이클 완료 — 스캔 풀: 대형 ${LARGE_SET.size}개 + 소형 ${SMALL_SET.size}개 + 동적 발견 ${discoveredSymbols.length}개 = 총 ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 활성 슬롯: ${SCAN_SYMBOLS.length}개 | 진입기준: ${adaptedEntryThreshold}점`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
