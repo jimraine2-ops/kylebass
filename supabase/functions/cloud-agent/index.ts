@@ -1428,16 +1428,17 @@ Deno.serve(async (req) => {
       await addLog('unified', 'scan', null, `[🌐전종목스캔] [${timeStr}] 매수 후보 ${candidates.length}개 중 TOP ${topCandidates.length}개 집중 투자: ${summary}`, {});
     }
 
-    for (const r of candidates) {
+    for (const r of topCandidates) {
       if (openCount >= MAX_POSITIONS) break;
       const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
       const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
       const isSuperEntry = (r as any).isSuperPattern;
+      const isScoreSurge = (r as any).isScoreSurge;
       
-      // ★ 집중 투자: 슈퍼 패턴 종목은 20% 비중, 일반 10%, 피라미딩 5%
-      const positionPct = isPyramiding ? 0.05 : isSuperEntry ? 0.20 : 0.10;
-
-      const maxKRW = balance * positionPct;
+      // ★ 집중 투자: 슈퍼/급상승 = ₩5,000,000 고정, 일반 = 잔고의 20%, 피라미딩 = 5%
+      const CONCENTRATED_KRW = 5000000; // ₩500만원 집중 투입
+      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0 : 0.20; // 0 = fixed amount
+      const maxKRW = positionPct === 0 ? Math.min(CONCENTRATED_KRW, balance * 0.33) : balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
       const costKRW = Math.floor(qty * priceKRW);
