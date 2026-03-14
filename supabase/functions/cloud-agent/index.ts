@@ -1379,15 +1379,26 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sort: session-specific → explosive → volume burst → liquidity → score
-    // ★ 세션별 최적화: 프리/데이 → 소형주 우선, 정규장 → 대형주 우선
+    // ★ Score Surge Detection: 점수 급상승 종목 알림
+    for (const c of candidates) {
+      const surge = detectScoreSurge(c.sym, c.scoring.totalScore);
+      if (surge.isSurge) {
+        (c as any).isScoreSurge = true;
+        await addLog('unified', 'milestone', c.sym, `🚨 [급등 예상 종목 포착] ${c.sym} 점수 급상승! ${surge.prevScore}점 → ${c.scoring.totalScore}점 (+${surge.delta}점) | 60점 이상 돌파 → 즉시 매수 검토 대상`, { prevScore: surge.prevScore, currentScore: c.scoring.totalScore, delta: surge.delta });
+      }
+    }
+
+    // Sort: score surge → super pattern → explosive → volume burst → liquidity → score
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
     candidates.sort((a, b) => {
+      // ★ 점수 급상승 종목 1순위
+      const aSurge = (a as any).isScoreSurge ? 3 : 0;
+      const bSurge = (b as any).isScoreSurge ? 3 : 0;
+      if (aSurge !== bSurge) return bSurge - aSurge;
       // ★ 슈퍼 패턴(15% 타겟) 최우선
       const aSP = (a as any).isSuperPattern ? 2 : 0;
       const bSP = (b as any).isSuperPattern ? 2 : 0;
       if (aSP !== bSP) return bSP - aSP;
-      // Session cap preference bonus
       const aCapBonus = a.capType === sessionCapPreference ? 1 : 0;
       const bCapBonus = b.capType === sessionCapPreference ? 1 : 0;
       if (aCapBonus !== bCapBonus) return bCapBonus - aCapBonus;
@@ -1403,14 +1414,18 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    if (candidates.length > 0) {
-      const summary = candidates.slice(0, 10).map(c => {
+    // ★ 집중 투자: 후보를 상위 5개로 제한 (분산은 소액 자산의 적)
+    const topCandidates = candidates.slice(0, 5);
+
+    if (topCandidates.length > 0) {
+      const summary = topCandidates.map((c, i) => {
         const volRank = (c as any).volumeRank;
         const volTag = volRank <= 20 ? ` Vol#${volRank}` : '';
         const burstTag = (c as any).isVolumeBurst ? '🔥' : '';
-        return `${burstTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
+        const surgeTag = (c as any).isScoreSurge ? '🚨급상승' : '';
+        return `${i+1}.${burstTag}${surgeTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
       }).join(', ');
-      await addLog('unified', 'scan', null, `[10대지표스캔] [${timeStr}] 매수 후보 ${candidates.length}개 (점수순): ${summary}`, {});
+      await addLog('unified', 'scan', null, `[🌐전종목스캔] [${timeStr}] 매수 후보 ${candidates.length}개 중 TOP ${topCandidates.length}개 집중 투자: ${summary}`, {});
     }
 
     for (const r of candidates) {
