@@ -1213,6 +1213,10 @@ Deno.serve(async (req) => {
       await new Promise(r => setTimeout(r, 200));
     }
 
+    // ★ openCount/MAX_POSITIONS 선언 (역발상 추매 + 엔트리 스캔 공용)
+    let openCount = (openPos || []).filter(p => p.status === 'open').length;
+    const MAX_POSITIONS = 15;
+
     // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
     if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS) {
       dipBuyCandidates.sort((a, b) => b.scoring.totalScore - a.scoring.totalScore);
@@ -1267,8 +1271,6 @@ Deno.serve(async (req) => {
       await addLog('unified', 'hold', null, `[필승-뇌동방지] 🚫 정규장 개장 직후 15분(09:30~09:45 ET) — 매수 잠금`, {});
     }
 
-    let openCount = (openPos || []).filter(p => p.status === 'open').length;
-    const MAX_POSITIONS = 15;
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
     if (!marketBuyHalt && !isOpeningRush) {
