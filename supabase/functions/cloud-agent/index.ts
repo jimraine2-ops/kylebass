@@ -888,7 +888,7 @@ Deno.serve(async (req) => {
       // ★ QQQ 모멘텀 보너스: QQQ 강세 시만 소폭 완화
       qqqTrendDown = qqqChange < -0.5;
       const qqqBonus = qqqChange >= 1.5 ? 3 : qqqChange >= 0.5 ? 1 : 0;
-      if (qqqBonus > 0) baseEntryThreshold = Math.max(62, baseEntryThreshold - qqqBonus);
+      if (qqqBonus > 0) baseEntryThreshold = Math.max(58, baseEntryThreshold - qqqBonus);
       await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → QQQ보너스 -${qqqBonus}점, 진입기준 ${baseEntryThreshold}점`, { spyChange, qqqChange, qqqBonus });
     } catch { /* fallback */ }
 
