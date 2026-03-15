@@ -907,9 +907,9 @@ Deno.serve(async (req) => {
     if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 70);
     else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 67);
 
-    // Session adaptation — ★ 필승형: 최소 65점 강제 하한선 (장외에서도 65점 이하 진입 금지)
+    // Session adaptation — ★ 고속 캐치업: 최소 60점 강제 하한선 (급등 초입 선점)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // 절대 하한 65점
+    const adaptedEntryThreshold = Math.max(rawAdapted, 60); // 절대 하한 60점
     const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
