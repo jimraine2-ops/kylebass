@@ -1411,8 +1411,8 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 초집중 투자: 후보를 상위 2개로 제한 (100만 원 자본 회전율 극대화)
-    const topCandidates = candidates.slice(0, 2);
+    // ★ 집중 투자: 후보를 상위 5개로 제한 (자본 회전율 극대화)
+    const topCandidates = candidates.slice(0, 5);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
