@@ -1411,8 +1411,8 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 집중 투자: 후보를 상위 5개로 제한 (분산은 소액 자산의 적)
-    const topCandidates = candidates.slice(0, 5);
+    // ★ 초집중 투자: 후보를 상위 2개로 제한 (100만 원 자본 회전율 극대화)
+    const topCandidates = candidates.slice(0, 2);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
