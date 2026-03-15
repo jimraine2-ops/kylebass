@@ -1432,10 +1432,10 @@ Deno.serve(async (req) => {
       const isSuperEntry = (r as any).isSuperPattern;
       const isScoreSurge = (r as any).isScoreSurge;
       
-      // ★ 집중 투자: 슈퍼/급상승 = ₩5,000,000 고정, 일반 = 잔고의 20%, 피라미딩 = 5%
-      const CONCENTRATED_KRW = 5000000; // ₩500만원 집중 투입
-      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0 : 0.20; // 0 = fixed amount
-      const maxKRW = positionPct === 0 ? Math.min(CONCENTRATED_KRW, balance * 0.33) : balance * positionPct;
+      // ★ 초집중 투자: 상위 1-2개에 100만 원 집중 투입 (자본 회전율 극대화)
+      const CONCENTRATED_KRW = 1000000; // ₩100만원 집중 투입
+      const positionPct = isPyramiding ? 0.05 : 0; // 모든 진입에 고정 금액 집중
+      const maxKRW = positionPct === 0 ? Math.min(CONCENTRATED_KRW, balance * 0.50) : balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
       const costKRW = Math.floor(qty * priceKRW);
