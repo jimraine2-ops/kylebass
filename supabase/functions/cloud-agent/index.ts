@@ -1572,8 +1572,8 @@ Deno.serve(async (req) => {
       (c as any).winConditions = wp.conditions;
       (c as any).winReasons = wp.reasons;
 
-      if (wp.probability >= 85) {
-        await addLog('unified', 'scan', c.sym, `[🏆익절확률 ${wp.probability}%] ${c.sym} ${wp.probability >= 90 ? '필승' : '유력'} 구간! [${wp.reasons.join(' + ')}] | ①패턴:${wp.conditions.pattern?'✅':'❌'} ②에너지:${wp.conditions.energy?'✅':'❌'} ③세력:${wp.conditions.bigOrder?'✅':'❌'} ④섹터:${wp.conditions.sector?'✅':'❌'}`, { winProbability: wp.probability, conditions: wp.conditions, reasons: wp.reasons });
+      if (wp.probability >= 88) {
+        await addLog('unified', 'scan', c.sym, `[🏆익절확률 ${wp.probability}%] ${c.sym} ${wp.probability >= 90 ? '필승' : '유력(88%↑)'} 구간! [${wp.reasons.join(' + ')}] | ①패턴:${wp.conditions.pattern?'✅':'❌'} ②에너지:${wp.conditions.energy?'✅':'❌'} ③세력:${wp.conditions.bigOrder?'✅':'❌'} ④섹터:${wp.conditions.sector?'✅':'❌'}`, { winProbability: wp.probability, conditions: wp.conditions, reasons: wp.reasons });
       }
     }
 
