@@ -158,4 +158,5 @@ export const SuperScannerPanel = forwardRef<HTMLDivElement>((_, ref) => {
       </Card>
     </div>
   );
-}
+});
+SuperScannerPanel.displayName = "SuperScannerPanel";
