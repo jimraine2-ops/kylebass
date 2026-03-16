@@ -1074,7 +1074,7 @@ Deno.serve(async (req) => {
 
     // Session adaptation — ★ 고속 캐치업: 최소 60점 강제 하한선 (급등 초입 선점)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // 절대 하한 65점 (고정밀 진입)
+    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // 절대 하한 65점 (고정밀 진입 유지)
     const adaptedRvolMin = entryRelax < 1.0 ? 1.2 : 1.5; // ★ 초고속 순환: RVOL 3x 상대적 급등 → 1.5x로 완화 (평소 대비 300%↑ 외에도 유입)
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
