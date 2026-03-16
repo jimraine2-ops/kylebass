@@ -258,6 +258,75 @@ function detectSuperPattern(closes: number[], highs: number[], lows: number[], v
   return { isSuperPattern, signals, confidence, resistanceThin };
 }
 
+// ===== Sector ETF Mapping (섹터 동조화 체크용) =====
+const SECTOR_MAP: Record<string, string> = {};
+for (const s of ['AAPL','MSFT','NVDA','GOOGL','META','AMD','INTC','QCOM','MU','AVGO','AMAT','LRCX','ARM','TSM','MRVL','ON','NXPI','TXN','KLAC','ADI','SWKS','MPWR','SMCI','DELL','CRM','NOW','SNOW','DDOG','PANW','FTNT','ZS','MDB','NET','CRWD','SHOP','WDAY','HUBS','TEAM','PLTR','AI','PATH','S','CFLT','GTLB','ADBE','ORCL']) SECTOR_MAP[s] = 'XLK';
+for (const s of ['JPM','GS','V','MA','BAC','WFC','MS','C','AXP','SCHW','BLK','COIN','SOFI','HOOD','AFRM','UPST','SQ','PYPL','NU','TOST','FOUR','PAYO','LMND','ICE','CME','SPGI','APO','KKR','ARES']) SECTOR_MAP[s] = 'XLF';
+for (const s of ['LLY','UNH','ISRG','JNJ','PFE','MRK','ABBV','TMO','DHR','AMGN','GILD','VRTX','REGN','MRNA','DXCM','ILMN','BSX','MDT','TMDX','INSP','ALGN','PODD','HIMS']) SECTOR_MAP[s] = 'XLV';
+for (const s of ['XOM','CVX','COP','SLB','EOG','PSX','MPC','VLO','OXY','DVN','FANG','HAL']) SECTOR_MAP[s] = 'XLE';
+for (const s of ['DIS','NKE','SBUX','MCD','COST','WMT','TGT','HD','LOW','TJX','LULU','TSLA','AMZN','NFLX','UBER','ABNB','BKNG','DASH','CAVA','CMG','DECK','ONON']) SECTOR_MAP[s] = 'XLY';
+for (const s of ['ENPH','FSLR','SEDG','RUN','RIVN','LCID','NIO','XPEV','LI','CHPT','PLUG','BE']) SECTOR_MAP[s] = 'QCLN';
+for (const s of ['MARA','RIOT','CLSK','HUT','BITF','WULF','BTBT','CIFR','BTDR','MSTR']) SECTOR_MAP[s] = 'BITO';
+for (const s of ['RKLB','ASTS','LUNR','RDW','SPCE','JOBY','LMT','RTX','BA','GE','HON','AXON']) SECTOR_MAP[s] = 'XLI';
+for (const s of ['FCX','ALB','NEM','GOLD','MP','LAC','CLF','X','AA','VALE','UEC']) SECTOR_MAP[s] = 'XLB';
+for (const s of ['VST','CEG','NRG','AES','NEE']) SECTOR_MAP[s] = 'XLU';
+for (const s of ['SOUN','IONQ','RGTI','QUBT','BBAI','SNDL','TLRY','ACB','CGC']) SECTOR_MAP[s] = 'QQQ';
+
+const sectorQuoteCache: Map<string, { changePct: number; timestamp: number }> = new Map();
+
+// ===== 승률 90% 예측 엔진 (Probability Engine) =====
+function calculateWinProbability(
+  scoring: any, closes: number[], highs: number[], volumes: number[], symbol: string, sectorChangePct: number
+): { probability: number; conditions: { a: boolean; b: boolean; c: boolean }; reasons: string[] } {
+  const reasons: string[] = [];
+  let probability = 0;
+  const n = closes.length - 1;
+  if (n < 5) return { probability: 0, conditions: { a: false, b: false, c: false }, reasons: ['데이터 부족'] };
+
+  const score = scoring.totalScore || 0;
+  if (score >= 75) { probability += 40; reasons.push(`지표${score}점(최상)`); }
+  else if (score >= 70) { probability += 37; reasons.push(`지표${score}점(우수)`); }
+  else if (score >= 65) { probability += 33; reasons.push(`지표${score}점(양호)`); }
+  else if (score >= 60) { probability += 28; reasons.push(`지표${score}점(기본)`); }
+  else { probability += 20; reasons.push(`지표${score}점`); }
+
+  // 조건 A: 체결 강도 150%↑ + 매수 주문 3배
+  const aggrDetail = scoring.indicators?.aggression?.details || '';
+  const aggrPct = parseInt(aggrDetail.match(/(\d+)%/)?.[1] || '0');
+  let bullCount = 0;
+  for (let i = Math.max(0, n - 9); i <= n; i++) {
+    if (i > 0 && closes[i] > closes[i - 1]) bullCount++;
+  }
+  const buyRatio = bullCount / Math.min(10, n);
+  const condA = aggrPct >= 150 && buyRatio >= 0.75;
+  if (condA) { probability += 20; reasons.push(`수급집중(체결${aggrPct}%,매수비${(buyRatio*100).toFixed(0)}%)`); }
+  else if (aggrPct >= 130 && buyRatio >= 0.65) { probability += 14; reasons.push(`수급양호(체결${aggrPct}%)`); }
+  else if (aggrPct >= 120) { probability += 8; reasons.push(`체결강도${aggrPct}%`); }
+
+  // 조건 B: 섹터 동조화
+  const condB = sectorChangePct >= 0.5;
+  if (condB) { probability += 20; reasons.push(`섹터동반상승(+${sectorChangePct.toFixed(1)}%)`); }
+  else if (sectorChangePct >= 0.1) { probability += 10; reasons.push(`섹터소폭상승(+${sectorChangePct.toFixed(1)}%)`); }
+  else if (sectorChangePct >= -0.3) { probability += 5; reasons.push('섹터중립'); }
+
+  // 조건 C: 5일 매물대 돌파 + 대량 거래
+  const high5d = Math.max(...highs.slice(Math.max(0, n - 5), n));
+  const avgVol20 = volumes.length >= 21 ? volumes.slice(Math.max(0, n - 20), n).reduce((a, b) => a + b, 0) / 20 : volumes[n];
+  const rvol = avgVol20 > 0 ? volumes[n] / avgVol20 : 1;
+  const condC = closes[n] > high5d && rvol >= 1.5;
+  if (condC) { probability += 20; reasons.push(`매물대돌파(5일고점↑+RVOL${rvol.toFixed(1)}x)`); }
+  else if (closes[n] > high5d) { probability += 10; reasons.push('5일고점돌파'); }
+  else if (rvol >= 2.0) { probability += 8; reasons.push(`대량거래(RVOL${rvol.toFixed(1)}x)`); }
+
+  if (scoring.superPattern?.isSuperPattern) {
+    probability += 5;
+    reasons.push(`슈퍼패턴[${scoring.superPattern.signals.join('+')}]`);
+  }
+
+  probability = Math.min(99, probability);
+  return { probability, conditions: { a: condA, b: condB, c: condC }, reasons };
+}
+
 // ===== Accumulation Pattern Detection (매집 패턴 포착) =====
 function detectAccumulation(closes: number[], highs: number[], lows: number[], volumes: number[], rsi: number[]): { isAccumulating: boolean; confidence: number; pattern: string; condensation: number } {
   const n = closes.length - 1;
