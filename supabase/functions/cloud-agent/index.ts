@@ -1632,10 +1632,10 @@ Deno.serve(async (req) => {
       const isSuperEntry = (r as any).isSuperPattern;
       const isScoreSurge = (r as any).isScoreSurge;
       
-      // ★ 초집중 투자: 상위 1-2개에 100만 원 집중 투입 (자본 회전율 극대화)
-      const CONCENTRATED_KRW = 1000000; // ₩100만원 집중 투입
-      const positionPct = isPyramiding ? 0.05 : 0; // 모든 진입에 고정 금액 집중
-      const maxKRW = positionPct === 0 ? Math.min(CONCENTRATED_KRW, balance * 0.50) : balance * positionPct;
+      // ★ 올인 전략: 익절 확률 90% 종목 1개에 전액 투입 (또는 잔고의 100%)
+      const CONCENTRATED_KRW = 1000000; // ₩100만원 전액 투입
+      const positionPct = isPyramiding ? 0.05 : 0; // 모든 진입에 전액 집중
+      const maxKRW = positionPct === 0 ? Math.min(CONCENTRATED_KRW, balance) : balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
       const costKRW = Math.floor(qty * priceKRW);
