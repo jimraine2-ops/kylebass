@@ -788,7 +788,10 @@ Deno.serve(async (req) => {
     }).not('id', 'is', null);
 
     const now = new Date();
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    // ★ 한국 시간(KST, UTC+9) 표시
+    const kstStr = now.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+    const kst = new Date(kstStr);
+    const timeStr = `${kst.getHours().toString().padStart(2, '0')}:${kst.getMinutes().toString().padStart(2, '0')}(KST)`;
     const sessionInfo = getMarketSession();
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
