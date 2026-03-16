@@ -1629,7 +1629,7 @@ Deno.serve(async (req) => {
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
       const condensationTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)})` : '';
       const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟 집중투자` : '';
-      const probTag = ` | [AI 승률 예측: ${winProb}%] [${winReasonsStr}]`;
+      const probTag = ` | [예상 익절 확률: ${winProb}%] [${winReasonsStr}]`;
       
       // ★ 엔진 개편: 지표 상세 근거 로그
       const indDetails = Object.entries(r.scoring.indicators)

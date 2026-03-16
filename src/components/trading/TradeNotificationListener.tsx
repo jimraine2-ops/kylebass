@@ -48,23 +48,32 @@ export function TradeNotificationListener() {
           const name = formatStockName(trade.symbol);
           const priceKRW = Math.round((trade.price || 0) * 1350);
           const score = trade.entry_score ?? "N/A";
-          const confidence = trade.ai_confidence ?? "N/A";
+          const confidence = trade.ai_confidence ?? 0;
           const isSuperPattern = (trade.ai_reason || '').includes('15%') || (trade.ai_reason || '').includes('슈퍼');
-          const targetPriceKRW = isSuperPattern ? Math.round((trade.price || 0) * 1.15 * 1350) : null;
+          const is90Prob = confidence >= 90 || (trade.ai_reason || '').includes('익절 확률');
+          const targetPriceKRW = Math.round((trade.price || 0) * 1.15 * 1350);
 
-          const message = isSuperPattern
-            ? `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 🎯15% 목표가: ₩${targetPriceKRW?.toLocaleString("ko-KR")}`
+          const message = is90Prob
+            ? `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 🏆익절확률: ${confidence}% | 🎯목표: ₩${targetPriceKRW.toLocaleString("ko-KR")}`
+            : isSuperPattern
+            ? `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 🎯15% 목표가: ₩${targetPriceKRW.toLocaleString("ko-KR")}`
             : `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 신뢰도: ${confidence}%`;
 
-          const title = isSuperPattern
+          const title = is90Prob
+            ? `🏆 익절확률 ${confidence}% 필승 종목 매수 완료!`
+            : isSuperPattern
             ? `🎯 슈퍼 패턴 매수! 15% 수익 타겟`
             : `🚀 매수 완료`;
 
+          const duration = is90Prob ? 15000 : isSuperPattern ? 12000 : 8000;
+          const borderColor = is90Prob ? '#f59e0b' : isSuperPattern ? 'hsl(var(--warning))' : 'hsl(var(--stock-up))';
+
           toast.success(title, {
             description: message,
-            duration: isSuperPattern ? 12000 : 8000,
+            duration,
             style: {
-              borderLeft: `4px solid hsl(var(--${isSuperPattern ? 'warning' : 'stock-up'}))`,
+              borderLeft: `4px solid ${borderColor}`,
+              ...(is90Prob ? { background: 'linear-gradient(135deg, rgba(245,158,11,0.1), transparent)', boxShadow: '0 0 20px rgba(245,158,11,0.15)' } : {}),
             },
           });
 

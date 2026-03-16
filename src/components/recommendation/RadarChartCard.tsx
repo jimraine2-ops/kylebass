@@ -77,7 +77,7 @@ export function RadarChartCard({ indicators, volume, price, winProbability, winR
       {winProbability && winProbability >= 70 && (
         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${winProbability >= 90 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-primary/10 border-primary/30'}`}>
           <span className={`text-sm font-bold ${winProbability >= 90 ? 'text-amber-500' : 'text-primary'}`}>
-            🏆 AI 승률 {winProbability}%
+            🏆 익절 확률 {winProbability}%
           </span>
           {winReasons && winReasons.length > 0 && (
             <div className="flex flex-wrap gap-1">
