@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchStockQuote, fetchChartData, searchStocks, scanPennyStocks, getUnifiedPortfolio, fetchQuantSignals, fetchCompanyNews, fetchSuperScan } from "@/lib/api";
+import { fetchStockQuote, fetchChartData, searchStocks, scanPennyStocks, getUnifiedPortfolio, fetchQuantSignals, fetchCompanyNews, fetchSuperScan, fetchEarningsWatch } from "@/lib/api";
 
 export function useStockQuotes(symbols: string[], enabled = true) {
   return useQuery({
