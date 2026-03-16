@@ -1384,14 +1384,57 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sort: score surge → super pattern → explosive → volume burst → liquidity → score
+    // ★★★ [승률 90% 예측 엔진] — 3대 필수조건 기반 확률 계산 ★★★
+    const uniqueSectors = new Set<string>();
+    for (const c of candidates) uniqueSectors.add(SECTOR_MAP[c.sym] || 'QQQ');
+    const sectorChangePcts: Map<string, number> = new Map();
+    for (const etf of uniqueSectors) {
+      const cached = sectorQuoteCache.get(etf);
+      if (cached && Date.now() - cached.timestamp < 60000) {
+        sectorChangePcts.set(etf, cached.changePct);
+      } else {
+        try {
+          const q = await finnhubFetch(`/quote?symbol=${etf}`);
+          const cp = q?.dp || 0;
+          sectorQuoteCache.set(etf, { changePct: cp, timestamp: Date.now() });
+          sectorChangePcts.set(etf, cp);
+        } catch { sectorChangePcts.set(etf, 0); }
+      }
+    }
+
+    // Calculate win probability for each candidate
+    for (const c of candidates) {
+      const sectorETF = SECTOR_MAP[c.sym] || 'QQQ';
+      const scp = sectorChangePcts.get(sectorETF) || 0;
+      const cData = (c as any).data;
+      const wp = calculateWinProbability(c.scoring, cData.closes, cData.highs, cData.volumes, c.sym, scp);
+      (c as any).winProbability = wp.probability;
+      (c as any).winConditions = wp.conditions;
+      (c as any).winReasons = wp.reasons;
+
+      if (wp.probability >= 90) {
+        await addLog('unified', 'scan', c.sym, `[🏆AI 승률 ${wp.probability}%] ${c.sym} 확정적 구간! [${wp.reasons.join(' + ')}] | A:${wp.conditions.a?'✅':'❌'} B:${wp.conditions.b?'✅':'❌'} C:${wp.conditions.c?'✅':'❌'}`, { winProbability: wp.probability, conditions: wp.conditions, reasons: wp.reasons });
+      }
+    }
+
+    // ★ 승률 90% 미만 종목 과감히 제외
+    const probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 90);
+    if (candidates.length > 0) {
+      await addLog('unified', 'scan', null, `[승률필터] 후보 ${candidates.length}개 → 승률 90%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외)`, {});
+    }
+
+    // Sort: win probability → score surge → super pattern → explosive → liquidity → score
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
-    candidates.sort((a, b) => {
-      // ★ 점수 급상승 종목 1순위
+    probFilteredCandidates.sort((a, b) => {
+      // ★ 승률 예측 최우선
+      const aWP = (a as any).winProbability || 0;
+      const bWP = (b as any).winProbability || 0;
+      if (Math.abs(aWP - bWP) >= 3) return bWP - aWP;
+      // ★ 점수 급상승 종목
       const aSurge = (a as any).isScoreSurge ? 3 : 0;
       const bSurge = (b as any).isScoreSurge ? 3 : 0;
       if (aSurge !== bSurge) return bSurge - aSurge;
-      // ★ 슈퍼 패턴(15% 타겟) 최우선
+      // ★ 슈퍼 패턴(15% 타겟)
       const aSP = (a as any).isSuperPattern ? 2 : 0;
       const bSP = (b as any).isSuperPattern ? 2 : 0;
       if (aSP !== bSP) return bSP - aSP;
@@ -1410,18 +1453,19 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 집중 투자: 후보를 상위 5개로 제한 (자본 회전율 극대화)
-    const topCandidates = candidates.slice(0, 5);
+    // ★ 집중 투자: 승률 90%↑ 상위 5개로 제한
+    const topCandidates = probFilteredCandidates.slice(0, 5);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
+        const wp = (c as any).winProbability;
         const volRank = (c as any).volumeRank;
         const volTag = volRank <= 20 ? ` Vol#${volRank}` : '';
         const burstTag = (c as any).isVolumeBurst ? '🔥' : '';
         const surgeTag = (c as any).isScoreSurge ? '🚨급상승' : '';
-        return `${i+1}.${burstTag}${surgeTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
+        return `${i+1}.${burstTag}${surgeTag}${c.sym}(${c.scoring.totalScore}점/승률${wp}%/${c.capType}${volTag})`;
       }).join(', ');
-      await addLog('unified', 'scan', null, `[🌐전종목스캔] [${timeStr}] 매수 후보 ${candidates.length}개 중 TOP ${topCandidates.length}개 집중 투자: ${summary}`, {});
+      await addLog('unified', 'scan', null, `[🏆확정적수익] [${timeStr}] 승률 90%↑ TOP ${topCandidates.length}개 집중 투자: ${summary}`, {});
     }
 
     for (const r of topCandidates) {
