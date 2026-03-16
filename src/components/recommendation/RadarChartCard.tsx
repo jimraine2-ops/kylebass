@@ -30,9 +30,11 @@ interface RadarChartCardProps {
   indicators: any;
   volume?: number;
   price?: number;
+  winProbability?: number | null;
+  winReasons?: string[];
 }
 
-export function RadarChartCard({ indicators, volume, price }: RadarChartCardProps) {
+export function RadarChartCard({ indicators, volume, price, winProbability, winReasons }: RadarChartCardProps) {
   const { rate } = useExchangeRate();
   const data = Object.entries(INDICATOR_LABELS).map(([key, label]) => ({
     indicator: label,
