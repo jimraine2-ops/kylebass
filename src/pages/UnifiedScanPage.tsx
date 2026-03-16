@@ -134,10 +134,10 @@ export default function UnifiedScanPage() {
 
       <Card className="border-primary/20">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📊 통합 실시간 스캐너 — ₩10,000 미만 저가주 정밀 타격 | 익절 확률 85%↑ 고정밀 필터</p>
-          <p>✅ 진입: [합산 ≥ 65점] AND [익절확률 ≥ 85%] AND 3중 조건 충족 시 자동 매수 | 🔥급등 예상 패턴 우선 진입</p>
-          <p>🎯 선제적 요격: 데이/프리마켓 잠입매집 + 과거급등패턴 매칭 → 정규장 폭발 선취매 | QQQ 섹터 동조 실시간 반영</p>
-          <p>🏷️ 상위 3종목 집중 투입(₩100만) | +1% 본절 보호 → +8% 확정 익절 → +15% 트레일링 → 30~50% 대시세 추격</p>
+          <p className="font-medium text-foreground">📊 초고속 순환 매매 — ₩10,000 미만 저가주 정밀 타격 | 3~5% 빠른 회전 + 복리 매매</p>
+          <p>✅ 진입: [합산 ≥ 65점] AND [익절확률 ≥ 85%] → 즉시 매수 | 🔥RVOL 3x 상대적 급등주 실시간 포착</p>
+          <p>⚡ 초고속: 3~5% 빠른 익절 → 자금 회수 → 다음 65점 종목 갈아타기 | 지표 70점↑ 시 15% 트레일링 확장</p>
+          <p>💰 복리: 100만 원→130만 원 시 130만 원 전액 재투입 | 일당 ₩500,000 달성 가속</p>
         </CardContent>
       </Card>
 
