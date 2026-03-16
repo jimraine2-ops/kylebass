@@ -1539,9 +1539,14 @@ Deno.serve(async (req) => {
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
 
-          // ★ 선취매 알림 로그 (강화)
+          // ★ 선취매 알림 로그 (강화) — 선제적 요격 완전 구현
           if (isAccumEntry) {
-            await addLog('unified', 'scan', r.sym, `[데이장 선취매] 지표 완벽 확인. 정규장 폭발을 대비해 ${r.sym}을 미리 매수합니다. | 매집패턴: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation });
+            const stealthTag = accumPattern?.stealthBuying ? '🕵️잠입매집 확인' : '';
+            const surgeMatchTag = (accumPattern?.historicalSurgeMatch || 0) >= 50 ? `📈과거급등패턴 ${accumPattern.historicalSurgeMatch}%일치` : '';
+            const sectorETF2 = SECTOR_MAP[r.sym] || 'QQQ';
+            const sectorPct2 = sectorChangePcts?.get(sectorETF2) || 0;
+            const sectorTag = sectorPct2 >= 0.5 ? `🌊섹터동조(${sectorETF2}+${sectorPct2.toFixed(1)}%)` : '';
+            await addLog('unified', 'scan', r.sym, `[🎯선제적 요격-선취매] ${r.sym} 정규장 폭발 대비 선매수 확정! | 매집: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 | ${stealthTag} ${surgeMatchTag} ${sectorTag} | ${r.scoring.totalScore}점(${metCount}/10) | 신뢰도 ${accumPattern?.confidence}%`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation, stealthBuying: accumPattern?.stealthBuying, historicalSurgeMatch: accumPattern?.historicalSurgeMatch });
           }
 
           candidates.push(r);
