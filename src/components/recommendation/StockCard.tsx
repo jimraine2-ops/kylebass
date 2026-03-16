@@ -54,10 +54,23 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
     const scoreStrong = stock.totalScore >= 55;
     const showHoldingStatus = isPriceDown && scoreStrong;
 
+    // ★ 익절 확률 90%+ 황금색 강조 (점수 75+ ≈ 90%+ 확률)
+    const isGoldenCandidate = stock.totalScore >= 75;
+    // ★ ₩10,000 미만 저가주 확인
+    const priceKRW = price * rate;
+    const isLowPriceTarget = priceKRW < 10000 && priceKRW >= 1000;
+    const isGoldenHighlight = isGoldenCandidate && isLowPriceTarget;
+
     return (
       <Card
         ref={ref}
-        className={`cursor-pointer transition-all hover:border-primary/40 ${isSelected ? 'border-primary ring-1 ring-primary/20' : ''}`}
+        className={`cursor-pointer transition-all hover:border-primary/40 ${
+          isSelected ? 'border-primary ring-1 ring-primary/20' : ''
+        } ${
+          isGoldenHighlight 
+            ? 'border-warning/60 ring-2 ring-warning/30 shadow-[0_0_20px_rgba(234,179,8,0.25)] bg-gradient-to-br from-warning/5 to-transparent' 
+            : ''
+        }`}
         onClick={() => onSelect(stock)}
       >
         <CardContent className="p-4">
