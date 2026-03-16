@@ -1136,21 +1136,18 @@ Deno.serve(async (req) => {
           }
           // ★ 일반 홀딩: -9%까지는 정상 변동성, 지표 50+ → 홀딩
           else if (pnlPct < 0 && pnlPct > -10 && indicatorsHold) {
-            await addLog('unified', 'hold', sym, `[변동성 구간: 지표 기반 홀딩 중] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 정상 변동성 | 지표 ${quantScore}점(≥50) → 대시세 대기`, { quantScore, vwapCross, aboveBB, pnlPct: +pnlPct.toFixed(2) });
+            await addLog('unified', 'hold', sym, `[변동성 구간: 지표 기반 홀딩 중] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 정상 변동성 | 지표 ${quantScore}점(≥50) → 30~50% 대시세 대기`, { quantScore, vwapCross, aboveBB, pnlPct: +pnlPct.toFixed(2) });
           }
-          else if (pnlPct < 0 && pnlPct > -10 && quantScore >= 40) {
-            await addLog('unified', 'warning', sym, `[변동성 구간: 주의 관찰] ${sym} -${Math.abs(pnlPct).toFixed(2)}% + 지표 ${quantScore}점(40~49) → 매도 유보`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-          }
-          // ★ 최종 방어선: 지표 40점 미만 → 매도
-          else if (quantScore < 40) {
+          // ★ [확정적 수익] 지표 50점 미만 → 즉시 매도 (승률 90% 모델 기반: 50점 하한선)
+          else if (quantScore < 50) {
             shouldClose = true;
-            closeReason = `[추세완전이탈] [${sessionLabel}] [${timeStr}] [${sym}] ${quantScore}점(<40) + -${Math.abs(pnlPct).toFixed(2)}% → 자산 보호 매도`;
-            newStatus = 'trend_collapse';
+            closeReason = `[확정수익-50점이탈] [${sessionLabel}] [${timeStr}] [${sym}] ${quantScore}점(<50) + ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}% → 승률 모델 기준 매도`;
+            newStatus = pnlPct >= 0 ? 'profit_taken' : 'trend_collapse';
           }
-          // -10% 이하 + 40~44점 + VWAP 이탈 → 매도
-          else if (pnlPct <= -10 && quantScore < 45 && !vwapCross && !emaAligned) {
+          // -10% 이하 + VWAP 이탈 → 매도
+          else if (pnlPct <= -10 && !vwapCross && !emaAligned) {
             shouldClose = true;
-            closeReason = `[복합위험] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% (-10%↓) + ${quantScore}점(<45) + VWAP이탈 → 매도`;
+            closeReason = `[복합위험] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% (-10%↓) + ${quantScore}점 + VWAP이탈 → 매도`;
             newStatus = 'indicator_exit';
           }
           // 40~49점 → 경고만
