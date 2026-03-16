@@ -47,14 +47,13 @@ function getScoreLabel(score: number): string {
 
 function parseWinProbability(aiReason: string | null): number | null {
   if (!aiReason) return null;
-  const match = aiReason.match(/\[AI 승률 예측:\s*(\d+)%\]/);
+  const match = aiReason.match(/\[예상 익절 확률:\s*(\d+)%\]/) || aiReason.match(/\[AI 승률 예측:\s*(\d+)%\]/);
   return match ? parseInt(match[1]) : null;
 }
 
 function parseWinReasons(aiReason: string | null): string[] {
   if (!aiReason) return [];
-  // Extract reasons from format: [reason1+reason2+reason3]
-  const probMatch = aiReason.match(/\[AI 승률 예측:\s*\d+%\]\s*\[([^\]]+)\]/);
+  const probMatch = aiReason.match(/\[예상 익절 확률:\s*\d+%\]\s*\[([^\]]+)\]/) || aiReason.match(/\[AI 승률 예측:\s*\d+%\]\s*\[([^\]]+)\]/);
   if (!probMatch) return [];
   return probMatch[1].split('+').filter(Boolean);
 }
