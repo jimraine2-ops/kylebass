@@ -1520,6 +1520,7 @@ Deno.serve(async (req) => {
           if (metCount < minMet) continue;
           
           // ★ 선취매: 매집 패턴 감지 시 RVOL 요건 완전 해제 (필승 패턴 = 거래량 무관)
+          // ★ 초고속 순환: RVOL 1.5x로 완화 (상대적 거래량 폭증 종목 포착)
           if (!isAccumEntry && rvol < adaptedRvolMin) continue;
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
