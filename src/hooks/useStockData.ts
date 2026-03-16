@@ -107,3 +107,13 @@ export function useSuperScan() {
     retry: 2,
   });
 }
+
+export function useEarningsWatch() {
+  return useQuery({
+    queryKey: ['earnings-watch'],
+    queryFn: () => fetchEarningsWatch(),
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 4 * 60 * 1000,
+    retry: 2,
+  });
+}
