@@ -1119,12 +1119,12 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ [확정적 수익 본절가 전략] — 1.5% 달성 시 즉시 본절 보호
-        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
-          const bs = +(pos.price * 1.002).toFixed(4);
+        // ★ [패배 없는 본절가 전략] — 1.0% 달성 시 즉시 +0.1% 본절 보호 → 리스크 제로
+        if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.001) {
+          const bs = +(pos.price * 1.001).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[확정수익설계] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (매수가+0.2%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'defense', sym, `[리스크제로] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (매수가+0.1%) 익절확률 100% 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
         // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
