@@ -107,6 +107,11 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
                       {stock.capType === 'large' ? '대형' : '소형'}
                     </Badge>
                   )}
+                  {isGoldenHighlight && (
+                    <Badge className="text-[9px] px-1.5 py-0 bg-gradient-to-r from-warning to-amber-400 text-warning-foreground border-0 animate-pulse font-bold">
+                      🏆 90%↑
+                    </Badge>
+                  )}
                 </div>
                 {stock.reason && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">📌 {stock.reason}</p>
