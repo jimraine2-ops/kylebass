@@ -1610,8 +1610,8 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 집중 투자: 승률 90%↑ 상위 5개로 제한
-    const topCandidates = probFilteredCandidates.slice(0, 5);
+    // ★ 올인 전략: 승률 90%↑ 상위 1개에 전액 집중 (3분할까지 허용)
+    const topCandidates = probFilteredCandidates.slice(0, 1);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
