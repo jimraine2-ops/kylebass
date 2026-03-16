@@ -1355,7 +1355,7 @@ Deno.serve(async (req) => {
 
     // ★ openCount/MAX_POSITIONS 선언 (역발상 추매 + 엔트리 스캔 공용)
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
-    const MAX_POSITIONS = 15;
+    const MAX_POSITIONS = 3; // ★ 올인 전략: 최대 3개 포지션 (집중 투자)
 
     // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
     if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS) {
