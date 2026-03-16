@@ -107,6 +107,10 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
   const aiJudgment = getAIHoldingJudgment(score, unrealizedPnlPct);
   const isHoldingRecommended = !isProfit && score !== null && score >= 50;
 
+  // ★ 익절 확률 파싱
+  const winProb = parseWinProbability(pos.ai_reason);
+  const is90ProbEntry = winProb !== null && winProb >= 90;
+
   // ★ 15% 목표가 & 진행률 계산
   const isSuperTarget = (pos.ai_reason || '').includes('15%') || (pos.ai_reason || '').includes('슈퍼');
   const targetPct = isSuperTarget ? 15 : (pos.take_profit && pos.price > 0)
@@ -122,7 +126,8 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         onSelect && 'cursor-pointer hover:border-primary/40',
         isSelected ? 'border-primary ring-1 ring-primary/20' : 'border-border',
         isDanger && 'animate-pulse border-destructive/60 bg-destructive/5',
-        isHoldingRecommended && 'border-stock-up/40 bg-stock-up/5'
+        isHoldingRecommended && 'border-stock-up/40 bg-stock-up/5',
+        is90ProbEntry && !isDanger && 'border-amber-500/60 ring-1 ring-amber-500/20 bg-amber-500/5'
       )}
       onClick={onSelect}
     >
