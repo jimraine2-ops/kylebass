@@ -9,8 +9,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 1000;
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_KRW = 13000; // ★ 3단계 프로세스: ₩13,000 미만 종목만 스캔
-const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $9.63
+const MAX_PRICE_KRW = 10000; // ★ 필승 지시서: ₩10,000 미만 종목만 스캔
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $7.41
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
@@ -1355,7 +1355,7 @@ Deno.serve(async (req) => {
 
     // ★ openCount/MAX_POSITIONS 선언 (역발상 추매 + 엔트리 스캔 공용)
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
-    const MAX_POSITIONS = 15;
+    const MAX_POSITIONS = 3; // ★ 올인 전략: 최대 3개 포지션 (집중 투자)
 
     // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
     if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS) {
@@ -1432,8 +1432,12 @@ Deno.serve(async (req) => {
             const price = data.quote.c;
             const capType = getCapType(price, sym);
             if (capType === 'small' && price < MIN_PRICE_USD) return null;
-            // ★ 3단계 프로세스: ₩13,000 ($9.63) 이상 종목 제외
+            // ★ 필승 지시서: ₩10,000 ($7.41) 이상 종목 제외
             if (price > MAX_PRICE_USD) return null;
+            // ★ 유동성 확보: 거래대금 최소 세션 평균 이상 필터
+            const vlCheck = volumeLeaders.find(vl => vl.symbol === sym);
+            const sessionAvgVal = volumeLeaders.length > 0 ? volumeLeaders.reduce((s, vl) => s + vl.tradingValue, 0) / volumeLeaders.length : 0;
+            if (vlCheck && sessionAvgVal > 0 && vlCheck.tradingValue < sessionAvgVal && !isLowVolumeSession) return null;
             const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
             if (!scoring) return null;
             lastScores.set(sym, scoring.totalScore);
@@ -1610,8 +1614,8 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 집중 투자: 승률 90%↑ 상위 5개로 제한
-    const topCandidates = probFilteredCandidates.slice(0, 5);
+    // ★ 올인 전략: 승률 90%↑ 상위 1개에 전액 집중 (3분할까지 허용)
+    const topCandidates = probFilteredCandidates.slice(0, 1);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
@@ -1632,10 +1636,10 @@ Deno.serve(async (req) => {
       const isSuperEntry = (r as any).isSuperPattern;
       const isScoreSurge = (r as any).isScoreSurge;
       
-      // ★ 초집중 투자: 상위 1-2개에 100만 원 집중 투입 (자본 회전율 극대화)
-      const CONCENTRATED_KRW = 1000000; // ₩100만원 집중 투입
-      const positionPct = isPyramiding ? 0.05 : 0; // 모든 진입에 고정 금액 집중
-      const maxKRW = positionPct === 0 ? Math.min(CONCENTRATED_KRW, balance * 0.50) : balance * positionPct;
+      // ★ 올인 전략: 익절 확률 90% 종목 1개에 전액 투입 (또는 잔고의 100%)
+      const CONCENTRATED_KRW = 1000000; // ₩100만원 전액 투입
+      const positionPct = isPyramiding ? 0.05 : 0; // 모든 진입에 전액 집중
+      const maxKRW = positionPct === 0 ? Math.min(CONCENTRATED_KRW, balance) : balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
       const costKRW = Math.floor(qty * priceKRW);
@@ -1736,7 +1740,7 @@ Deno.serve(async (req) => {
       total_cycles: (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 3단계 익절확률90% 자동매매 엔진 완료 — ₩13K이하 저가주 전수조사 | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 1단계(데이장):선취매 2단계(프리마켓):검증 3단계(정규장):가속익절`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 ₩10K미만 필승 자동매매 엔진 완료 — 올인 전략(1종목 전액투입) | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 익절확률90%↑ 정밀타격 | 본절방어:+1%→SL+0.1%`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
