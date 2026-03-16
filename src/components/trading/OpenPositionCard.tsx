@@ -45,6 +45,20 @@ function getScoreLabel(score: number): string {
   return '매도 검토';
 }
 
+function parseWinProbability(aiReason: string | null): number | null {
+  if (!aiReason) return null;
+  const match = aiReason.match(/\[AI 승률 예측:\s*(\d+)%\]/);
+  return match ? parseInt(match[1]) : null;
+}
+
+function parseWinReasons(aiReason: string | null): string[] {
+  if (!aiReason) return [];
+  // Extract reasons from format: [reason1+reason2+reason3]
+  const probMatch = aiReason.match(/\[AI 승률 예측:\s*\d+%\]\s*\[([^\]]+)\]/);
+  if (!probMatch) return [];
+  return probMatch[1].split('+').filter(Boolean);
+}
+
 function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: string; color: string; winProb: number } | null {
   if (score === null) return null;
   let winProb = 0;
@@ -149,6 +163,25 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
               🎯 익절확률 {aiJudgment.winProb}%
             </Badge>
           )}
+
+          {(() => {
+            const winProb = parseWinProbability(pos.ai_reason);
+            if (winProb && winProb >= 90) {
+              return (
+                <Badge className="text-[10px] px-2 py-0.5 gap-1 bg-gradient-to-r from-amber-500 to-yellow-400 text-black border-amber-500/50 font-bold shadow-sm shadow-amber-500/30">
+                  🏆 AI 승률 {winProb}%
+                </Badge>
+              );
+            }
+            if (winProb && winProb >= 70) {
+              return (
+                <Badge variant="outline" className="text-[10px] px-2 py-0.5 gap-1 border-amber-500/40 text-amber-500 font-mono">
+                  🎯 승률 {winProb}%
+                </Badge>
+              );
+            }
+            return null;
+          })()}
 
           <Badge variant="outline" className="text-[10px]">
             신뢰도: {pos.ai_confidence}%

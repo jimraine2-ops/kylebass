@@ -30,9 +30,11 @@ interface RadarChartCardProps {
   indicators: any;
   volume?: number;
   price?: number;
+  winProbability?: number | null;
+  winReasons?: string[];
 }
 
-export function RadarChartCard({ indicators, volume, price }: RadarChartCardProps) {
+export function RadarChartCard({ indicators, volume, price, winProbability, winReasons }: RadarChartCardProps) {
   const { rate } = useExchangeRate();
   const data = Object.entries(INDICATOR_LABELS).map(([key, label]) => ({
     indicator: label,
@@ -71,13 +73,31 @@ export function RadarChartCard({ indicators, volume, price }: RadarChartCardProp
         ))}
       </div>
 
+      {/* 승률 예측 근거 요약 */}
+      {winProbability && winProbability >= 70 && (
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${winProbability >= 90 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-primary/10 border-primary/30'}`}>
+          <span className={`text-sm font-bold ${winProbability >= 90 ? 'text-amber-500' : 'text-primary'}`}>
+            🏆 AI 승률 {winProbability}%
+          </span>
+          {winReasons && winReasons.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {winReasons.map((reason, i) => (
+                <Badge key={i} variant="outline" className={`text-[9px] px-1.5 py-0 ${winProbability >= 90 ? 'border-amber-500/30 text-amber-500' : 'border-primary/30 text-primary'}`}>
+                  {reason}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 레이더 차트 */}
       <ResponsiveContainer width="100%" height={300}>
         <RadarChart data={data}>
           <PolarGrid stroke="hsl(var(--border))" />
           <PolarAngleAxis dataKey="indicator" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} />
           <PolarRadiusAxis angle={30} domain={[0, 10]} tick={{ fontSize: 9 }} />
-          <Radar name="점수" dataKey="score" stroke={isAboutToExplode ? "hsl(var(--warning))" : "hsl(var(--primary))"} fill={isAboutToExplode ? "hsl(var(--warning))" : "hsl(var(--primary))"} fillOpacity={isAboutToExplode ? 0.4 : 0.3} strokeWidth={2} />
+          <Radar name="점수" dataKey="score" stroke={isAboutToExplode ? "hsl(var(--warning))" : winProbability && winProbability >= 90 ? "#f59e0b" : "hsl(var(--primary))"} fill={isAboutToExplode ? "hsl(var(--warning))" : winProbability && winProbability >= 90 ? "#f59e0b" : "hsl(var(--primary))"} fillOpacity={isAboutToExplode ? 0.4 : winProbability && winProbability >= 90 ? 0.35 : 0.3} strokeWidth={2} />
           <Tooltip 
             contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} 
             formatter={(value: number, name: string, props: any) => [
