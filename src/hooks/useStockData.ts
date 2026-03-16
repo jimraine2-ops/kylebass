@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchStockQuote, fetchChartData, searchStocks, scanPennyStocks, getUnifiedPortfolio, fetchQuantSignals, fetchCompanyNews, fetchSuperScan } from "@/lib/api";
+import { fetchStockQuote, fetchChartData, searchStocks, scanPennyStocks, getUnifiedPortfolio, fetchQuantSignals, fetchCompanyNews, fetchSuperScan, fetchEarningsWatch } from "@/lib/api";
 
 export function useStockQuotes(symbols: string[], enabled = true) {
   return useQuery({
@@ -104,6 +104,16 @@ export function useSuperScan() {
     queryFn: () => fetchSuperScan(),
     refetchInterval: 60000,
     staleTime: 50000,
+    retry: 2,
+  });
+}
+
+export function useEarningsWatch() {
+  return useQuery({
+    queryKey: ['earnings-watch'],
+    queryFn: () => fetchEarningsWatch(),
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 4 * 60 * 1000,
     retry: 2,
   });
 }

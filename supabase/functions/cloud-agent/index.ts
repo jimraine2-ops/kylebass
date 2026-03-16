@@ -1040,7 +1040,7 @@ Deno.serve(async (req) => {
     // --- Market Trend Guard (비활성화: 시장잠금 OFF) ---
     let marketBearish = false;
     let marketBuyHalt = false;
-    let baseEntryThreshold = 60; // ★ 고속 캐치업: 진입 문턱 60점 (급등 초입 선점)
+    let baseEntryThreshold = 65; // ★ 고정밀 진입: 진입 문턱 65점 (확실한 추세 형성 시에만 진입)
     let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
@@ -1074,7 +1074,7 @@ Deno.serve(async (req) => {
 
     // Session adaptation — ★ 고속 캐치업: 최소 60점 강제 하한선 (급등 초입 선점)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 60); // 절대 하한 60점
+    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // 절대 하한 65점 (고정밀 진입)
     const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
@@ -1623,14 +1623,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 익절 확률 필터: 90% 우선, 후보 없으면 88%로 완화 (88% Hard Floor)
+    // ★ 익절 확률 필터: 90% 우선, 후보 없으면 85%로 완화 (85% Hard Floor — 고정밀 진입)
     let probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 90);
-    const probThreshold = probFilteredCandidates.length > 0 ? 90 : 88;
+    const probThreshold = probFilteredCandidates.length > 0 ? 90 : 85;
     if (probFilteredCandidates.length === 0) {
-      probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 88);
+      probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 85);
     }
     if (candidates.length > 0) {
-      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 ${probThreshold}%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외) | ★88% Hard Floor 적용`, {});
+      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 ${probThreshold}%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외) | ★85% Hard Floor 적용 (고정밀 진입)`, {});
     }
 
     // Sort: win probability → score surge → super pattern → explosive → liquidity → score
