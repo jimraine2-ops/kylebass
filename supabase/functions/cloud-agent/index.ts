@@ -825,10 +825,12 @@ Deno.serve(async (req) => {
     }).not('id', 'is', null);
 
     const now = new Date();
-    // ★ 한국 시간(KST, UTC+9) 표시
-    const kstStr = now.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-    const kst = new Date(kstStr);
-    const timeStr = `${kst.getHours().toString().padStart(2, '0')}:${kst.getMinutes().toString().padStart(2, '0')}(KST)`;
+    // ★ 한국 시간(KST, UTC+9) 표시 — Deno 환경에서 toLocaleString 파싱 불안정 → 수동 계산
+    const kstOffset = 9 * 60 * 60 * 1000; // UTC+9
+    const kstTime = new Date(now.getTime() + kstOffset);
+    const kstH = kstTime.getUTCHours().toString().padStart(2, '0');
+    const kstM = kstTime.getUTCMinutes().toString().padStart(2, '0');
+    const timeStr = `${kstH}:${kstM}(KST)`;
     const sessionInfo = getMarketSession();
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
