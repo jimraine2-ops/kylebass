@@ -835,7 +835,7 @@ Deno.serve(async (req) => {
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
     const entryRelax = sessionInfo.entryRelax;
-    const sessionRvolMin = 2.0;
+    const sessionRvolMin = 1.5; // ★ 초고속 순환: 상대적 거래량 300%↑ (2.0→1.5 완화)
 
     // ★ 전 종목 동적 발견: Finnhub에서 미국 상장 전 종목 심볼 갱신
     try {
