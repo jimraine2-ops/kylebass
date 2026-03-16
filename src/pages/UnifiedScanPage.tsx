@@ -81,6 +81,7 @@ export default function UnifiedScanPage() {
 
   const hotStocks = allStocks.filter((s: any) => (s.changePct || s.regularMarketChangePercent || 0) >= 10);
   const surgingStocks = allStocks.filter((s: any) => (s.changePct || s.regularMarketChangePercent || 0) >= 5);
+  const pendingStocks = allStocks.filter((s: any) => (s.totalScore || 0) >= 60 && (s.totalScore || 0) < 65);
 
   return (
     <div className="space-y-4">
