@@ -381,10 +381,10 @@ function calculateWinProbability(
   };
 }
 
-// ===== Accumulation Pattern Detection (매집 패턴 포착) =====
-function detectAccumulation(closes: number[], highs: number[], lows: number[], volumes: number[], rsi: number[]): { isAccumulating: boolean; confidence: number; pattern: string; condensation: number } {
+// ===== Accumulation Pattern Detection (매집 패턴 포착) — ★ 선제적 요격 강화 =====
+function detectAccumulation(closes: number[], highs: number[], lows: number[], volumes: number[], rsi: number[]): { isAccumulating: boolean; confidence: number; pattern: string; condensation: number; stealthBuying: boolean; historicalSurgeMatch: number } {
   const n = closes.length - 1;
-  if (n < 10) return { isAccumulating: false, confidence: 0, pattern: 'insufficient_data', condensation: 0 };
+  if (n < 10) return { isAccumulating: false, confidence: 0, pattern: 'insufficient_data', condensation: 0, stealthBuying: false, historicalSurgeMatch: 0 };
 
   // 1. 박스권 횡보 체크: 최근 10봉의 고가-저가 범위가 좁으면 박스권
   const recentHighs = highs.slice(-10);
@@ -416,17 +416,53 @@ function detectAccumulation(closes: number[], highs: number[], lows: number[], v
   const priceStable = n >= 5 && Math.abs(closes[n] - closes[n - 5]) / closes[n - 5] * 100 < 2;
   const emaRising = ema5[n] > ema5[n - 1] && ema10[n] > ema10[n - 1];
 
-  const signals = [isBoxPattern, rsiRising, emaConverging, volContracting, priceStable && emaRising].filter(Boolean).length;
-  const confidence = Math.min(100, signals * 20);
-  const isAccumulating = signals >= 2; // 5개 중 2개 이상이면 매집 판정
+  // ★ [선제적 요격] 6. 잠입 매집 (Stealth Buying): 호가창 특정 가격대 유지 + 조용한 양봉
+  // 최근 10봉 중 저가가 일정 수준 이하로 내려가지 않음 (지지선 형성)
+  const supportLevel = Math.min(...lows.slice(-10));
+  const currentLow = lows[n];
+  const supportHolding = currentLow >= supportLevel * 0.99; // 지지선 1% 이내 유지
+  let quietBullCount = 0;
+  for (let i = Math.max(0, n - 9); i <= n; i++) {
+    if (closes[i] > (i > 0 ? closes[i - 1] : closes[i]) && volumes[i] < avgVol20 * 0.7) quietBullCount++;
+  }
+  const stealthBuying = supportHolding && quietBullCount >= 3 && volContracting;
+
+  // ★ [선제적 요격] 7. 과거 급등 패턴 매칭: 현재 패턴이 과거 20%+ 급등 직전과 유사한지
+  // 조건: BB수축 + 거래량감소 + RSI 30~55 상승 → 과거 5~20봉 뒤 20%+ 급등 이력
+  let historicalSurgeMatch = 0;
+  if (n >= 20) {
+    // 과거 20봉 내 20% 이상 급등 구간 존재 여부
+    for (let i = Math.max(0, n - 30); i < n - 5; i++) {
+      const futureMax = Math.max(...closes.slice(i, Math.min(i + 10, n)));
+      const surgeFromBase = ((futureMax - closes[i]) / closes[i]) * 100;
+      if (surgeFromBase >= 20) {
+        // 급등 직전 패턴 확인: BB수축 + 거래량감소 + RSI 저점
+        const preRange = Math.max(0, i - 5);
+        const preRSI = rsi[preRange] || 50;
+        const preVolAvg = volumes.slice(Math.max(0, preRange - 5), preRange + 1).reduce((a, b) => a + b, 0) / 6;
+        const preVolLow = preVolAvg < avgVol20 * 0.8;
+        const preRSILow = preRSI >= 25 && preRSI <= 55;
+        if (preVolLow && preRSILow) historicalSurgeMatch += 25;
+      }
+    }
+    // 현재도 같은 조건이면 매칭 강화
+    if (historicalSurgeMatch > 0 && (isBoxPattern || volContracting) && rsiRising) {
+      historicalSurgeMatch = Math.min(95, historicalSurgeMatch + 30);
+    }
+  }
+
+  const signals = [isBoxPattern, rsiRising, emaConverging, volContracting, priceStable && emaRising, stealthBuying].filter(Boolean).length;
+  const confidence = Math.min(100, signals * 17);
+  const isAccumulating = signals >= 2; // 6개 중 2개 이상이면 매집 판정
 
   // ★ 수급 응축도 점수 (0~10): 레이더 차트 연동용
   let condensation = 0;
-  if (isBoxPattern) condensation += 2.5;
-  if (rsiRising) condensation += 2;
-  if (emaConverging) condensation += 2;
+  if (isBoxPattern) condensation += 2.0;
+  if (rsiRising) condensation += 1.5;
+  if (emaConverging) condensation += 2.0;
   if (volContracting) condensation += 1.5;
-  if (priceStable && emaRising) condensation += 2;
+  if (priceStable && emaRising) condensation += 1.5;
+  if (stealthBuying) condensation += 1.5; // ★ 잠입 매집 보너스
   condensation = Math.min(10, Math.round(condensation * 10) / 10);
 
   let pattern = '';
@@ -434,10 +470,11 @@ function detectAccumulation(closes: number[], highs: number[], lows: number[], v
   if (rsiRising) pattern += 'RSI반등|';
   if (emaConverging) pattern += '이평밀집|';
   if (volContracting) pattern += '거래량감소|';
-  if (priceStable && emaRising) pattern += '에너지응축';
+  if (priceStable && emaRising) pattern += '에너지응축|';
+  if (stealthBuying) pattern += '잠입매집';
   pattern = pattern.replace(/\|$/, '') || 'none';
 
-  return { isAccumulating, confidence, pattern, condensation };
+  return { isAccumulating, confidence, pattern, condensation, stealthBuying, historicalSurgeMatch };
 }
 
 // ===== Unified 10-Indicator Scoring (Weighted: RVOL×1.5, MACD×2, VWAP/Candle×2, 거래대금×1.5) =====
