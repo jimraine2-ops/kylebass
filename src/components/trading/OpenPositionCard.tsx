@@ -47,14 +47,13 @@ function getScoreLabel(score: number): string {
 
 function parseWinProbability(aiReason: string | null): number | null {
   if (!aiReason) return null;
-  const match = aiReason.match(/\[AI 승률 예측:\s*(\d+)%\]/);
+  const match = aiReason.match(/\[예상 익절 확률:\s*(\d+)%\]/) || aiReason.match(/\[AI 승률 예측:\s*(\d+)%\]/);
   return match ? parseInt(match[1]) : null;
 }
 
 function parseWinReasons(aiReason: string | null): string[] {
   if (!aiReason) return [];
-  // Extract reasons from format: [reason1+reason2+reason3]
-  const probMatch = aiReason.match(/\[AI 승률 예측:\s*\d+%\]\s*\[([^\]]+)\]/);
+  const probMatch = aiReason.match(/\[예상 익절 확률:\s*\d+%\]\s*\[([^\]]+)\]/) || aiReason.match(/\[AI 승률 예측:\s*\d+%\]\s*\[([^\]]+)\]/);
   if (!probMatch) return [];
   return probMatch[1].split('+').filter(Boolean);
 }
@@ -108,6 +107,10 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
   const aiJudgment = getAIHoldingJudgment(score, unrealizedPnlPct);
   const isHoldingRecommended = !isProfit && score !== null && score >= 50;
 
+  // ★ 익절 확률 파싱
+  const winProb = parseWinProbability(pos.ai_reason);
+  const is90ProbEntry = winProb !== null && winProb >= 90;
+
   // ★ 15% 목표가 & 진행률 계산
   const isSuperTarget = (pos.ai_reason || '').includes('15%') || (pos.ai_reason || '').includes('슈퍼');
   const targetPct = isSuperTarget ? 15 : (pos.take_profit && pos.price > 0)
@@ -123,7 +126,8 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         onSelect && 'cursor-pointer hover:border-primary/40',
         isSelected ? 'border-primary ring-1 ring-primary/20' : 'border-border',
         isDanger && 'animate-pulse border-destructive/60 bg-destructive/5',
-        isHoldingRecommended && 'border-stock-up/40 bg-stock-up/5'
+        isHoldingRecommended && 'border-stock-up/40 bg-stock-up/5',
+        is90ProbEntry && !isDanger && 'border-amber-500/60 ring-1 ring-amber-500/20 bg-amber-500/5'
       )}
       onClick={onSelect}
     >
@@ -169,14 +173,14 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
             if (winProb && winProb >= 90) {
               return (
                 <Badge className="text-[10px] px-2 py-0.5 gap-1 bg-gradient-to-r from-amber-500 to-yellow-400 text-black border-amber-500/50 font-bold shadow-sm shadow-amber-500/30">
-                  🏆 AI 승률 {winProb}%
+                  🏆 익절확률 {winProb}%
                 </Badge>
               );
             }
             if (winProb && winProb >= 70) {
               return (
                 <Badge variant="outline" className="text-[10px] px-2 py-0.5 gap-1 border-amber-500/40 text-amber-500 font-mono">
-                  🎯 승률 {winProb}%
+                  🎯 익절확률 {winProb}%
                 </Badge>
               );
             }

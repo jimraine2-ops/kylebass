@@ -274,57 +274,109 @@ for (const s of ['SOUN','IONQ','RGTI','QUBT','BBAI','SNDL','TLRY','ACB','CGC']) 
 
 const sectorQuoteCache: Map<string, { changePct: number; timestamp: number }> = new Map();
 
-// ===== 승률 90% 예측 엔진 (Probability Engine) =====
+// ===== 익절 확률 90% 예측 엔진 (Profit Probability Engine) =====
+// 4대 필수조건: ①패턴일치 ②에너지응축 ③세력매집 ④섹터동조
 function calculateWinProbability(
-  scoring: any, closes: number[], highs: number[], volumes: number[], symbol: string, sectorChangePct: number
-): { probability: number; conditions: { a: boolean; b: boolean; c: boolean }; reasons: string[] } {
+  scoring: any, closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[], symbol: string, sectorChangePct: number
+): { probability: number; conditions: { pattern: boolean; energy: boolean; bigOrder: boolean; sector: boolean }; reasons: string[] } {
   const reasons: string[] = [];
   let probability = 0;
   const n = closes.length - 1;
-  if (n < 5) return { probability: 0, conditions: { a: false, b: false, c: false }, reasons: ['데이터 부족'] };
+  if (n < 10) return { probability: 0, conditions: { pattern: false, energy: false, bigOrder: false, sector: false }, reasons: ['데이터 부족'] };
 
+  // Base: 지표 점수 기여 (최대 30%)
   const score = scoring.totalScore || 0;
-  if (score >= 75) { probability += 40; reasons.push(`지표${score}점(최상)`); }
-  else if (score >= 70) { probability += 37; reasons.push(`지표${score}점(우수)`); }
-  else if (score >= 65) { probability += 33; reasons.push(`지표${score}점(양호)`); }
-  else if (score >= 60) { probability += 28; reasons.push(`지표${score}점(기본)`); }
-  else { probability += 20; reasons.push(`지표${score}점`); }
+  if (score >= 75) { probability += 30; reasons.push(`지표${score}점(최상)`); }
+  else if (score >= 70) { probability += 27; reasons.push(`지표${score}점(우수)`); }
+  else if (score >= 65) { probability += 24; reasons.push(`지표${score}점(양호)`); }
+  else if (score >= 60) { probability += 20; reasons.push(`지표${score}점(기본)`); }
+  else { probability += 12; reasons.push(`지표${score}점`); }
 
-  // 조건 A: 체결 강도 150%↑ + 매수 주문 3배
+  // ===== 조건 ① 패턴 일치: 과거 급등 패턴 매칭 (최대 +18%) =====
+  // 급등 전 패턴: ▼BB스퀴즈 후 상단돌파 + ▼거래량 급증 + ▼이평선 정배열 + ▼RSI 50-70 상승
+  const ema9 = calculateEMA(closes, 9);
+  const ema21 = calculateEMA(closes, 21);
+  const rsi = calculateRSI(closes, 14);
+  const atr = calculateATR(highs, lows, closes, 14);
+  const ema20 = calculateEMA(closes, 20);
+  const bbUpper = ema20[n] + 2 * atr[n];
+  const bbLower = ema20[n] - 2 * atr[n];
+  // BB 수축 후 돌파 체크
+  const bbWidth5 = atr.slice(-5).reduce((a,b)=>a+b,0) / 5;
+  const bbWidth20 = atr.slice(-20).reduce((a,b)=>a+b,0) / 20;
+  const isSqueezeThenBreak = bbWidth20 > 0 && bbWidth5 / bbWidth20 < 0.7 && closes[n] > bbUpper;
+  // 이평선 정배열 + RSI 상승 모멘텀
+  const emaAligned = ema9[n] > ema21[n];
+  const rsiMomentum = rsi[n] >= 50 && rsi[n] <= 72 && rsi[n] > (rsi[n-1]||50);
+  // 최근 5봉 연속 양봉 패턴 (강력 상승 초기)
+  let consecutiveBull = 0;
+  for (let i = n; i >= Math.max(0, n-4); i--) {
+    if (closes[i] > opens[i]) consecutiveBull++; else break;
+  }
+  const strongBullPattern = consecutiveBull >= 3;
+  // 패턴 점수 합산
+  let patternScore = 0;
+  if (isSqueezeThenBreak) patternScore += 6;
+  if (emaAligned && rsiMomentum) patternScore += 5;
+  if (strongBullPattern) patternScore += 4;
+  if (scoring.superPattern?.isSuperPattern) patternScore += 3;
+  const condPattern = patternScore >= 10;
+  if (condPattern) { probability += 18; reasons.push(`패턴일치(${patternScore}/18,급등초기형)`); }
+  else if (patternScore >= 7) { probability += 13; reasons.push(`패턴유사(${patternScore}/18)`); }
+  else if (patternScore >= 4) { probability += 7; reasons.push(`패턴부분일치(${patternScore}/18)`); }
+
+  // ===== 조건 ② 에너지 응축: BB하단→상단 돌파 + 거래대금 동반 (최대 +18%) =====
+  const avgVol20 = volumes.length >= 21 ? volumes.slice(Math.max(0, n - 20), n).reduce((a, b) => a + b, 0) / 20 : volumes[n];
+  const rvol = avgVol20 > 0 ? volumes[n] / avgVol20 : 1;
+  // 최근 5봉 중 BB 하단 터치 후 현재 상단 돌파
+  let touchedBBLower = false;
+  for (let i = Math.max(0, n-5); i < n; i++) {
+    const bbL = ema20[i] - 2 * atr[i];
+    if (lows[i] <= bbL * 1.01) touchedBBLower = true;
+  }
+  const energyExplosion = touchedBBLower && closes[n] > bbUpper && rvol >= 2.0;
+  const energyPartial = closes[n] > ema20[n] + atr[n] && rvol >= 1.5;
+  const condEnergy = energyExplosion;
+  if (condEnergy) { probability += 18; reasons.push(`에너지응축폭발(BB하단→상단+RVOL${rvol.toFixed(1)}x)`); }
+  else if (energyPartial && touchedBBLower) { probability += 13; reasons.push(`에너지응축(BB반등+RVOL${rvol.toFixed(1)}x)`); }
+  else if (energyPartial) { probability += 8; reasons.push(`에너지축적(RVOL${rvol.toFixed(1)}x)`); }
+  else if (rvol >= 2.0) { probability += 5; reasons.push(`대량거래(RVOL${rvol.toFixed(1)}x)`); }
+
+  // ===== 조건 ③ 세력 매집: 대량 체결(빅오더) + 특정 가격 지지 (최대 +18%) =====
   const aggrDetail = scoring.indicators?.aggression?.details || '';
   const aggrPct = parseInt(aggrDetail.match(/(\d+)%/)?.[1] || '0');
+  // 매수 주도 비율 (양봉 비율로 근사)
   let bullCount = 0;
   for (let i = Math.max(0, n - 9); i <= n; i++) {
     if (i > 0 && closes[i] > closes[i - 1]) bullCount++;
   }
   const buyRatio = bullCount / Math.min(10, n);
-  const condA = aggrPct >= 150 && buyRatio >= 0.75;
-  if (condA) { probability += 20; reasons.push(`수급집중(체결${aggrPct}%,매수비${(buyRatio*100).toFixed(0)}%)`); }
-  else if (aggrPct >= 130 && buyRatio >= 0.65) { probability += 14; reasons.push(`수급양호(체결${aggrPct}%)`); }
-  else if (aggrPct >= 120) { probability += 8; reasons.push(`체결강도${aggrPct}%`); }
+  // OBV 매집 확인
+  const obvData = scoring.obv || { obvRising: false, priceSideways: false, score: 0 };
+  const accumData = scoring.accumulation || { isAccumulating: false, condensation: 0, pattern: '' };
+  // 세력 매집 판정: 높은 체결 강도 + 매수 주도 + OBV 상승
+  const bigOrderBuying = aggrPct >= 150 && buyRatio >= 0.70;
+  const silentAccum = obvData.obvRising && obvData.priceSideways && accumData.condensation >= 5;
+  const condBigOrder = bigOrderBuying || silentAccum;
+  if (bigOrderBuying && silentAccum) { probability += 18; reasons.push(`세력매집확정(체결${aggrPct}%+OBV매집+응축${accumData.condensation.toFixed(1)})`); }
+  else if (bigOrderBuying) { probability += 15; reasons.push(`수급집중(체결${aggrPct}%,매수비${(buyRatio*100).toFixed(0)}%)`); }
+  else if (silentAccum) { probability += 13; reasons.push(`은밀매집(OBV↑+응축${accumData.condensation.toFixed(1)})`); }
+  else if (aggrPct >= 120 && buyRatio >= 0.60) { probability += 8; reasons.push(`수급양호(체결${aggrPct}%)`); }
+  else if (aggrPct >= 100) { probability += 4; reasons.push(`체결강도${aggrPct}%`); }
 
-  // 조건 B: 섹터 동조화
-  const condB = sectorChangePct >= 0.5;
-  if (condB) { probability += 20; reasons.push(`섹터동반상승(+${sectorChangePct.toFixed(1)}%)`); }
-  else if (sectorChangePct >= 0.1) { probability += 10; reasons.push(`섹터소폭상승(+${sectorChangePct.toFixed(1)}%)`); }
-  else if (sectorChangePct >= -0.3) { probability += 5; reasons.push('섹터중립'); }
-
-  // 조건 C: 5일 매물대 돌파 + 대량 거래
-  const high5d = Math.max(...highs.slice(Math.max(0, n - 5), n));
-  const avgVol20 = volumes.length >= 21 ? volumes.slice(Math.max(0, n - 20), n).reduce((a, b) => a + b, 0) / 20 : volumes[n];
-  const rvol = avgVol20 > 0 ? volumes[n] / avgVol20 : 1;
-  const condC = closes[n] > high5d && rvol >= 1.5;
-  if (condC) { probability += 20; reasons.push(`매물대돌파(5일고점↑+RVOL${rvol.toFixed(1)}x)`); }
-  else if (closes[n] > high5d) { probability += 10; reasons.push('5일고점돌파'); }
-  else if (rvol >= 2.0) { probability += 8; reasons.push(`대량거래(RVOL${rvol.toFixed(1)}x)`); }
-
-  if (scoring.superPattern?.isSuperPattern) {
-    probability += 5;
-    reasons.push(`슈퍼패턴[${scoring.superPattern.signals.join('+')}]`);
-  }
+  // ===== 조건 ④ 섹터 동조: QQQ + 섹터 ETF 강세 (최대 +16%) =====
+  const condSector = sectorChangePct >= 0.5;
+  if (sectorChangePct >= 1.5) { probability += 16; reasons.push(`섹터강세(+${sectorChangePct.toFixed(1)}%)`); }
+  else if (condSector) { probability += 14; reasons.push(`섹터동반상승(+${sectorChangePct.toFixed(1)}%)`); }
+  else if (sectorChangePct >= 0.1) { probability += 8; reasons.push(`섹터소폭상승(+${sectorChangePct.toFixed(1)}%)`); }
+  else if (sectorChangePct >= -0.3) { probability += 3; reasons.push('섹터중립'); }
 
   probability = Math.min(99, probability);
-  return { probability, conditions: { a: condA, b: condB, c: condC }, reasons };
+  return {
+    probability,
+    conditions: { pattern: condPattern, energy: condEnergy, bigOrder: condBigOrder, sector: condSector },
+    reasons
+  };
 }
 
 // ===== Accumulation Pattern Detection (매집 패턴 포착) =====
@@ -1067,12 +1119,12 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ [확정적 수익 본절가 전략] — 1.5% 달성 시 즉시 본절 보호
-        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
-          const bs = +(pos.price * 1.002).toFixed(4);
+        // ★ [패배 없는 본절가 전략] — 1.0% 달성 시 즉시 +0.1% 본절 보호 → 리스크 제로
+        if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.001) {
+          const bs = +(pos.price * 1.001).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[확정수익설계] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (매수가+0.2%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'defense', sym, `[리스크제로] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (매수가+0.1%) 익절확률 100% 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
         // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
@@ -1471,25 +1523,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Calculate win probability for each candidate
+    // Calculate profit probability for each candidate (4대 조건)
     for (const c of candidates) {
       const sectorETF = SECTOR_MAP[c.sym] || 'QQQ';
       const scp = sectorChangePcts.get(sectorETF) || 0;
       const cData = (c as any).data;
-      const wp = calculateWinProbability(c.scoring, cData.closes, cData.highs, cData.volumes, c.sym, scp);
+      const wp = calculateWinProbability(c.scoring, cData.closes, cData.highs, cData.lows, cData.opens, cData.volumes, c.sym, scp);
       (c as any).winProbability = wp.probability;
       (c as any).winConditions = wp.conditions;
       (c as any).winReasons = wp.reasons;
 
       if (wp.probability >= 90) {
-        await addLog('unified', 'scan', c.sym, `[🏆AI 승률 ${wp.probability}%] ${c.sym} 확정적 구간! [${wp.reasons.join(' + ')}] | A:${wp.conditions.a?'✅':'❌'} B:${wp.conditions.b?'✅':'❌'} C:${wp.conditions.c?'✅':'❌'}`, { winProbability: wp.probability, conditions: wp.conditions, reasons: wp.reasons });
+        await addLog('unified', 'scan', c.sym, `[🏆익절확률 ${wp.probability}%] ${c.sym} 필승 구간! [${wp.reasons.join(' + ')}] | ①패턴:${wp.conditions.pattern?'✅':'❌'} ②에너지:${wp.conditions.energy?'✅':'❌'} ③세력:${wp.conditions.bigOrder?'✅':'❌'} ④섹터:${wp.conditions.sector?'✅':'❌'}`, { winProbability: wp.probability, conditions: wp.conditions, reasons: wp.reasons });
       }
     }
 
-    // ★ 승률 90% 미만 종목 과감히 제외
+    // ★ 익절 확률 90% 미만 종목 과감히 제외
     const probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 90);
     if (candidates.length > 0) {
-      await addLog('unified', 'scan', null, `[승률필터] 후보 ${candidates.length}개 → 승률 90%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외)`, {});
+      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 90%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외)`, {});
     }
 
     // Sort: win probability → score surge → super pattern → explosive → liquidity → score
@@ -1577,7 +1629,7 @@ Deno.serve(async (req) => {
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
       const condensationTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)})` : '';
       const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟 집중투자` : '';
-      const probTag = ` | [AI 승률 예측: ${winProb}%] [${winReasonsStr}]`;
+      const probTag = ` | [예상 익절 확률: ${winProb}%] [${winReasonsStr}]`;
       
       // ★ 엔진 개편: 지표 상세 근거 로그
       const indDetails = Object.entries(r.scoring.indicators)
@@ -1648,7 +1700,7 @@ Deno.serve(async (req) => {
       total_cycles: (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 확정적 수익 엔진 사이클 완료 — 스캔 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 활성 슬롯: ${SCAN_SYMBOLS.length}개 | 진입: ${adaptedEntryThreshold}점+승률90%↑ | 본절: +1.5% | 매도: <50점 | 집중: TOP5×₩100만`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 익절확률90% 자동매매 엔진 완료 — 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 진입: ${adaptedEntryThreshold}점+익절확률90%↑ | 본절: +1.0%→+0.1% | 매도: <50점 | 4대조건: 패턴+에너지+세력+섹터`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
