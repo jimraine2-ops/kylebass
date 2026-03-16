@@ -1523,25 +1523,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Calculate win probability for each candidate
+    // Calculate profit probability for each candidate (4대 조건)
     for (const c of candidates) {
       const sectorETF = SECTOR_MAP[c.sym] || 'QQQ';
       const scp = sectorChangePcts.get(sectorETF) || 0;
       const cData = (c as any).data;
-      const wp = calculateWinProbability(c.scoring, cData.closes, cData.highs, cData.volumes, c.sym, scp);
+      const wp = calculateWinProbability(c.scoring, cData.closes, cData.highs, cData.lows, cData.opens, cData.volumes, c.sym, scp);
       (c as any).winProbability = wp.probability;
       (c as any).winConditions = wp.conditions;
       (c as any).winReasons = wp.reasons;
 
       if (wp.probability >= 90) {
-        await addLog('unified', 'scan', c.sym, `[🏆AI 승률 ${wp.probability}%] ${c.sym} 확정적 구간! [${wp.reasons.join(' + ')}] | A:${wp.conditions.a?'✅':'❌'} B:${wp.conditions.b?'✅':'❌'} C:${wp.conditions.c?'✅':'❌'}`, { winProbability: wp.probability, conditions: wp.conditions, reasons: wp.reasons });
+        await addLog('unified', 'scan', c.sym, `[🏆익절확률 ${wp.probability}%] ${c.sym} 필승 구간! [${wp.reasons.join(' + ')}] | ①패턴:${wp.conditions.pattern?'✅':'❌'} ②에너지:${wp.conditions.energy?'✅':'❌'} ③세력:${wp.conditions.bigOrder?'✅':'❌'} ④섹터:${wp.conditions.sector?'✅':'❌'}`, { winProbability: wp.probability, conditions: wp.conditions, reasons: wp.reasons });
       }
     }
 
-    // ★ 승률 90% 미만 종목 과감히 제외
+    // ★ 익절 확률 90% 미만 종목 과감히 제외
     const probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 90);
     if (candidates.length > 0) {
-      await addLog('unified', 'scan', null, `[승률필터] 후보 ${candidates.length}개 → 승률 90%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외)`, {});
+      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 90%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외)`, {});
     }
 
     // Sort: win probability → score surge → super pattern → explosive → liquidity → score
