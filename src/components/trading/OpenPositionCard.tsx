@@ -45,6 +45,20 @@ function getScoreLabel(score: number): string {
   return '매도 검토';
 }
 
+function parseWinProbability(aiReason: string | null): number | null {
+  if (!aiReason) return null;
+  const match = aiReason.match(/\[AI 승률 예측:\s*(\d+)%\]/);
+  return match ? parseInt(match[1]) : null;
+}
+
+function parseWinReasons(aiReason: string | null): string[] {
+  if (!aiReason) return [];
+  // Extract reasons from format: [reason1+reason2+reason3]
+  const probMatch = aiReason.match(/\[AI 승률 예측:\s*\d+%\]\s*\[([^\]]+)\]/);
+  if (!probMatch) return [];
+  return probMatch[1].split('+').filter(Boolean);
+}
+
 function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: string; color: string; winProb: number } | null {
   if (score === null) return null;
   let winProb = 0;
