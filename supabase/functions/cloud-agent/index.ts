@@ -1404,6 +1404,8 @@ Deno.serve(async (req) => {
             const price = data.quote.c;
             const capType = getCapType(price, sym);
             if (capType === 'small' && price < MIN_PRICE_USD) return null;
+            // ★ 3단계 프로세스: ₩13,000 ($9.63) 이상 종목 제외
+            if (price > MAX_PRICE_USD) return null;
             const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
             if (!scoring) return null;
             lastScores.set(sym, scoring.totalScore);
