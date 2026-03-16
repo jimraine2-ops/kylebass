@@ -112,6 +112,11 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
                       🏆 90%↑
                     </Badge>
                   )}
+                  {stock.ai_reason?.includes('선제적요격') || stock.ai_reason?.includes('선취매') ? (
+                    <Badge className="text-[9px] px-1.5 py-0 bg-gradient-to-r from-amber-500 to-yellow-400 text-warning-foreground border-0 font-bold">
+                      🎯 선취매 완료 - 익절확률 {stock.ai_confidence || stock.totalScore}%
+                    </Badge>
+                  ) : null}
                 </div>
                 {stock.reason && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">📌 {stock.reason}</p>

@@ -1789,7 +1789,7 @@ Deno.serve(async (req) => {
       total_cycles: (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 ₩10K미만 필승 자동매매 엔진 완료 — 상위3종목 집중투입 | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 익절확률88%↑ 정밀타격 | 본절방어:+1%→SL+0.1%`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 ₩10K미만 필승 자동매매 엔진 완료 — 선제적요격+88%↑정밀타격 | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 잠입매집+과거급등패턴+섹터동조 분석 | 본절방어:+1%→SL+0.1%`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
