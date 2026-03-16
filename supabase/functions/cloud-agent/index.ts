@@ -1577,14 +1577,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 익절 확률 필터: 90% 우선, 후보 없으면 85%로 완화
+    // ★ 익절 확률 필터: 90% 우선, 후보 없으면 88%로 완화 (88% Hard Floor)
     let probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 90);
-    const probThreshold = probFilteredCandidates.length > 0 ? 90 : 85;
+    const probThreshold = probFilteredCandidates.length > 0 ? 90 : 88;
     if (probFilteredCandidates.length === 0) {
-      probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 85);
+      probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 88);
     }
     if (candidates.length > 0) {
-      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 ${probThreshold}%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외)`, {});
+      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 ${probThreshold}%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외) | ★88% Hard Floor 적용`, {});
     }
 
     // Sort: win probability → score surge → super pattern → explosive → liquidity → score
