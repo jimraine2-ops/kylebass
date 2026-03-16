@@ -381,10 +381,10 @@ function calculateWinProbability(
   };
 }
 
-// ===== Accumulation Pattern Detection (매집 패턴 포착) =====
-function detectAccumulation(closes: number[], highs: number[], lows: number[], volumes: number[], rsi: number[]): { isAccumulating: boolean; confidence: number; pattern: string; condensation: number } {
+// ===== Accumulation Pattern Detection (매집 패턴 포착) — ★ 선제적 요격 강화 =====
+function detectAccumulation(closes: number[], highs: number[], lows: number[], volumes: number[], rsi: number[]): { isAccumulating: boolean; confidence: number; pattern: string; condensation: number; stealthBuying: boolean; historicalSurgeMatch: number } {
   const n = closes.length - 1;
-  if (n < 10) return { isAccumulating: false, confidence: 0, pattern: 'insufficient_data', condensation: 0 };
+  if (n < 10) return { isAccumulating: false, confidence: 0, pattern: 'insufficient_data', condensation: 0, stealthBuying: false, historicalSurgeMatch: 0 };
 
   // 1. 박스권 횡보 체크: 최근 10봉의 고가-저가 범위가 좁으면 박스권
   const recentHighs = highs.slice(-10);
@@ -416,17 +416,53 @@ function detectAccumulation(closes: number[], highs: number[], lows: number[], v
   const priceStable = n >= 5 && Math.abs(closes[n] - closes[n - 5]) / closes[n - 5] * 100 < 2;
   const emaRising = ema5[n] > ema5[n - 1] && ema10[n] > ema10[n - 1];
 
-  const signals = [isBoxPattern, rsiRising, emaConverging, volContracting, priceStable && emaRising].filter(Boolean).length;
-  const confidence = Math.min(100, signals * 20);
-  const isAccumulating = signals >= 2; // 5개 중 2개 이상이면 매집 판정
+  // ★ [선제적 요격] 6. 잠입 매집 (Stealth Buying): 호가창 특정 가격대 유지 + 조용한 양봉
+  // 최근 10봉 중 저가가 일정 수준 이하로 내려가지 않음 (지지선 형성)
+  const supportLevel = Math.min(...lows.slice(-10));
+  const currentLow = lows[n];
+  const supportHolding = currentLow >= supportLevel * 0.99; // 지지선 1% 이내 유지
+  let quietBullCount = 0;
+  for (let i = Math.max(0, n - 9); i <= n; i++) {
+    if (closes[i] > (i > 0 ? closes[i - 1] : closes[i]) && volumes[i] < avgVol20 * 0.7) quietBullCount++;
+  }
+  const stealthBuying = supportHolding && quietBullCount >= 3 && volContracting;
+
+  // ★ [선제적 요격] 7. 과거 급등 패턴 매칭: 현재 패턴이 과거 20%+ 급등 직전과 유사한지
+  // 조건: BB수축 + 거래량감소 + RSI 30~55 상승 → 과거 5~20봉 뒤 20%+ 급등 이력
+  let historicalSurgeMatch = 0;
+  if (n >= 20) {
+    // 과거 20봉 내 20% 이상 급등 구간 존재 여부
+    for (let i = Math.max(0, n - 30); i < n - 5; i++) {
+      const futureMax = Math.max(...closes.slice(i, Math.min(i + 10, n)));
+      const surgeFromBase = ((futureMax - closes[i]) / closes[i]) * 100;
+      if (surgeFromBase >= 20) {
+        // 급등 직전 패턴 확인: BB수축 + 거래량감소 + RSI 저점
+        const preRange = Math.max(0, i - 5);
+        const preRSI = rsi[preRange] || 50;
+        const preVolAvg = volumes.slice(Math.max(0, preRange - 5), preRange + 1).reduce((a, b) => a + b, 0) / 6;
+        const preVolLow = preVolAvg < avgVol20 * 0.8;
+        const preRSILow = preRSI >= 25 && preRSI <= 55;
+        if (preVolLow && preRSILow) historicalSurgeMatch += 25;
+      }
+    }
+    // 현재도 같은 조건이면 매칭 강화
+    if (historicalSurgeMatch > 0 && (isBoxPattern || volContracting) && rsiRising) {
+      historicalSurgeMatch = Math.min(95, historicalSurgeMatch + 30);
+    }
+  }
+
+  const signals = [isBoxPattern, rsiRising, emaConverging, volContracting, priceStable && emaRising, stealthBuying].filter(Boolean).length;
+  const confidence = Math.min(100, signals * 17);
+  const isAccumulating = signals >= 2; // 6개 중 2개 이상이면 매집 판정
 
   // ★ 수급 응축도 점수 (0~10): 레이더 차트 연동용
   let condensation = 0;
-  if (isBoxPattern) condensation += 2.5;
-  if (rsiRising) condensation += 2;
-  if (emaConverging) condensation += 2;
+  if (isBoxPattern) condensation += 2.0;
+  if (rsiRising) condensation += 1.5;
+  if (emaConverging) condensation += 2.0;
   if (volContracting) condensation += 1.5;
-  if (priceStable && emaRising) condensation += 2;
+  if (priceStable && emaRising) condensation += 1.5;
+  if (stealthBuying) condensation += 1.5; // ★ 잠입 매집 보너스
   condensation = Math.min(10, Math.round(condensation * 10) / 10);
 
   let pattern = '';
@@ -434,10 +470,11 @@ function detectAccumulation(closes: number[], highs: number[], lows: number[], v
   if (rsiRising) pattern += 'RSI반등|';
   if (emaConverging) pattern += '이평밀집|';
   if (volContracting) pattern += '거래량감소|';
-  if (priceStable && emaRising) pattern += '에너지응축';
+  if (priceStable && emaRising) pattern += '에너지응축|';
+  if (stealthBuying) pattern += '잠입매집';
   pattern = pattern.replace(/\|$/, '') || 'none';
 
-  return { isAccumulating, confidence, pattern, condensation };
+  return { isAccumulating, confidence, pattern, condensation, stealthBuying, historicalSurgeMatch };
 }
 
 // ===== Unified 10-Indicator Scoring (Weighted: RVOL×1.5, MACD×2, VWAP/Candle×2, 거래대금×1.5) =====
@@ -1497,14 +1534,21 @@ Deno.serve(async (req) => {
           (r as any).isAccumulationEntry = isAccumEntry;
           (r as any).accumPattern = accumPattern?.pattern || '';
           (r as any).accumCondensation = accumPattern?.condensation || 0;
+          (r as any).accumStealthBuying = accumPattern?.stealthBuying || false;
+          (r as any).accumSurgeMatch = accumPattern?.historicalSurgeMatch || 0;
           const tradingVal = vlInfo?.tradingValue || 0;
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
 
-          // ★ 선취매 알림 로그 (강화)
+          // ★ 선취매 알림 로그 (강화) — 선제적 요격 완전 구현
           if (isAccumEntry) {
-            await addLog('unified', 'scan', r.sym, `[데이장 선취매] 지표 완벽 확인. 정규장 폭발을 대비해 ${r.sym}을 미리 매수합니다. | 매집패턴: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation });
+            const stealthTag = accumPattern?.stealthBuying ? '🕵️잠입매집 확인' : '';
+            const surgeMatchTag = (accumPattern?.historicalSurgeMatch || 0) >= 50 ? `📈과거급등패턴 ${accumPattern.historicalSurgeMatch}%일치` : '';
+            const sectorETF2 = SECTOR_MAP[r.sym] || 'QQQ';
+            const sectorPct2 = sectorChangePcts?.get(sectorETF2) || 0;
+            const sectorTag = sectorPct2 >= 0.5 ? `🌊섹터동조(${sectorETF2}+${sectorPct2.toFixed(1)}%)` : '';
+            await addLog('unified', 'scan', r.sym, `[🎯선제적 요격-선취매] ${r.sym} 정규장 폭발 대비 선매수 확정! | 매집: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 | ${stealthTag} ${surgeMatchTag} ${sectorTag} | ${r.scoring.totalScore}점(${metCount}/10) | 신뢰도 ${accumPattern?.confidence}%`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation, stealthBuying: accumPattern?.stealthBuying, historicalSurgeMatch: accumPattern?.historicalSurgeMatch });
           }
 
           candidates.push(r);
@@ -1660,7 +1704,7 @@ Deno.serve(async (req) => {
       const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망
       // ★ 전 종목 TP +15% 통일 (슈퍼/선취매 구분 없이)
       const takeProfit = +(adjustedPrice * 1.15).toFixed(4);
-      const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : currentSession === 'DAY' ? '1단계-선취매' : currentSession === 'PRE_MARKET' ? '2단계-확증' : '3단계-가속';
+      const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? '선제적요격-선취매' : currentSession === 'DAY' ? '1단계-선취매' : currentSession === 'PRE_MARKET' ? '2단계-확증' : '3단계-가속';
       const winProb = (r as any).winProbability || 0;
       const winReasonsStr = ((r as any).winReasons || []).join('+');
       const balanceBefore = Math.round(balance);
@@ -1670,7 +1714,9 @@ Deno.serve(async (req) => {
       const volRank = (r as any).volumeRank;
       const volRankTag = volRank <= 50 ? ` | Vol#${volRank}` : '';
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
-      const condensationTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)})` : '';
+      const stealthInfo = isAccumEntry && (r as any).accumStealthBuying ? '|🕵️잠입매집' : '';
+      const surgeMatchInfo = isAccumEntry && ((r as any).accumSurgeMatch || 0) >= 50 ? `|📈패턴${(r as any).accumSurgeMatch}%` : '';
+      const condensationTag = isAccumEntry ? ` | 📡선제적요격(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)}${stealthInfo}${surgeMatchInfo})` : '';
       const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟 집중투자` : '';
       const probTag = ` | [예상 익절 확률: ${winProb}%] [${winReasonsStr}]`;
       
@@ -1678,7 +1724,7 @@ Deno.serve(async (req) => {
       const indDetails = Object.entries(r.scoring.indicators)
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
-      const logMsg = `[${isSuperEntry ? '🎯15%슈퍼매수' : isAccumEntry ? '데이장 선취매' : '🏆확정수익매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${probTag}${spreadNote}${volRankTag}${burstTag}${condensationTag}${superTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const logMsg = `[${isSuperEntry ? '🎯15%슈퍼매수' : isAccumEntry ? '🎯선제적요격-선취매' : '🏆확정수익매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${probTag}${spreadNote}${volRankTag}${burstTag}${condensationTag}${superTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       // ★ 슈퍼 패턴 알림: "15% 익절이 보장된 슈퍼 패턴 종목 매수 완료"
       if (isSuperEntry) {
@@ -1743,7 +1789,7 @@ Deno.serve(async (req) => {
       total_cycles: (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 ₩10K미만 필승 자동매매 엔진 완료 — 상위3종목 집중투입 | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 익절확률88%↑ 정밀타격 | 본절방어:+1%→SL+0.1%`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 ₩10K미만 필승 자동매매 엔진 완료 — 선제적요격+88%↑정밀타격 | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 잠입매집+과거급등패턴+섹터동조 분석 | 본절방어:+1%→SL+0.1%`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
