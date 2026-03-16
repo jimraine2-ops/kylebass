@@ -9,6 +9,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 1000;
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
+const MAX_PRICE_KRW = 13000; // ★ 3단계 프로세스: ₩13,000 미만 종목만 스캔
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $9.63
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
@@ -1127,6 +1129,26 @@ Deno.serve(async (req) => {
           await addLog('unified', 'defense', sym, `[리스크제로] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (매수가+0.1%) 익절확률 100% 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
+        // ★ [3단계 프로세스] 정규장 +8% 돌파 → 무조건 익절 확정 (본절 보호 강화)
+        if (currentSession === 'REGULAR' && pnlPct >= 8.0 && pos.stop_loss < pos.price * 1.05) {
+          const safeStop = +(pos.price * 1.05).toFixed(4); // 최소 +5% 확보
+          await supabase.from('unified_trades').update({ stop_loss: safeStop }).eq('id', pos.id);
+          pos.stop_loss = safeStop;
+          await addLog('unified', 'defense', sym, `[🏆3단계-정규장익절확정] ${sym} +${pnlPct.toFixed(2)}% (≥8%) → SL=${fmtKRW(safeStop)} (+5%확보) 무조건 익절 확정! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+        }
+
+        // ★ [2단계 프로세스] 프리마켓 검증: 데이장 매수 종목의 점수 <50 → 본절 정리
+        const isDayMarketEntry = (pos.ai_reason || '').includes('선취매') || (pos.ai_reason || '').includes('데이장');
+        if (currentSession === 'PRE_MARKET' && isDayMarketEntry && quantScore < 50 && !shouldClose) {
+          if (pnlPct >= -0.5) {
+            shouldClose = true;
+            closeReason = `[2단계-프리마켓검증실패] [${sessionLabel}] [${timeStr}] ${sym} 데이장 매수 → 프리마켓 지표 ${quantScore}점(<50) 급락 → 본절 부근 정리 (자산 보호)`;
+            newStatus = 'premarket_exit';
+          } else {
+            await addLog('unified', 'warning', sym, `[2단계-프리마켓경고] ${sym} 데이장 매수 → 프리마켓 지표 ${quantScore}점(<50) ⚠️ 정규장 변동성 대비 주시`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          }
+        }
+
         // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
         if (pnlPct >= 30.0) {
           // ★ 30%+ 대시세: 지표 65점 이상이면 고점-2% 트레일링으로 50%까지 추격
@@ -1372,26 +1394,34 @@ Deno.serve(async (req) => {
       .not('status', 'eq', 'open')
       .gte('closed_at', todayStart.toISOString());
     const dailyPnl = (todayClosedTrades || []).reduce((sum, t) => sum + (t.pnl || 0), 0);
-    const DAILY_TARGET_KRW = 300000;
-    const dailyTargetHit = dailyPnl >= DAILY_TARGET_KRW;
-    if (dailyTargetHit) {
-      await addLog('unified', 'milestone', null, `🎉🏆 [일일 목표 달성!] 오늘 실현 수익 ${fmtKRWRaw(dailyPnl)} ≥ ₩300,000 — 목표 초과 달성!`, { dailyPnl });
+    const DAILY_TARGET_MIN_KRW = 300000;
+    const DAILY_TARGET_MAX_KRW = 500000;
+    const dailyTargetHit = dailyPnl >= DAILY_TARGET_MIN_KRW;
+    const dailyTargetMax = dailyPnl >= DAILY_TARGET_MAX_KRW;
+    if (dailyTargetMax) {
+      await addLog('unified', 'milestone', null, `🎉🏆🏆 [일일 최대 목표 달성!] 오늘 실현 수익 ${fmtKRWRaw(dailyPnl)} ≥ ₩500,000 — 신규 매수 중단, 보유 종목 관리만!`, { dailyPnl });
+    } else if (dailyTargetHit) {
+      await addLog('unified', 'milestone', null, `🎉🏆 [일일 목표 달성!] 오늘 실현 수익 ${fmtKRWRaw(dailyPnl)} ≥ ₩300,000 — 추가 매수 신중 모드!`, { dailyPnl });
     } else {
-      await addLog('system', 'info', null, `[일일목표] 오늘 실현 PnL: ${fmtKRWRaw(dailyPnl)} / 목표 ₩300,000 (${(dailyPnl/DAILY_TARGET_KRW*100).toFixed(1)}%)`, { dailyPnl });
+      await addLog('system', 'info', null, `[일일목표] 오늘 실현 PnL: ${fmtKRWRaw(dailyPnl)} / 목표 ₩300,000~500,000 (${(dailyPnl/DAILY_TARGET_MIN_KRW*100).toFixed(1)}%)`, { dailyPnl });
     }
 
     // ========== UNIFIED ENTRY SCAN ==========
     // ★ 필승 로직: 시장 하락 또는 개장 직후 15분 뇌동매매 방지
+    // ★ 3단계: 일일 최대 목표(₩500K) 달성 시 신규 매수 중단
     if (marketBuyHalt) {
       await addLog('unified', 'hold', null, `[필승-시장잠금] 🚫 시장 하락 감지로 전체 매수 잠금 — 기존 포지션 관리만 수행`, { qqqTrendDown, marketBearish });
     }
     if (isOpeningRush) {
       await addLog('unified', 'hold', null, `[필승-뇌동방지] 🚫 정규장 개장 직후 15분(09:30~09:45 ET) — 매수 잠금`, {});
     }
+    if (dailyTargetMax) {
+      await addLog('unified', 'hold', null, `[3단계-목표달성] 🏆 일일 최대 목표 ₩500,000 달성 → 신규 매수 중단`, {});
+    }
 
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
-    if (!marketBuyHalt && !isOpeningRush) {
+    if (!marketBuyHalt && !isOpeningRush && !dailyTargetMax) {
       for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
         const batch = SCAN_SYMBOLS.slice(i, i + 5);
         const results = await Promise.all(batch.map(async (sym) => {
@@ -1402,6 +1432,8 @@ Deno.serve(async (req) => {
             const price = data.quote.c;
             const capType = getCapType(price, sym);
             if (capType === 'small' && price < MIN_PRICE_USD) return null;
+            // ★ 3단계 프로세스: ₩13,000 ($9.63) 이상 종목 제외
+            if (price > MAX_PRICE_USD) return null;
             const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
             if (!scoring) return null;
             lastScores.set(sym, scoring.totalScore);
@@ -1621,7 +1653,7 @@ Deno.serve(async (req) => {
       const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망
       // ★ 전 종목 TP +15% 통일 (슈퍼/선취매 구분 없이)
       const takeProfit = +(adjustedPrice * 1.15).toFixed(4);
-      const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
+      const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : currentSession === 'DAY' ? '1단계-선취매' : currentSession === 'PRE_MARKET' ? '2단계-확증' : '3단계-가속';
       const winProb = (r as any).winProbability || 0;
       const winReasonsStr = ((r as any).winReasons || []).join('+');
       const balanceBefore = Math.round(balance);
@@ -1704,7 +1736,7 @@ Deno.serve(async (req) => {
       total_cycles: (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 익절확률90% 자동매매 엔진 완료 — 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 진입: ${adaptedEntryThreshold}점+익절확률90%↑ | 본절: +1.0%→+0.1% | 매도: <50점 | 4대조건: 패턴+에너지+세력+섹터`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 3단계 익절확률90% 자동매매 엔진 완료 — ₩13K이하 저가주 전수조사 | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 1단계(데이장):선취매 2단계(프리마켓):검증 3단계(정규장):가속익절`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
