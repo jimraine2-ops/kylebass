@@ -1702,7 +1702,7 @@ Deno.serve(async (req) => {
       const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망
       // ★ 전 종목 TP +15% 통일 (슈퍼/선취매 구분 없이)
       const takeProfit = +(adjustedPrice * 1.15).toFixed(4);
-      const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : currentSession === 'DAY' ? '1단계-선취매' : currentSession === 'PRE_MARKET' ? '2단계-확증' : '3단계-가속';
+      const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? '선제적요격-선취매' : currentSession === 'DAY' ? '1단계-선취매' : currentSession === 'PRE_MARKET' ? '2단계-확증' : '3단계-가속';
       const winProb = (r as any).winProbability || 0;
       const winReasonsStr = ((r as any).winReasons || []).join('+');
       const balanceBefore = Math.round(balance);
@@ -1712,7 +1712,9 @@ Deno.serve(async (req) => {
       const volRank = (r as any).volumeRank;
       const volRankTag = volRank <= 50 ? ` | Vol#${volRank}` : '';
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
-      const condensationTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)})` : '';
+      const stealthInfo = isAccumEntry && (r as any).accumStealthBuying ? '|🕵️잠입매집' : '';
+      const surgeMatchInfo = isAccumEntry && ((r as any).accumSurgeMatch || 0) >= 50 ? `|📈패턴${(r as any).accumSurgeMatch}%` : '';
+      const condensationTag = isAccumEntry ? ` | 📡선제적요격(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)}${stealthInfo}${surgeMatchInfo})` : '';
       const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟 집중투자` : '';
       const probTag = ` | [예상 익절 확률: ${winProb}%] [${winReasonsStr}]`;
       
