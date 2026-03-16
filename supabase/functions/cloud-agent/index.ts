@@ -1432,8 +1432,12 @@ Deno.serve(async (req) => {
             const price = data.quote.c;
             const capType = getCapType(price, sym);
             if (capType === 'small' && price < MIN_PRICE_USD) return null;
-            // ★ 3단계 프로세스: ₩13,000 ($9.63) 이상 종목 제외
+            // ★ 필승 지시서: ₩10,000 ($7.41) 이상 종목 제외
             if (price > MAX_PRICE_USD) return null;
+            // ★ 유동성 확보: 거래대금 최소 세션 평균 이상 필터
+            const vlCheck = volumeLeaders.find(vl => vl.symbol === sym);
+            const sessionAvgVal = volumeLeaders.length > 0 ? volumeLeaders.reduce((s, vl) => s + vl.tradingValue, 0) / volumeLeaders.length : 0;
+            if (vlCheck && sessionAvgVal > 0 && vlCheck.tradingValue < sessionAvgVal && !isLowVolumeSession) return null;
             const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
             if (!scoring) return null;
             lastScores.set(sym, scoring.totalScore);
