@@ -1533,15 +1533,19 @@ Deno.serve(async (req) => {
       (c as any).winConditions = wp.conditions;
       (c as any).winReasons = wp.reasons;
 
-      if (wp.probability >= 90) {
-        await addLog('unified', 'scan', c.sym, `[🏆익절확률 ${wp.probability}%] ${c.sym} 필승 구간! [${wp.reasons.join(' + ')}] | ①패턴:${wp.conditions.pattern?'✅':'❌'} ②에너지:${wp.conditions.energy?'✅':'❌'} ③세력:${wp.conditions.bigOrder?'✅':'❌'} ④섹터:${wp.conditions.sector?'✅':'❌'}`, { winProbability: wp.probability, conditions: wp.conditions, reasons: wp.reasons });
+      if (wp.probability >= 85) {
+        await addLog('unified', 'scan', c.sym, `[🏆익절확률 ${wp.probability}%] ${c.sym} ${wp.probability >= 90 ? '필승' : '유력'} 구간! [${wp.reasons.join(' + ')}] | ①패턴:${wp.conditions.pattern?'✅':'❌'} ②에너지:${wp.conditions.energy?'✅':'❌'} ③세력:${wp.conditions.bigOrder?'✅':'❌'} ④섹터:${wp.conditions.sector?'✅':'❌'}`, { winProbability: wp.probability, conditions: wp.conditions, reasons: wp.reasons });
       }
     }
 
-    // ★ 익절 확률 90% 미만 종목 과감히 제외
-    const probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 90);
+    // ★ 익절 확률 필터: 90% 우선, 후보 없으면 85%로 완화
+    let probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 90);
+    const probThreshold = probFilteredCandidates.length > 0 ? 90 : 85;
+    if (probFilteredCandidates.length === 0) {
+      probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 85);
+    }
     if (candidates.length > 0) {
-      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 90%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외)`, {});
+      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 ${probThreshold}%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외)`, {});
     }
 
     // Sort: win probability → score surge → super pattern → explosive → liquidity → score
