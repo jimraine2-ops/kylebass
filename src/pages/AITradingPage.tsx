@@ -1,8 +1,8 @@
-import { Bot } from "lucide-react";
 import { IntegratedKPIDashboard } from "@/components/trading/IntegratedKPIDashboard";
 import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
-import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
+import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
+import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useUnifiedPortfolio } from "@/hooks/useStockData";
