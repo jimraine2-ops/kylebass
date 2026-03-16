@@ -1,20 +1,15 @@
-import { Bot } from "lucide-react";
 import { IntegratedKPIDashboard } from "@/components/trading/IntegratedKPIDashboard";
-import { SessionIndicator } from "@/components/trading/SessionIndicator";
 import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
-import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useUnifiedPortfolio } from "@/hooks/useStockData";
 import { useMemo } from "react";
-import { Badge } from "@/components/ui/badge";
 
 export default function AITradingPage() {
   const { data } = useUnifiedPortfolio();
-  const { rate: fxRate, isLive: fxLive } = useExchangeRate();
+  const { rate: fxRate } = useExchangeRate();
 
-  // Collect all symbols from open positions for WebSocket subscription
   const allSymbols = useMemo(() => {
     const symbols = new Set<string>();
     (data?.openPositions || []).forEach((p: any) => symbols.add(p.symbol));
@@ -24,33 +19,10 @@ export default function AITradingPage() {
   const ws = useWebSocketPrices(allSymbols);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Bot className="w-5 h-5 text-primary" />
-          통합 KPI 대시보드
-        </h2>
-        <div className="flex items-center gap-2 flex-wrap">
-          <LiveSyncIndicator
-            isConnected={ws.isConnected}
-            latencyMs={ws.latencyMs}
-            lastUpdateAt={ws.lastUpdateAt}
-          />
-          <Badge variant="outline" className={`text-[10px] px-2 py-0.5 gap-1 ${fxLive ? 'border-stock-up/30 text-stock-up' : 'border-warning/30 text-warning'}`}>
-            💱 {fxLive ? '실시간' : '고정'} ₩{fxRate.toLocaleString('ko-KR')}/USD
-          </Badge>
-          <SessionIndicator />
-        </div>
-      </div>
-
-      {/* Server Status Banner */}
+    <div className="space-y-3">
       <ServerStatusBanner />
-
-      {/* Agent Log Viewer */}
-      <AgentLogViewer />
-
-      {/* Integrated KPI Dashboard */}
       <IntegratedKPIDashboard wsGetPrice={ws.getPrice} wsConnected={ws.isConnected} fxRate={fxRate} />
+      <AgentLogViewer />
     </div>
   );
 }
