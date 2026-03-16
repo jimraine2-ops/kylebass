@@ -9,8 +9,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 1000;
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_KRW = 13000; // ★ 3단계 프로세스: ₩13,000 미만 종목만 스캔
-const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $9.63
+const MAX_PRICE_KRW = 10000; // ★ 필승 지시서: ₩10,000 미만 종목만 스캔
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $7.41
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
