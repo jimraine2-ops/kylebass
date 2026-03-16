@@ -164,6 +164,25 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
             </Badge>
           )}
 
+          {(() => {
+            const winProb = parseWinProbability(pos.ai_reason);
+            if (winProb && winProb >= 90) {
+              return (
+                <Badge className="text-[10px] px-2 py-0.5 gap-1 bg-gradient-to-r from-amber-500 to-yellow-400 text-black border-amber-500/50 font-bold shadow-sm shadow-amber-500/30">
+                  🏆 AI 승률 {winProb}%
+                </Badge>
+              );
+            }
+            if (winProb && winProb >= 70) {
+              return (
+                <Badge variant="outline" className="text-[10px] px-2 py-0.5 gap-1 border-amber-500/40 text-amber-500 font-mono">
+                  🎯 승률 {winProb}%
+                </Badge>
+              );
+            }
+            return null;
+          })()}
+
           <Badge variant="outline" className="text-[10px]">
             신뢰도: {pos.ai_confidence}%
           </Badge>
