@@ -130,9 +130,9 @@ export default function UnifiedScanPage() {
 
       <Card className="border-primary/20">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📊 통합 실시간 스캐너 — 대형 30 + 소형 50 = 80종목 실시간 모니터링</p>
-          <p>✅ 진입: [합산 ≥ 55점] AND 3중 조건 충족 시 자동 매수 | 🔥급등 예상 패턴 우선 진입</p>
-          <p>🏷️ 대형/소형 자동 태깅 | 전 세션(24h) 거래 활성화 | Cloud Agent 1분 간격 자율 실행</p>
+          <p className="font-medium text-foreground">📊 통합 실시간 스캐너 — ₩10,000 미만 저가주 정밀 타격 | 익절 확률 88%↑ 필승 필터</p>
+          <p>✅ 진입: [합산 ≥ 60점] AND [익절확률 ≥ 88%] AND 3중 조건 충족 시 자동 매수 | 🔥급등 예상 패턴 우선 진입</p>
+          <p>🏷️ 상위 3종목 집중 투입(₩100만) | +1% 본절 보호 → +8% 확정 익절 → +15% 트레일링 → 30~50% 대시세 추격</p>
         </CardContent>
       </Card>
 
