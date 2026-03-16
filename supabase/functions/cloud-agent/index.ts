@@ -1355,7 +1355,7 @@ Deno.serve(async (req) => {
 
     // ★ openCount/MAX_POSITIONS 선언 (역발상 추매 + 엔트리 스캔 공용)
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
-    const MAX_POSITIONS = 3; // ★ 올인 전략: 최대 3개 포지션 (집중 투자)
+    const MAX_POSITIONS = 5; // ★ 집중 전략: 최대 5개 포지션
 
     // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
     if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS) {
@@ -1614,8 +1614,8 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 올인 전략: 승률 90%↑ 상위 1개에 전액 집중 (3분할까지 허용)
-    const topCandidates = probFilteredCandidates.slice(0, 1);
+    // ★ 집중 전략: 승률 90%↑ 상위 3개에 전액 집중 투입
+    const topCandidates = probFilteredCandidates.slice(0, 3);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
