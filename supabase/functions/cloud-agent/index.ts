@@ -1572,19 +1572,19 @@ Deno.serve(async (req) => {
       (c as any).winConditions = wp.conditions;
       (c as any).winReasons = wp.reasons;
 
-      if (wp.probability >= 85) {
-        await addLog('unified', 'scan', c.sym, `[🏆익절확률 ${wp.probability}%] ${c.sym} ${wp.probability >= 90 ? '필승' : '유력'} 구간! [${wp.reasons.join(' + ')}] | ①패턴:${wp.conditions.pattern?'✅':'❌'} ②에너지:${wp.conditions.energy?'✅':'❌'} ③세력:${wp.conditions.bigOrder?'✅':'❌'} ④섹터:${wp.conditions.sector?'✅':'❌'}`, { winProbability: wp.probability, conditions: wp.conditions, reasons: wp.reasons });
+      if (wp.probability >= 88) {
+        await addLog('unified', 'scan', c.sym, `[🏆익절확률 ${wp.probability}%] ${c.sym} ${wp.probability >= 90 ? '필승' : '유력(88%↑)'} 구간! [${wp.reasons.join(' + ')}] | ①패턴:${wp.conditions.pattern?'✅':'❌'} ②에너지:${wp.conditions.energy?'✅':'❌'} ③세력:${wp.conditions.bigOrder?'✅':'❌'} ④섹터:${wp.conditions.sector?'✅':'❌'}`, { winProbability: wp.probability, conditions: wp.conditions, reasons: wp.reasons });
       }
     }
 
-    // ★ 익절 확률 필터: 90% 우선, 후보 없으면 85%로 완화
+    // ★ 익절 확률 필터: 90% 우선, 후보 없으면 88%로 완화 (88% Hard Floor)
     let probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 90);
-    const probThreshold = probFilteredCandidates.length > 0 ? 90 : 85;
+    const probThreshold = probFilteredCandidates.length > 0 ? 90 : 88;
     if (probFilteredCandidates.length === 0) {
-      probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 85);
+      probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 88);
     }
     if (candidates.length > 0) {
-      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 ${probThreshold}%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외)`, {});
+      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 ${probThreshold}%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외) | ★88% Hard Floor 적용`, {});
     }
 
     // Sort: win probability → score surge → super pattern → explosive → liquidity → score
@@ -1743,7 +1743,7 @@ Deno.serve(async (req) => {
       total_cycles: (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 ₩10K미만 필승 자동매매 엔진 완료 — 올인 전략(1종목 전액투입) | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 익절확률90%↑ 정밀타격 | 본절방어:+1%→SL+0.1%`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 ₩10K미만 필승 자동매매 엔진 완료 — 상위3종목 집중투입 | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 익절확률88%↑ 정밀타격 | 본절방어:+1%→SL+0.1%`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
