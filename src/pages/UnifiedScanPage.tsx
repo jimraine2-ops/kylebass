@@ -118,6 +118,9 @@ export default function UnifiedScanPage() {
           <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
             <TrendingUp className="w-3 h-3 mr-1" />+5% 이상: {surgingStocks.length}개
           </Badge>
+          <Badge variant="outline" className="text-[10px] border-warning/40 text-warning">
+            ⏳ 대기(60~64점): {pendingStocks.length}개
+          </Badge>
         </div>
         <div className="flex items-center gap-2">
           {wsConnected && (
