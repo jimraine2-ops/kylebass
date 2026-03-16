@@ -1614,8 +1614,8 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 올인 전략: 승률 90%↑ 상위 1개에 전액 집중 (3분할까지 허용)
-    const topCandidates = probFilteredCandidates.slice(0, 1);
+    // ★ 집중 전략: 승률 90%↑ 상위 3개에 전액 집중 투입
+    const topCandidates = probFilteredCandidates.slice(0, 3);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
