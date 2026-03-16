@@ -1129,6 +1129,26 @@ Deno.serve(async (req) => {
           await addLog('unified', 'defense', sym, `[리스크제로] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (매수가+0.1%) 익절확률 100% 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
+        // ★ [3단계 프로세스] 정규장 +8% 돌파 → 무조건 익절 확정 (본절 보호 강화)
+        if (currentSession === 'REGULAR' && pnlPct >= 8.0 && pos.stop_loss < pos.price * 1.05) {
+          const safeStop = +(pos.price * 1.05).toFixed(4); // 최소 +5% 확보
+          await supabase.from('unified_trades').update({ stop_loss: safeStop }).eq('id', pos.id);
+          pos.stop_loss = safeStop;
+          await addLog('unified', 'defense', sym, `[🏆3단계-정규장익절확정] ${sym} +${pnlPct.toFixed(2)}% (≥8%) → SL=${fmtKRW(safeStop)} (+5%확보) 무조건 익절 확정! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+        }
+
+        // ★ [2단계 프로세스] 프리마켓 검증: 데이장 매수 종목의 점수 <50 → 본절 정리
+        const isDayMarketEntry = (pos.ai_reason || '').includes('선취매') || (pos.ai_reason || '').includes('데이장');
+        if (currentSession === 'PRE_MARKET' && isDayMarketEntry && quantScore < 50 && !shouldClose) {
+          if (pnlPct >= -0.5) {
+            shouldClose = true;
+            closeReason = `[2단계-프리마켓검증실패] [${sessionLabel}] [${timeStr}] ${sym} 데이장 매수 → 프리마켓 지표 ${quantScore}점(<50) 급락 → 본절 부근 정리 (자산 보호)`;
+            newStatus = 'premarket_exit';
+          } else {
+            await addLog('unified', 'warning', sym, `[2단계-프리마켓경고] ${sym} 데이장 매수 → 프리마켓 지표 ${quantScore}점(<50) ⚠️ 정규장 변동성 대비 주시`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          }
+        }
+
         // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
         if (pnlPct >= 30.0) {
           // ★ 30%+ 대시세: 지표 65점 이상이면 고점-2% 트레일링으로 50%까지 추격
