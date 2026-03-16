@@ -26,6 +26,7 @@ const App = () => (
               <Route path="/" element={<Dashboard />} />
               <Route path="/stock/:symbol" element={<StockDetail />} />
               <Route path="/unified-scan" element={<UnifiedScanPage />} />
+              <Route path="/earnings-watch" element={<EarningsWatchPage />} />
               <Route path="/ai-trading" element={<AITradingPage />} />
               {/* Legacy redirects */}
               <Route path="/recommendations" element={<UnifiedScanPage />} />
