@@ -1408,16 +1408,20 @@ Deno.serve(async (req) => {
 
     // ========== UNIFIED ENTRY SCAN ==========
     // ★ 필승 로직: 시장 하락 또는 개장 직후 15분 뇌동매매 방지
+    // ★ 3단계: 일일 최대 목표(₩500K) 달성 시 신규 매수 중단
     if (marketBuyHalt) {
       await addLog('unified', 'hold', null, `[필승-시장잠금] 🚫 시장 하락 감지로 전체 매수 잠금 — 기존 포지션 관리만 수행`, { qqqTrendDown, marketBearish });
     }
     if (isOpeningRush) {
       await addLog('unified', 'hold', null, `[필승-뇌동방지] 🚫 정규장 개장 직후 15분(09:30~09:45 ET) — 매수 잠금`, {});
     }
+    if (dailyTargetMax) {
+      await addLog('unified', 'hold', null, `[3단계-목표달성] 🏆 일일 최대 목표 ₩500,000 달성 → 신규 매수 중단`, {});
+    }
 
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
-    if (!marketBuyHalt && !isOpeningRush) {
+    if (!marketBuyHalt && !isOpeningRush && !dailyTargetMax) {
       for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
         const batch = SCAN_SYMBOLS.slice(i, i + 5);
         const results = await Promise.all(batch.map(async (sym) => {
