@@ -18,9 +18,11 @@ interface OpenPositionCardProps {
 
 function getStrategyTag(aiReason: string | null): { label: string; color: string } {
   if (!aiReason) return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
+  if (aiReason.includes('선취매') || aiReason.includes('필승패턴')) return { label: '🔥선취매', color: 'bg-amber-500/20 text-amber-500 border-amber-500/30' };
+  if (aiReason.includes('스나이퍼')) return { label: '🎯스나이퍼', color: 'bg-stock-up/20 text-stock-up border-stock-up/30' };
+  if (aiReason.includes('수급 돌파')) return { label: '🔫수급돌파', color: 'bg-stock-up/20 text-stock-up border-stock-up/30' };
   if (aiReason.includes('15%') || aiReason.includes('슈퍼')) return { label: '🎯15%', color: 'bg-warning/20 text-warning border-warning/30' };
-  if (aiReason.startsWith('[Quant]')) return { label: 'Quant', color: 'bg-stock-up/20 text-stock-up border-stock-up/30' };
-  if (aiReason.startsWith('[Scalp]')) return { label: 'Scalp', color: 'bg-warning/20 text-warning border-warning/30' };
+  if (aiReason.includes('선제적 요격')) return { label: '🎯선제적요격', color: 'bg-primary/20 text-primary border-primary/30' };
   return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
 }
 
