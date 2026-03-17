@@ -72,9 +72,6 @@ export default function Dashboard() {
 
       {/* Section 1: Unified Portfolio (all open positions) */}
       <UnifiedPortfolio wsGetPrice={ws.getPrice} fxRate={fxRate} />
-
-      {/* Section 2: Super Scanner Top 30 */}
-      <SuperScannerPanel />
     </div>
   );
 }
