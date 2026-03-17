@@ -813,9 +813,9 @@ function getCapType(price: number, symbol: string): 'large' | 'small' {
 async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: string; volume: number; changePct: number; tradingValue: number }[]> {
   const leaders: { symbol: string; volume: number; changePct: number; tradingValue: number }[] = [];
   
-  // ★ 초고속: 샘플 30개로 축소하여 타임아웃 방지 (200→30)
+  // ★ 전 종목 확장: 샘플 100개로 확대 (30→100), 롤링 스캔
   const allKnown = [...Array.from(LARGE_SET), ...Array.from(SMALL_SET)];
-  const sampleSize = 30;
+  const sampleSize = 100;
   const cycleOffset = Math.floor(Math.random() * allKnown.length);
   const sample: string[] = [];
   for (let i = 0; i < Math.min(sampleSize, allKnown.length); i++) {
