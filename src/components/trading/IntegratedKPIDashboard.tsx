@@ -162,11 +162,11 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
           <p className="font-medium text-yellow-400">🏆 10대 지표 필승 패턴 다이렉트 매매 | 100% 익절 목표</p>
-          <p>🎯 패턴 A (수급 폭발): 가격 횡보 + 거래대금 300%↑ + VWAP 상단 → 즉시 매수</p>
-          <p>🎯 패턴 B (변동성 응축): BB 극도 수축 + RSI 50선 강력 상향 돌파 → 즉시 매수</p>
-          <p>🎯 패턴 C (이평선 정렬): 모든 EMA 수렴 후 부채꼴 확산 → 즉시 매수</p>
-          <p>🛡️ 동적 본절가: +0.5% 도달 → SL=매수가+0.1% (패배 없는 게임) | 패턴 유지 시 30~50% 끝까지 추격</p>
-          <p>🚫 익절확률 90% 미만 신호 자동 차단 | 상장폐지 위험 종목 배제</p>
+          <p>🎯 패턴 A (수급 폭발) / B (변동성 응축) / C (이평선 정렬) 감지 → 즉시 매수</p>
+          <p>📡 데이/프리마켓 선취매: 거래량 無해도 에너지 응축 + 고래 매집 → 익절확률 90%↑ 즉시 선매수</p>
+          <p>🛡️ +0.5% 도달 → 본절보호(100% 익절) | 패턴 유지 시 정규장 20~50% 추격</p>
+          <p>🐋 저유동성 구간: 고래 흔적(지지선 매집) + RSI 저점반등 + MACD 골든임박 → 선취매 트리거</p>
+          <p>📦 분할 잠입 매집: 호가 충격 없이 5분할 조용히 체결 | 🚫 90% 미만 자동 차단</p>
           <p className="text-yellow-400 font-medium">💰 일일 목표 ₩300,000 — 달성 시 축하 알림 ☁️</p>
         </CardContent>
       </Card>
