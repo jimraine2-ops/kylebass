@@ -1727,14 +1727,14 @@ Deno.serve(async (req) => {
     // ★ 필승 패턴(isSureWinEntry, isOrderFlowEntry, isPullbackEntry)은 확률 필터 바이패스
     const winningLogicCandidates = candidates.filter(c => (c as any).isSureWinEntry || (c as any).isOrderFlowEntry || (c as any).isPullbackEntry);
     const normalCandidates = candidates.filter(c => !(c as any).isSureWinEntry && !(c as any).isOrderFlowEntry && !(c as any).isPullbackEntry);
+    // ★ 익절 확률 필터: 90% 미만은 거들떠보지도 마라 (Hard Floor 90%)
+    // 필승 패턴(isSureWinEntry, isOrderFlowEntry, isPullbackEntry)은 확률 필터 바이패스
     let probFilteredNormal = normalCandidates.filter(c => (c as any).winProbability >= 90);
-    const probThreshold = probFilteredNormal.length > 0 ? 90 : 85;
-    if (probFilteredNormal.length === 0) {
-      probFilteredNormal = normalCandidates.filter(c => (c as any).winProbability >= 85);
-    }
+    const probThreshold = 90; // ★ 하드 코어: 90% 미만 절대 진입 불가
     const probFilteredCandidates = [...winningLogicCandidates, ...probFilteredNormal];
     if (candidates.length > 0) {
-      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 필승로직 ${winningLogicCandidates.length}개(바이패스) + 확률${probThreshold}%↑ ${probFilteredNormal.length}개 = 총 ${probFilteredCandidates.length}개 통과`, {});
+      const rejected90 = normalCandidates.filter(c => (c as any).winProbability < 90).length;
+      await addLog('unified', 'scan', null, `[🎯90%스나이퍼필터] 후보 ${candidates.length}개 → 필승로직 ${winningLogicCandidates.length}개(바이패스) + 확률90%↑ ${probFilteredNormal.length}개 = 총 ${probFilteredCandidates.length}개 통과 | 90%미만 ${rejected90}개 탈락`, {});
     }
 
     // Sort: win probability → score surge → super pattern → explosive → liquidity → score
