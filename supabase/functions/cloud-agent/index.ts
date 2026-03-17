@@ -1222,19 +1222,19 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ [승률100% 가드] 1.5% 달성 시 → SL을 매수가+0.2%로 즉시 상향 → '절대 손실 불가' 상태
-        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
-          const bs = +(pos.price * 1.002).toFixed(4);
-          await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
-          pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[🛡️승률100%가드] ${sym} +${pnlPct.toFixed(2)}% (≥1.5%) → SL=${fmtKRW(bs)} (매수가+0.2%) 절대손실불가 달성! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-        }
-        // ★ [무손실 본절가 이동] — 1.0% 달성 시 +0.1% 본절 보호 (1.5% 미달 시 1차 방어)
-        else if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.001) {
+        // ★ [승률100% 가드] 1.5% 달성 시 → SL을 매수가+0.1%로 즉시 상향 → '절대 손실 불가' 상태
+        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.001) {
           const bs = +(pos.price * 1.001).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[무손실본절] ${sym} +${pnlPct.toFixed(2)}% (≥1.0%) → SL=${fmtKRW(bs)} (매수가+0.1%) 리스크제로 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'defense', sym, `[🛡️승률100%가드] ${sym} +${pnlPct.toFixed(2)}% (≥1.5%) → SL=${fmtKRW(bs)} (매수가+0.1%) 절대손실불가 달성! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+        }
+        // ★ [무손실 본절가 이동] — 1.0% 달성 시 본절가 정확히 매수가로 이동
+        else if (pnlPct >= 1.0 && pos.stop_loss < pos.price) {
+          const bs = +(pos.price * 1.0).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
+          pos.stop_loss = bs;
+          await addLog('unified', 'defense', sym, `[무손실본절] ${sym} +${pnlPct.toFixed(2)}% (≥1.0%) → SL=${fmtKRW(bs)} (본절가) 리스크제로 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
         // ★ [3단계 프로세스] 정규장 +8% 돌파 → 무조건 익절 확정 (본절 보호 강화)
