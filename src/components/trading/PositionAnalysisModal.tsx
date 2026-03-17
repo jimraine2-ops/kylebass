@@ -395,6 +395,35 @@ export function PositionAnalysisModal({
                 </RadarChart>
               </ResponsiveContainer>
             )}
+
+            {/* ★ 점수 산출 근거 Top 3 */}
+            {scoreReasons.length > 0 && (
+              <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border">
+                <p className="text-xs font-bold text-foreground mb-2 flex items-center gap-1.5">
+                  📋 점수 근거 Top 3
+                </p>
+                <div className="space-y-1.5">
+                  {scoreReasons.map((r, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span className={cn(
+                        "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
+                        i === 0 ? 'bg-amber-500/20 text-amber-500' : i === 1 ? 'bg-primary/20 text-primary' : 'bg-muted-foreground/20 text-muted-foreground'
+                      )}>
+                        {i + 1}
+                      </span>
+                      <span className="font-medium text-foreground">{r.label}</span>
+                      <span className="text-muted-foreground">—</span>
+                      <span className="text-muted-foreground flex-1">{r.reason}</span>
+                      <Badge variant="outline" className={cn("text-[9px] px-1.5 py-0 shrink-0",
+                        r.score >= 8 ? 'border-stock-up/40 text-stock-up' : r.score >= 5 ? 'border-primary/40 text-primary' : 'border-warning/40 text-warning'
+                      )}>
+                        {r.score}/10
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
