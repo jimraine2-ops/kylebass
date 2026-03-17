@@ -97,17 +97,17 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
+          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
+            🏆 70점 돌파 & 90% 확정 익절 엔진
+          </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            📡 데이터: Finnhub 실시간 + Twelve Data 교차검증
+            📡 Finnhub 실시간 + Twelve Data 교차검증
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            ⚡ 슬리피지 ±0.02% 적용
-          </Badge>
-          <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔥 대형주 퀀트 전략 (진입 임계: 50점)
+            🎯 정예 5선 집중 | ₩100만 원
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            📊 10대 지표 기반 통합 포트폴리오
+            🛡️ +1.5%→본절보호 | 철갑홀딩(65점+)
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
