@@ -92,7 +92,7 @@ export default function UnifiedScanPage() {
         <div className="flex items-center gap-2">
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-xs">
             <Cloud className="w-3.5 h-3.5 mr-1" />
-            ₩50,000 미만 중소형주 자율매매
+            필승 패턴 A/B/C | 90%+ 익절확률
           </Badge>
           <Button variant="outline" size="sm" onClick={() => quantRefetch()} disabled={quantFetching}>
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${quantFetching ? 'animate-spin' : ''}`} />
