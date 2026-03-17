@@ -7,7 +7,7 @@ const corsHeaders = {
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
-const MAX_PRICE_USD = 12000 / KRW_RATE; // ≈ $8.89
+
 
 function getToken(): string { return Deno.env.get('FINNHUB_API_KEY') || ''; }
 
@@ -102,8 +102,6 @@ Deno.serve(async (req) => {
           if (!quote || !quote.c || quote.c <= 0) return null;
 
           const priceKRW = quote.c * KRW_RATE;
-          // Filter: only sub-₩12,000 stocks
-          if (quote.c > MAX_PRICE_USD) return null;
 
           const score = quickScore(quote);
           const winProb = getWinProbability(score);

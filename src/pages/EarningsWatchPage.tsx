@@ -61,7 +61,7 @@ export default function EarningsWatchPage() {
         </h2>
         <div className="flex items-center gap-2">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
-            💰 ₩12,000 미만 전용
+            📊 전 종목 실적 스캔
           </Badge>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${isFetching ? 'animate-spin' : ''}`} />
@@ -74,7 +74,7 @@ export default function EarningsWatchPage() {
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
           <p className="font-medium text-yellow-400">🏆 실적 발표 임박 저가주 — 88% 확정 익절 선취매</p>
-          <p>✅ 타겟: [주당 ≤ ₩12,000] AND [실적 발표 48시간 이내] → 실적 기대감 폭발 선점</p>
+          <p>✅ 타겟: [실적 발표 48시간 이내] 전 종목 → 실적 기대감 폭발 선점</p>
           <p>🎯 선취매: 지표 60점↑ AND 익절확률 88%↑ → 거래량 무관 즉시 매수</p>
           <p>🚨 급등 전조: 실적주 지표 60점 돌파 시 "실적주 폭발 전조 포착" 알림</p>
         </CardContent>
@@ -115,7 +115,7 @@ export default function EarningsWatchPage() {
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground">
             <CalendarDays className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>₩12,000 미만 실적 발표 예정 종목이 없습니다.</p>
+            <p>실적 발표 예정 종목이 없습니다.</p>
           </CardContent>
         </Card>
       ) : (
@@ -181,9 +181,6 @@ function EarningsCard({ stock }: { stock: any }) {
           </Badge>
           <Badge variant="outline" className={`text-[10px] font-mono ${stock.winProb >= 88 ? 'border-yellow-500/50 text-yellow-400 bg-yellow-500/10' : stock.winProb >= 70 ? 'border-stock-up/40 text-stock-up' : 'border-muted'}`}>
             {stock.winProb >= 88 ? '🏆' : '📊'} 익절 {stock.winProb}%
-          </Badge>
-          <Badge variant="outline" className="text-[9px] px-1 py-0">
-            💰 ₩12K↓
           </Badge>
         </div>
 
