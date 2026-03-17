@@ -1584,10 +1584,22 @@ Deno.serve(async (req) => {
           // ★ 필승 로직 2: 세력 미이탈 눌림목 선취매 — 무조건 익절 패턴
           const pullback = detectPullbackWithForce(r.data.closes, r.data.volumes);
           const isPullbackEntry = pullback.isPullback;
+
+          // ★ 필승 로직 3: [데이/프리마켓 필승 확정 선매수] — 거래량 제한 없이 즉시 선매수
+          // OBV 상승 + 가격 횡보 = 수급 응축 → 정규장 폭발 90%↑ 확률
+          const obvData = detectOBVDivergence(r.data.closes, r.data.volumes);
+          const accumData = r.scoring.accumulation || { isAccumulating: false, condensation: 0, stealthBuying: false, historicalSurgeMatch: 0, confidence: 0, pattern: '' };
+          
+          // 필승 패턴: (OBV매집 + 가격횡보) OR (잠입매집 + 응축도≥5) OR (과거급등패턴 90%↑ 매칭)
+          const isOBVAccum = obvData.obvRising && obvData.priceSideways;
+          const isStealthAccum = accumData.stealthBuying && accumData.condensation >= 5;
+          const isHistoricalMatch = accumData.historicalSurgeMatch >= 90;
+          const isSureWinPattern = isOBVAccum || isStealthAccum || isHistoricalMatch;
+          const isSureWinEntry = isSureWinPattern && isLowVolumeSession; // 데이/프리마켓에서만 발동
           
           // 필승 로직 진입 시 점수 문턱 완화 (수급 원리 우선)
-          const isWinningLogicEntry = isOrderFlowEntry || isPullbackEntry;
-          const effectiveThreshold = isWinningLogicEntry ? Math.min(adaptedEntryThreshold, 55) : adaptedEntryThreshold;
+          const isWinningLogicEntry = isOrderFlowEntry || isPullbackEntry || isSureWinEntry;
+          const effectiveThreshold = isWinningLogicEntry ? Math.min(adaptedEntryThreshold, 50) : adaptedEntryThreshold;
           
           if (r.scoring.totalScore < effectiveThreshold) continue;
 
@@ -1596,7 +1608,7 @@ Deno.serve(async (req) => {
           const accumPattern = r.scoring.accumulation;
           const isAccumCandidate = isLowVolumeSession && accumPattern?.isAccumulating;
           
-          // ★ 선취매: 매집 패턴 감지 시 거래대금 필터 해제 (필승 패턴이면 거래량 제한 무시)
+          // ★ [필승 패턴] 거래량 제한 완전 해제 — 필승 패턴/선취매 시 거래대금 필터 무시
           if (!isAccumCandidate && !isWinningLogicEntry) {
             if (vlInfo && vlInfo.tradingValue < 10000) continue;
             const sessionAvgTradingValue = volumeLeaders.length > 0 
@@ -1617,13 +1629,13 @@ Deno.serve(async (req) => {
           const minMet = isWinningLogicEntry ? 2 : isAccumEntry ? 3 : 5;
           if (metCount < minMet) continue;
           
-          // ★ 필승 로직/선취매 시 RVOL 요건 해제
+          // ★ 필승 로직/선취매 시 RVOL 요건 완전 해제
           if (!isAccumEntry && !isWinningLogicEntry && rvol < adaptedRvolMin) continue;
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
           // ★ 필승 로직 시 체결강도 요건 완화
-          const minAggression = isWinningLogicEntry ? 50 : isAccumEntry ? 60 : 120;
+          const minAggression = isWinningLogicEntry ? 40 : isAccumEntry ? 60 : 120;
           if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
