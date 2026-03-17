@@ -317,7 +317,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         )}
         {isDanger && (
           <span className="text-destructive font-bold animate-pulse">
-            ⚠️ 지표 추세 이탈 — 40점 미만 시 자동 매도
+            ⚠️ 추세 붕괴 — 익절확률 40% 미만 시 자동 매도
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
