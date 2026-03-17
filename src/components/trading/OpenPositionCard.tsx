@@ -138,12 +138,12 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
               )}
             </Badge>
           )}
-          {score !== null && score >= 70 && (
+          {score !== null && score >= 63 && (
             <Badge variant="outline" className="text-[10px] px-2 py-0.5 gap-1 font-mono font-bold border border-yellow-500/50 bg-yellow-500/20 text-yellow-400 shadow-[0_0_8px_rgba(234,179,8,0.3)]">
-              🎯 70점 돌파
+              🎯 63점 돌파
             </Badge>
           )}
-          {score !== null && score < 70 && (
+          {score !== null && score < 63 && (
             <span className={cn("text-[9px] font-medium", getScoreColor(score))}>
               {getScoreLabel(score)}
             </span>
