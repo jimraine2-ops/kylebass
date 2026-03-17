@@ -1759,14 +1759,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 익절 확률 필터: 90% 우선, 후보 없으면 85%로 완화 (85% Hard Floor — 고정밀 진입)
-    let probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 90);
-    const probThreshold = probFilteredCandidates.length > 0 ? 90 : 85;
-    if (probFilteredCandidates.length === 0) {
-      probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 85);
+    // ★ 익절 확률 필터: 90% 우선, 후보 없으면 85%로 완화
+    // ★ 필승 패턴(isSureWinEntry, isOrderFlowEntry, isPullbackEntry)은 확률 필터 바이패스
+    const winningLogicCandidates = candidates.filter(c => (c as any).isSureWinEntry || (c as any).isOrderFlowEntry || (c as any).isPullbackEntry);
+    const normalCandidates = candidates.filter(c => !(c as any).isSureWinEntry && !(c as any).isOrderFlowEntry && !(c as any).isPullbackEntry);
+    let probFilteredNormal = normalCandidates.filter(c => (c as any).winProbability >= 90);
+    const probThreshold = probFilteredNormal.length > 0 ? 90 : 85;
+    if (probFilteredNormal.length === 0) {
+      probFilteredNormal = normalCandidates.filter(c => (c as any).winProbability >= 85);
     }
+    const probFilteredCandidates = [...winningLogicCandidates, ...probFilteredNormal];
     if (candidates.length > 0) {
-      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 ${probThreshold}%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외) | ★85% Hard Floor 적용 (고정밀 진입)`, {});
+      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 필승로직 ${winningLogicCandidates.length}개(바이패스) + 확률${probThreshold}%↑ ${probFilteredNormal.length}개 = 총 ${probFilteredCandidates.length}개 통과`, {});
     }
 
     // Sort: win probability → score surge → super pattern → explosive → liquidity → score
