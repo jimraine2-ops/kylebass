@@ -1334,33 +1334,28 @@ Deno.serve(async (req) => {
           }
         }
 
-        // 2. ★ [손절 -10% 하향] SL 터치 — 지표 우선 홀딩 강화, -10% 미만에서만 손절 검토
+        // 2. ★ [철갑 홀딩] 기계적 손절 폐기 — 오직 익절 확률 40% 미만 또는 추세 완전 붕괴 시에만 매도
         if (!shouldClose && pos.stop_loss && price <= pos.stop_loss) {
           if (pnlPct >= 0) {
+            // 본절 보호(+0.2% 이상)에서 터치 → 수익 확정 매도
             shouldClose = true;
             closeReason = `[본절방어] [${sessionLabel}] [${timeStr}] [${sym}] 본절가 터치 (${quantScore}점)`;
             newStatus = 'breakeven_exit';
-          } else if (pnlPct > -10 && indicatorsHold) {
-            // ★ -1%~-9%: 정상적인 흔들림, 지표 50점 이상 → 무조건 홀딩
-            await addLog('unified', 'hold', sym, `[변동성 구간: 지표 기반 홀딩 중] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 정상 변동성 | 지표 ${quantScore}점(≥50) → 대시세 대기, 매도 유보`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold });
-          } else if (pnlPct > -10 && quantScore >= 40) {
-            // ★ -1%~-9% + 지표 40~49: 경고만, 매도 유보 (노이즈 무시)
-            await addLog('unified', 'warning', sym, `[변동성 구간: 주의 관찰] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 변동성 구간 + 지표 ${quantScore}점(40~49) → 매도 유보`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-          } else if (pnlPct <= -10 && indicatorsHold && (coreIntact || technicalSafe)) {
-            // ★ -10% 이하지만 지표 50점 이상 + 기술 안전 → 수급 기반 홀딩 유지
-            await addLog('unified', 'hold', sym, `[AI 판단: 홀딩 권장] ${sym} -${Math.abs(pnlPct).toFixed(2)}% -10% 도달 BUT 지표 ${quantScore}점(≥50) + ${coreIntact ? 'VWAP+이평선 정배열' : '기술안전'} → 수급 살아있음, 홀딩`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold });
-          } else if (pnlPct <= -10 && quantScore >= 40) {
-            // ★ -10% 이하 + 지표 40~49: 경고, 매도 검토
-            await addLog('unified', 'warning', sym, `[⚠️ 손절 경고] ${sym} -${Math.abs(pnlPct).toFixed(2)}% -10% 이하 + 지표 ${quantScore}점(40~49) → 매도 임박`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          } else if (indicatorsHold) {
+            // ★ 지표 50점 이상 → 가격 하락 무시, 절대 홀딩 (개미 털기 내성)
+            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩: 익절확률 유지 중] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 하락 BUT 지표 ${quantScore}점(≥50) → 익절 확률 90% 유지, 가격 노이즈 무시 홀딩`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold });
+          } else if (quantScore >= 40) {
+            // ★ 지표 40~49점: 경고만, 아직 매도 안 함 (추세 붕괴 전까지 대기)
+            await addLog('unified', 'warning', sym, `[⚠️주의 관찰] ${sym} -${Math.abs(pnlPct).toFixed(2)}% + 지표 ${quantScore}점(40~49) → 추세 붕괴 감시 중, 매도 유보`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           } else {
-            // ★ 최종 방어선: -10% 이하 + 지표 40점 미만 → 자산 보호 매도
+            // ★ 최종 방어선: 익절 확률 40% 미만(지표 <40점) → 추세 완전 붕괴 → 자산 보호 매도
             shouldClose = true;
-            closeReason = `[추세완전이탈] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% (-10%↓) + 지표 ${quantScore}점(<40) → 자산 보호 매도`;
+            closeReason = `[추세완전붕괴] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% + 지표 ${quantScore}점(<40) 익절확률 40%미만 → 자산 보호 매도`;
             newStatus = 'trend_collapse';
           }
         }
 
-        // 3. ★ 지표 무결성 중심 판단 (손절 -10% 동기화)
+        // 3. ★ 철갑 홀딩 중심 판단 — 지표 무결성이 깨지기 전까지 가격 하락에 굴하지 않음
         if (!shouldClose) {
           // ★ Iron Hold: 필승 패턴(응축도≥6 + 지표≥50) → 일시적 하락 무시
           if (isIronHold && pnlPct < 0) {
@@ -1371,37 +1366,27 @@ Deno.serve(async (req) => {
             await addLog('unified', 'hold', sym, `[세션홀딩] ${sym} ${sessionLabel} -${Math.abs(pnlPct).toFixed(2)}% 밀림 → 지표 ${quantScore}점(≥50) 양호, 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2), session: sessionLabel });
           }
           // ★ [필승 선취매 강력 홀딩] 데이/프리마켓 선취매 종목 → 정규장까지 무조건 보유
-          // 지표 40점 이상이면 절대 매도하지 않음 (정규장 수급 폭발 대기)
           else if (isPreMarketEntry && quantScore >= 40 && currentSession !== 'REGULAR') {
             await addLog('unified', 'hold', sym, `[🔒필승선취매-강력홀딩] ${sym} 지표 ${quantScore}점(≥40) | ${sessionLabel} → 정규장 거대 수급 진입까지 절대 홀딩! PnL: ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           }
-          else if (isPreMarketEntry && indicatorsStrong && currentSession !== 'REGULAR') {
-            await addLog('unified', 'hold', sym, `[선취매홀딩] ${sym} 지표 ${quantScore}점(≥55) → 정규장 폭발 대기`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          // ★ 철갑 홀딩: 지표 50점 이상이면 가격 하락 무관 홀딩 — 30~50% 대시세 대기
+          else if (pnlPct < 0 && indicatorsHold) {
+            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩: 익절확률 90% 유지 중] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 가격 하락 → 지표 ${quantScore}점(≥50) 무결성 유지, 30~50% 대시세까지 홀딩 권장`, { quantScore, vwapCross, aboveBB, pnlPct: +pnlPct.toFixed(2) });
           }
-          // ★ 일반 홀딩: -9%까지는 정상 변동성, 지표 50+ → 홀딩
-          else if (pnlPct < 0 && pnlPct > -10 && indicatorsHold) {
-            await addLog('unified', 'hold', sym, `[변동성 구간: 지표 기반 홀딩 중] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 정상 변동성 | 지표 ${quantScore}점(≥50) → 30~50% 대시세 대기`, { quantScore, vwapCross, aboveBB, pnlPct: +pnlPct.toFixed(2) });
-          }
-          // ★ [확정적 수익] 지표 50점 미만 → 즉시 매도 (승률 90% 모델 기반: 50점 하한선)
-          else if (quantScore < 50) {
+          // ★ 추세 붕괴 판정: 지표 40점 미만 → 익절 확률 40% 미만 → 매도
+          else if (quantScore < 40) {
             shouldClose = true;
-            closeReason = `[확정수익-50점이탈] [${sessionLabel}] [${timeStr}] [${sym}] ${quantScore}점(<50) + ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}% → 승률 모델 기준 매도`;
+            closeReason = `[추세붕괴-40점미만] [${sessionLabel}] [${timeStr}] [${sym}] ${quantScore}점(<40) 익절확률 40%미만 + ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}% → 자산 보호 매도`;
             newStatus = pnlPct >= 0 ? 'profit_taken' : 'trend_collapse';
           }
-          // -10% 이하 + VWAP 이탈 → 매도
-          else if (pnlPct <= -10 && !vwapCross && !emaAligned) {
-            shouldClose = true;
-            closeReason = `[복합위험] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% (-10%↓) + ${quantScore}점 + VWAP이탈 → 매도`;
-            newStatus = 'indicator_exit';
-          }
-          // 40~49점 → 경고만
-          else if (quantScore < 50 && quantScore >= 40) {
-            await addLog('unified', 'warning', sym, `[주의] ${sym} ${quantScore}점(40~49) ⚠️ 지표 약화 중 — ${pnlPct > -10 ? '변동성 구간 홀딩' : '손절 임박'} | PnL: ${pnlPct.toFixed(2)}%`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          // 40~49점 → 경고만 (아직 추세 붕괴 아님)
+          else if (quantScore >= 40 && quantScore < 50 && pnlPct < 0) {
+            await addLog('unified', 'warning', sym, `[⚠️주의 관찰] ${sym} ${quantScore}점(40~49) + PnL ${pnlPct.toFixed(2)}% → 추세 약화 감시 중, 40점 미만 시 매도`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           }
           // 블랙리스트 + 지표 미달
-          else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && !indicatorsHold) {
+          else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && quantScore < 40) {
             shouldClose = true;
-            closeReason = `[블랙리스트] [${sessionLabel}] [${timeStr}] [${sym}] + 지표 미달(${quantScore}점<50)`;
+            closeReason = `[블랙리스트] [${sessionLabel}] [${timeStr}] [${sym}] + 지표 미달(${quantScore}점<40)`;
             newStatus = 'early_exit';
           }
         }
