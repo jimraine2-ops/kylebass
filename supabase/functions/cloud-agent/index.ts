@@ -1135,13 +1135,13 @@ Deno.serve(async (req) => {
     else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 67);
 
     // Session adaptation — ★ 데이장 완화: 절대 하한 35점 (필승패턴 활성화)
+    const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
     // ★ 데이장/프리마켓/애프터마켓: 하한 35점, 정규장: 하한 60점
     const sessionFloor = isLowVolumeSession ? 35 : 60;
     const adaptedEntryThreshold = Math.max(rawAdapted, sessionFloor);
     const adaptedRvolMin = entryRelax < 1.0 ? 0.5 : 1.5; // ★ 데이장: RVOL 0.5x (거의 해제)
     const adaptedVwapMin = entryRelax < 1.0 ? 1 : 4;
-    const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
 
     if (entryRelax < 1.0) {
       await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점 | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin} | 선취매모드: ${isLowVolumeSession ? 'ON' : 'OFF'}`, {});
