@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Radio, Bot, Wallet } from "lucide-react";
 import { Link } from "react-router-dom";
 import { UnifiedPortfolio } from "@/components/dashboard/UnifiedPortfolio";
-import { SuperScannerPanel } from "@/components/dashboard/SuperScannerPanel";
+
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useAIPortfolio, useScalpingPortfolio } from "@/hooks/useStockData";
