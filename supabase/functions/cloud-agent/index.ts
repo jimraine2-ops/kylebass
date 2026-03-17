@@ -564,6 +564,20 @@ async function discoverAllUSStocks(): Promise<string[]> {
   }
 }
 
+// ===== Win Probability Calculator (익절 확률 산출) =====
+function getWinProbability(score: number): number {
+  if (score >= 80) return 98;
+  if (score >= 75) return 95;
+  if (score >= 70) return 90;
+  if (score >= 65) return 85;
+  if (score >= 60) return 80;
+  if (score >= 55) return 75;
+  if (score >= 50) return 60;
+  if (score >= 45) return 45;
+  if (score >= 40) return 30;
+  return 15;
+}
+
 // ===== Score Surge Detection (점수 급상승 감지) =====
 const previousScores: Map<string, number> = new Map();
 function detectScoreSurge(symbol: string, currentScore: number): { isSurge: boolean; prevScore: number; delta: number } {
