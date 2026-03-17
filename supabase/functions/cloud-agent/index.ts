@@ -200,10 +200,67 @@ function detectOBVDivergence(closes: number[], volumes: number[]): { obvRising: 
   return { obvRising, priceSideways, score: Math.min(10, score) };
 }
 
-// ===== 필승 패턴 A/B/C 감지 (점수 무관 즉시 진입) =====
-function detectCriticalPatterns(closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[], quote: any): { patternA: boolean; patternB: boolean; patternC: boolean; patterns: string[]; confidence: number } {
+// ===== 고래 흔적 탐지 (저유동성 구간 매집 감지) =====
+function detectWhaleTrace(closes: number[], volumes: number[], lows: number[]): { detected: boolean; supportLevel: number; confidence: number } {
   const n = closes.length - 1;
-  if (n < 20) return { patternA: false, patternB: false, patternC: false, patterns: [], confidence: 0 };
+  if (n < 10) return { detected: false, supportLevel: 0, confidence: 0 };
+  // 특정 가격대에서 반복적으로 지지되며 소량씩 매집하는 패턴
+  const recentLows = lows.slice(-10);
+  const avgLow = recentLows.reduce((a, b) => a + b, 0) / recentLows.length;
+  const lowDeviation = recentLows.reduce((sum, l) => sum + Math.abs(l - avgLow), 0) / recentLows.length;
+  const lowDeviationPct = avgLow > 0 ? (lowDeviation / avgLow) * 100 : 999;
+  const tightSupport = lowDeviationPct < 1.0; // 저가가 1% 이내로 일정 = 강력 지지선
+  // 거래량이 적지만 가격이 하락하지 않음
+  const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, volumes.length);
+  const recentAvgVol = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  const lowVolume = avgVol20 > 0 && recentAvgVol / avgVol20 < 0.5;
+  const priceStable = Math.abs(closes[n] - closes[Math.max(0, n - 5)]) / closes[Math.max(0, n - 5)] * 100 < 2;
+  const detected = tightSupport && (lowVolume || priceStable);
+  const confidence = detected ? (tightSupport && lowVolume && priceStable ? 92 : 85) : 0;
+  return { detected, supportLevel: avgLow, confidence };
+}
+
+// ===== 에너지 응축 패턴 (발산 직전 감지) =====
+function detectEnergyCondensation(closes: number[], highs: number[], lows: number[], volumes: number[]): { detected: boolean; signals: string[]; confidence: number } {
+  const n = closes.length - 1;
+  if (n < 20) return { detected: false, signals: [], confidence: 0 };
+  const signals: string[] = [];
+  // 1. RSI 저점 반등: RSI가 30-45에서 상향 전환
+  const rsi = calculateRSI(closes, 14);
+  const rsiRising = rsi[n] > rsi[n - 1] && rsi[n] >= 30 && rsi[n] <= 55 && rsi[n] - rsi[n - 1] >= 2;
+  if (rsiRising) signals.push('RSI저점반등');
+  // 2. MACD 골든크로스 임박: MACD line이 Signal에 수렴 중
+  const ema12 = calculateEMA(closes, 12);
+  const ema26 = calculateEMA(closes, 26);
+  const macd = ema12[n] - ema26[n];
+  const macdPrev = n > 0 ? ema12[n - 1] - ema26[n - 1] : 0;
+  const macdConverging = macd > macdPrev && macd < 0 && Math.abs(macd) < closes[n] * 0.005;
+  if (macdConverging) signals.push('MACD골든임박');
+  // 3. BB 극도 수축
+  const atr = calculateATR(highs, lows, closes, 14);
+  const bbWidth5 = atr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  const bbWidth20 = atr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  if (bbWidth20 > 0 && bbWidth5 / bbWidth20 < 0.5) signals.push('BB극도수축');
+  // 4. 이평선 수렴
+  const ema5 = calculateEMA(closes, 5);
+  const ema10 = calculateEMA(closes, 10);
+  const ema20 = calculateEMA(closes, 20);
+  const emaSpread = Math.abs(ema5[n] - ema20[n]) / closes[n] * 100;
+  if (emaSpread < 1.0) signals.push('이평선수렴');
+  // 5. 거래량 감소 중 가격 유지 (응축)
+  const avgVol5 = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, volumes.length);
+  if (avgVol20 > 0 && avgVol5 / avgVol20 < 0.6) signals.push('거래량응축');
+
+  const detected = signals.length >= 2;
+  const confidence = signals.length >= 4 ? 96 : signals.length >= 3 ? 92 : signals.length >= 2 ? 88 : 0;
+  return { detected, signals, confidence };
+}
+
+// ===== 필승 패턴 A/B/C 감지 (점수 무관 즉시 진입) =====
+function detectCriticalPatterns(closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[], quote: any): { patternA: boolean; patternB: boolean; patternC: boolean; patterns: string[]; confidence: number; whaleTrace: ReturnType<typeof detectWhaleTrace>; energyCondensation: ReturnType<typeof detectEnergyCondensation> } {
+  const n = closes.length - 1;
+  if (n < 20) return { patternA: false, patternB: false, patternC: false, patterns: [], confidence: 0, whaleTrace: { detected: false, supportLevel: 0, confidence: 0 }, energyCondensation: { detected: false, signals: [], confidence: 0 } };
   const patterns: string[] = [];
 
   // ★ 패턴 A (수급 돌파): 가격 횡보 중 거래대금 직전 5분 평균 300% 돌파 + VWAP 위
@@ -212,7 +269,7 @@ function detectCriticalPatterns(closes: number[], highs: number[], lows: number[
   const volBurst = avgVol5 > 0 ? currentVol / avgVol5 : 1;
   const recentCloses5 = closes.slice(-6, -1);
   const priceRange5 = recentCloses5.length > 0 ? (Math.max(...recentCloses5) - Math.min(...recentCloses5)) / Math.min(...recentCloses5) * 100 : 999;
-  const priceSideways = priceRange5 < 3; // 3% 이내 횡보
+  const priceSideways = priceRange5 < 3;
   const vwap = calculateVWAP(highs.slice(-20), lows.slice(-20), closes.slice(-20), volumes.slice(-20));
   const aboveVWAP = closes[n] > vwap;
   const patternA = priceSideways && volBurst >= 3.0 && aboveVWAP;
@@ -223,7 +280,7 @@ function detectCriticalPatterns(closes: number[], highs: number[], lows: number[
   const atr = calculateATR(highs, lows, closes, 14);
   const bbWidth5 = atr.slice(-5).reduce((a, b) => a + b, 0) / 5;
   const bbWidth20 = atr.slice(-20).reduce((a, b) => a + b, 0) / 20;
-  const isTightBB = bbWidth20 > 0 && bbWidth5 / bbWidth20 < 0.5; // 밴드 50% 수축
+  const isTightBB = bbWidth20 > 0 && bbWidth5 / bbWidth20 < 0.5;
   const rsi = calculateRSI(closes, 14);
   const rsiCrossUp50 = rsi[n] > 50 && rsi[n] > rsi[n - 1] && (rsi[n - 1] <= 50 || rsi[n] - rsi[n - 1] >= 5);
   const patternB = isTightBB && rsiCrossUp50;
@@ -233,16 +290,21 @@ function detectCriticalPatterns(closes: number[], highs: number[], lows: number[
   const ema5 = calculateEMA(closes, 5);
   const ema10 = calculateEMA(closes, 10);
   const ema_20 = calculateEMA(closes, 20);
-  // 직전 봉의 이평선 밀집도
   const prevSpread = n > 1 ? Math.abs(ema5[n - 1] - ema_20[n - 1]) / closes[n - 1] * 100 : 999;
   const currSpread = Math.abs(ema5[n] - ema_20[n]) / closes[n] * 100;
-  const wasConverging = prevSpread < 1.0; // 1% 이내 밀집
-  const nowDiverging = currSpread > prevSpread && ema5[n] > ema10[n] && ema10[n] > ema_20[n]; // 정배열로 확산
+  const wasConverging = prevSpread < 1.0;
+  const nowDiverging = currSpread > prevSpread && ema5[n] > ema10[n] && ema10[n] > ema_20[n];
   const patternC = wasConverging && nowDiverging;
   if (patternC) patterns.push('이평선정렬(C)');
 
-  const confidence = patterns.length >= 3 ? 98 : patterns.length >= 2 ? 94 : patterns.length >= 1 ? 88 : 0;
-  return { patternA, patternB, patternC, patterns, confidence };
+  // ★ 고래 흔적 & 에너지 응축 패턴
+  const whaleTrace = detectWhaleTrace(closes, volumes, lows);
+  const energyCondensation = detectEnergyCondensation(closes, highs, lows, volumes);
+  if (whaleTrace.detected) patterns.push('고래매집');
+  if (energyCondensation.detected && !patternB) patterns.push(`에너지응축(${energyCondensation.signals.join('+')})`);
+
+  const confidence = patterns.length >= 4 ? 98 : patterns.length >= 3 ? 96 : patterns.length >= 2 ? 94 : patterns.length >= 1 ? 88 : 0;
+  return { patternA, patternB, patternC, patterns, confidence, whaleTrace, energyCondensation };
 }
 
 // ===== 슈퍼 패턴 감지 (15% 수익 보장형 '대시세 초입' 종목) =====
