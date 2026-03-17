@@ -907,8 +907,8 @@ Deno.serve(async (req) => {
     const recentWinRate = recentTotal > 0 ? (recentWins / recentTotal) * 100 : 50;
 
     // Win-rate adjustment: 극단적 저승률에서만 소폭 상향
-    if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 70);
-    else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 67);
+    if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 75);
+    else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 72);
 
     // Session adaptation — ★ 필승형: 최소 65점 강제 하한선 (장외에서도 65점 이하 진입 금지)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
