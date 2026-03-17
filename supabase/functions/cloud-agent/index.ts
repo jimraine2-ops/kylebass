@@ -9,6 +9,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 1000;
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
+const MAX_PRICE_KRW = 12000; // ★ 12,000원 미만 저가주 전용
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $8.89
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
@@ -1015,12 +1017,12 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ 본절 보호: +1.5% 도달 즉시 SL을 매수가+0.2%로 상향 → '패배 없는 게임'
-        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
-          const bs = +(pos.price * 1.002).toFixed(4);
+        // ★ 본절 보호: +1.0% 도달 즉시 SL을 매수가+0.1%로 상향 → '패배 없는 게임'
+        if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.001) {
+          const bs = +(pos.price * 1.001).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[패배없는게임] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.5% → SL=${fmtKRW(bs)} (매수가+0.2%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'defense', sym, `[패배없는게임] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.0% → SL=${fmtKRW(bs)} (매수가+0.1%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
         // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
@@ -1285,7 +1287,7 @@ Deno.serve(async (req) => {
     }
 
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
-    const MAX_POSITIONS = 5; // ★ 정예 5선: 100만 원을 최대 5개에만 집중 투입
+    const MAX_POSITIONS = 3; // ★ 정예 1~3선: 100만 원을 최대 3개에만 극한 집중 투입
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
     if (!marketBuyHalt && !isOpeningRush) {
@@ -1298,7 +1300,9 @@ Deno.serve(async (req) => {
             if (!data) return null;
             const price = data.quote.c;
             const capType = getCapType(price, sym);
-            if (capType === 'small' && price < MIN_PRICE_USD) return null;
+            if (price < MIN_PRICE_USD) return null;
+            // ★ 12,000원 미만 저가주 전용: 가격 상한선 필터
+            if (price > MAX_PRICE_USD) return null;
             const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
             if (!scoring) return null;
             lastScores.set(sym, scoring.totalScore);
@@ -1428,13 +1432,12 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 정예 5선: 70점+90% 확정 후보만 상위 5개 집중 (분산은 소액 자산의 적)
-    // 익절 확률 90% 미만 필터 제거
+    // ★ 정예 1~3선 집중 투자: 63점+88% 확정 후보만 상위 3개 집중
     const filteredCandidates = candidates.filter(c => {
       const winProb = getWinProbability(c.scoring.totalScore);
-      return winProb >= 90;
+      return winProb >= 88;
     });
-    const topCandidates = filteredCandidates.slice(0, 5);
+    const topCandidates = filteredCandidates.slice(0, 3);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
@@ -1454,8 +1457,8 @@ Deno.serve(async (req) => {
       const isSuperEntry = (r as any).isSuperPattern;
       const isScoreSurge = (r as any).isScoreSurge;
       
-      // ★ 정예 5선 집중 투자: ₩100만 원 ÷ 최대 5 = ₩200,000씩, 슈퍼/급상승은 잔고의 33%까지 집중
-      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0.33 : 0.20;
+      // ★ 정예 1~3선 집중 투자: 슈퍼/급상승은 잔고의 50%까지 극한 집중
+      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0.50 : 0.33;
       const maxKRW = balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);

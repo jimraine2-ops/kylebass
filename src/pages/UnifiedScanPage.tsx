@@ -92,7 +92,7 @@ export default function UnifiedScanPage() {
         <div className="flex items-center gap-2">
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-xs">
             <Cloud className="w-3.5 h-3.5 mr-1" />
-            Cloud Agent: 서버 자율 매매 중
+            ₩12,000 미만 저가주 전용 자율매매
           </Badge>
           <Button variant="outline" size="sm" onClick={() => quantRefetch()} disabled={quantFetching}>
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${quantFetching ? 'animate-spin' : ''}`} />
@@ -110,7 +110,7 @@ export default function UnifiedScanPage() {
             <div className={`w-2.5 h-2.5 rounded-full ${wsConnected ? 'bg-stock-up animate-pulse' : 'bg-muted-foreground'}`} />
             {wsConnected ? 'LIVE: WebSocket' : 'REST 폴링'}
           </div>
-          <Badge variant="outline" className="text-[10px]">보유: {openPositions.length}/5</Badge>
+          <Badge variant="outline" className="text-[10px]">보유: {openPositions.length}/3</Badge>
           <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">
             <Flame className="w-3 h-3 mr-1" />+10% 급등: {hotStocks.length}개
           </Badge>
@@ -130,10 +130,11 @@ export default function UnifiedScanPage() {
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 63점 돌파 & 88% 확정 익절 엔진 — 정예 5선 집중 투입</p>
-          <p>✅ 진입: [합산 ≥ 63점] AND [익절확률 ≥ 88%] → 상위 5종목에만 ₩100만 원 집중 배분</p>
-          <p>🛡️ 본절 보호: +1.5% 도달 시 SL을 매수가+0.2%로 상향 → '패배 없는 게임' | 지표 60점 이상 시 철갑 홀딩</p>
-          <p>🎯 데이/프리마켓: 63점 필승 패턴 시 거래량 무관 선매수 → 정규장 폭발력 전환</p>
+          <p className="font-medium text-yellow-400">🏆 ₩12,000 미만 저가주 전용 | 63점 돌파 & 88% 확정 익절 엔진</p>
+          <p>✅ 진입: [주당 ≤ ₩12,000] AND [합산 ≥ 63점] AND [익절확률 ≥ 88%] → 상위 1~3종목에 ₩100만 원 극한 집중</p>
+          <p>🛡️ 본절 보호: +1.0% 도달 시 SL을 매수가+0.1%로 상향 → '패배 없는 게임' | 지표 40점 미만 시에만 매도</p>
+          <p>🎯 대시세 추격: 저가주 변동성 활용, 지표 40점↑ 유지 시 30~50% 대폭 상승 끝까지 추격</p>
+          <p>🚫 상장폐지 위험 종목 자동 배제 | 데이장 88% 확률 보장 시 선매수</p>
         </CardContent>
       </Card>
 
