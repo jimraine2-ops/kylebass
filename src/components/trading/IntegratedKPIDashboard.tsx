@@ -147,7 +147,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             🎯 정예 5선 집중 | ₩100만 원
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🛡️ +1.5%→본절보호 | 철갑홀딩(60점+)
+            🛡️ +1.0%→본절보호 | 40점↓ 시에만 매도
           </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
