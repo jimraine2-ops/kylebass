@@ -902,15 +902,13 @@ Deno.serve(async (req) => {
     const entryRelax = sessionInfo.entryRelax;
     const sessionRvolMin = 1.5; // ★ 초고속 순환: 상대적 거래량 300%↑ (2.0→1.5 완화)
 
-    // ★ 전 종목 동적 발견: 콜드스타트 시 스킵 (타임아웃 방지)
-    if (discoveredSymbols.length > 0) {
-      try {
-        const discovered = await discoverAllUSStocks();
-        if (discovered.length > 0) {
-          await addLog('system', 'scan', null, `[🌐전종목스캔] ${discovered.length}개 동적 발견`, {});
-        }
-      } catch { /* non-critical */ }
-    }
+    // ★ 전 종목 동적 발견: Finnhub에서 미국 상장 전 종목 심볼 갱신
+    try {
+      const discovered = await discoverAllUSStocks();
+      if (discovered.length > 0) {
+        await addLog('system', 'scan', null, `[🌐전종목스캔] Finnhub 전 종목 심볼 ${discovered.length}개 동적 발견`, {});
+      }
+    } catch { /* non-critical */ }
     const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
 
     // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
