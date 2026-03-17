@@ -1348,8 +1348,8 @@ Deno.serve(async (req) => {
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          // ★ 선취매: 매집 패턴 시 체결강도 60%로 완화 (조용한 매집은 양봉비율만으로 판단)
-          const minAggression = isAccumEntry ? 60 : 120;
+          // ★ 체결강도 완화: 80% 이상 (매집 패턴 시 40%)
+          const minAggression = isAccumEntry ? 40 : 80;
           if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
