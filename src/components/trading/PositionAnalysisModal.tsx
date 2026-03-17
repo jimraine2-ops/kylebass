@@ -142,11 +142,9 @@ export function PositionAnalysisModal({
     open && pos ? pos.symbol : null
   );
 
-  if (!pos) return null;
-
-  const quantStock = fetchedQuant || externalQuantStock;
-  const displayPrice = livePrice ?? pos.currentPrice ?? pos.price;
-  const score = liveScore ?? quantStock?.totalScore ?? pos.entry_score ?? 0;
+  const quantStock = pos ? (fetchedQuant || externalQuantStock) : null;
+  const displayPrice = pos ? (livePrice ?? pos.currentPrice ?? pos.price) : 0;
+  const score = pos ? (liveScore ?? quantStock?.totalScore ?? pos.entry_score ?? 0) : 0;
   const indicators = quantStock?.indicators || {};
   const hasIndicators = Object.keys(indicators).length > 0;
 
