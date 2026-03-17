@@ -1590,16 +1590,17 @@ Deno.serve(async (req) => {
           const obvData = detectOBVDivergence(r.data.closes, r.data.volumes);
           const accumData = r.scoring.accumulation || { isAccumulating: false, condensation: 0, stealthBuying: false, historicalSurgeMatch: 0, confidence: 0, pattern: '' };
           
-          // 필승 패턴: (OBV매집 + 가격횡보) OR (잠입매집 + 응축도≥5) OR (과거급등패턴 90%↑ 매칭)
-          const isOBVAccum = obvData.obvRising && obvData.priceSideways;
-          const isStealthAccum = accumData.stealthBuying && accumData.condensation >= 5;
-          const isHistoricalMatch = accumData.historicalSurgeMatch >= 90;
+          // ★ 필승 패턴 조건 대폭 완화 — 데이장에서도 발동
+          // (OBV 상승만으로도 OK) OR (매집 중 + 응축도≥3) OR (과거급등패턴 50%↑) OR (가격횡보+이평선수렴)
+          const isOBVAccum = obvData.obvRising; // ★ 완화: 가격횡보 조건 제거, OBV 상승만으로 충분
+          const isStealthAccum = accumData.isAccumulating && accumData.condensation >= 3; // ★ 완화: 5→3
+          const isHistoricalMatch = accumData.historicalSurgeMatch >= 50; // ★ 완화: 90%→50%
           const isSureWinPattern = isOBVAccum || isStealthAccum || isHistoricalMatch;
-          const isSureWinEntry = isSureWinPattern && isLowVolumeSession; // 데이/프리마켓에서만 발동
+          const isSureWinEntry = isSureWinPattern; // ★ 완화: 모든 세션에서 발동 (데이장 제한 해제)
           
-          // 필승 로직 진입 시 점수 문턱 완화 (수급 원리 우선)
+          // 필승 로직 진입 시 점수 문턱 최대 완화 (수급 원리 우선)
           const isWinningLogicEntry = isOrderFlowEntry || isPullbackEntry || isSureWinEntry;
-          const effectiveThreshold = isWinningLogicEntry ? Math.min(adaptedEntryThreshold, 50) : adaptedEntryThreshold;
+          const effectiveThreshold = isWinningLogicEntry ? Math.min(adaptedEntryThreshold, 40) : adaptedEntryThreshold; // ★ 50→40
           
           if (r.scoring.totalScore < effectiveThreshold) continue;
 
