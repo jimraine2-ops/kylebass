@@ -813,9 +813,9 @@ function getCapType(price: number, symbol: string): 'large' | 'small' {
 async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: string; volume: number; changePct: number; tradingValue: number }[]> {
   const leaders: { symbol: string; volume: number; changePct: number; tradingValue: number }[] = [];
   
-  // ★ 초고속: 샘플 30개로 축소하여 타임아웃 방지 (200→30)
+  // ★ 전 종목 확장: 샘플 100개로 확대 (30→100), 롤링 스캔
   const allKnown = [...Array.from(LARGE_SET), ...Array.from(SMALL_SET)];
-  const sampleSize = 30;
+  const sampleSize = 100;
   const cycleOffset = Math.floor(Math.random() * allKnown.length);
   const sample: string[] = [];
   for (let i = 0; i < Math.min(sampleSize, allKnown.length); i++) {
@@ -894,8 +894,14 @@ Deno.serve(async (req) => {
     const entryRelax = sessionInfo.entryRelax;
     const sessionRvolMin = 1.5;
 
-    // ★ 동적 발견 비활성화: 타임아웃 방지 (기존 풀만 사용)
+    // ★ 전 종목 동적 발견 활성화: 매 사이클마다 Finnhub 전 종목 심볼 갱신
     const sessionSlippage = sessionInfo.aggressiveSlippage;
+    try {
+      const discovered = await discoverAllUSStocks();
+      if (discovered.length > 0) {
+        await addLog('system', 'scan', null, `[전종목스캔] 동적 발견 ${discovered.length}개 심볼 로드 완료 (기존 풀 ${LARGE_SET.size + SMALL_SET.size}개 + 신규 ${discovered.length}개 = 총 ${LARGE_SET.size + SMALL_SET.size + discovered.length}개)`, {});
+      }
+    } catch { /* non-critical */ }
 
     // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
     const etStr2 = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
@@ -938,9 +944,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Fill 50 active slots — ★ 초고속: 20 대형 + 30 소형 = 50개 (타임아웃 방지)
-    const LARGE_SLOTS = 20;
-    const SMALL_SLOTS = 30;
+    // Step 2: Fill 100 active slots — ★ 전 종목 확장: 40 대형 + 60 소형 = 100개 롤링
+    const LARGE_SLOTS = 40;
+    const SMALL_SLOTS = 60;
 
     const currentLarge: string[] = [];
     const currentSmall: string[] = [];
@@ -968,10 +974,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 전 종목 확장: 동적 발견 종목에서도 슬롯 충전
+    // ★ 전 종목 확장: 동적 발견 종목에서 롤링 슬롯 충전 (매 사이클 100개씩 순환)
     const dynSymbols = discoveredSymbols.length > 0 ? discoveredSymbols : [];
-    const dynStart = (cycleCount * 50) % Math.max(1, dynSymbols.length);
-    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(50, dynSymbols.length); i++) {
+    const dynStart = (cycleCount * 100) % Math.max(1, dynSymbols.length);
+    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(100, dynSymbols.length); i++) {
       const sym = dynSymbols[(dynStart + i) % dynSymbols.length];
       if (!activeUnifiedList.has(sym)) {
         activeUnifiedList.add(sym);
