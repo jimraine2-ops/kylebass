@@ -769,8 +769,11 @@ async function discoverAllUSStocks(): Promise<string[]> {
   try {
     const token = getToken();
     if (!token) return [];
-    // Finnhub US stock symbols
-    const res = await fetch(`${FINNHUB_BASE}/stock/symbol?exchange=US&token=${token}`);
+    // ★ 3초 타임아웃: 콜드스타트 시 전종목 스캔이 cron 타임아웃 유발 방지
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${FINNHUB_BASE}/stock/symbol?exchange=US&token=${token}`, { signal: controller.signal });
+    clearTimeout(timeout);
     if (!res.ok) return discoveredSymbols;
     const symbols = await res.json();
     if (!Array.isArray(symbols)) return discoveredSymbols;
