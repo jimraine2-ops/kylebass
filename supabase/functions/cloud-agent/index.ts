@@ -405,9 +405,9 @@ function detectOrderFlowImbalance(closes: number[], opens: number[], volumes: nu
   }
   const askBidRatio = buyVol > 0 ? sellVol / buyVol : 0;
   
-  // 수급 불균형 조건: 매도 잔량 ≥ 매수 × 3 AND 체결 강도 ≥ 150%
-  // 이는 매도 물량을 흡수하며 올라가는 "세력 매집" 신호
-  const isImbalance = askBidRatio >= 3 && aggressionPct >= 150;
+  // ★ 수급 불균형 조건 완화: 매도/매수비 ≥ 2x AND 체결 강도 ≥ 100%
+  // 데이장에서도 감지 가능하도록 임계값 하향
+  const isImbalance = askBidRatio >= 2 && aggressionPct >= 100;
   const logicName = isImbalance ? '[🎯스나이퍼 매수] 수급불균형 돌파' : '';
   
   return { isImbalance, aggressionPct, askBidRatio, logicName };
