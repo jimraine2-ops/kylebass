@@ -1471,14 +1471,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sort: score surge → super pattern → explosive → volume burst → liquidity → score
+    // Sort: critical pattern → score surge → super pattern → explosive → volume burst → liquidity → score
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
     candidates.sort((a, b) => {
-      // ★ 점수 급상승 종목 1순위
+      // ★ 필승 패턴(A/B/C) 최우선
+      const aCP = (a as any).hasCriticalPattern ? 4 : 0;
+      const bCP = (b as any).hasCriticalPattern ? 4 : 0;
+      if (aCP !== bCP) return bCP - aCP;
+      // ★ 점수 급상승 종목
       const aSurge = (a as any).isScoreSurge ? 3 : 0;
       const bSurge = (b as any).isScoreSurge ? 3 : 0;
       if (aSurge !== bSurge) return bSurge - aSurge;
-      // ★ 슈퍼 패턴(15% 타겟) 최우선
+      // ★ 슈퍼 패턴(15% 타겟)
       const aSP = (a as any).isSuperPattern ? 2 : 0;
       const bSP = (b as any).isSuperPattern ? 2 : 0;
       if (aSP !== bSP) return bSP - aSP;
@@ -1497,10 +1501,17 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 정예 1~5선 집중 투자: 63점+85% 확정 후보만 상위 5개 집중
+    // ★ 정예 1~5선 집중 투자: 필승 패턴 or (65점+90%익절확률) 확정 후보만
     const filteredCandidates = candidates.filter(c => {
       const winProb = getWinProbability(c.scoring.totalScore);
-      return c.scoring.totalScore >= 65 && winProb >= 85; // ★ score 65+ & 85% 이상 → 진입
+      const hasCritical = (c as any).hasCriticalPattern;
+      // 필승 패턴 감지 시: 50점 이상 + 패턴 익절확률 90%+ → 즉시 진입
+      if (hasCritical) {
+        const patternConf = (c as any).criticalPatternConfidence || 0;
+        return patternConf >= 90 || (c.scoring.totalScore >= 65 && winProb >= 90);
+      }
+      // 일반 진입: 65점+ & 90% 이상
+      return c.scoring.totalScore >= 65 && winProb >= 90;
     });
     const topCandidates = filteredCandidates.slice(0, 5);
 
