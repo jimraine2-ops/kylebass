@@ -144,7 +144,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             📡 Finnhub 실시간 + Twelve Data 교차검증
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🎯 정예 5선 집중 | ₩100만 원
+            🎯 정예 5선 집중 | 5/10 충족 | ₩100만 원
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
             🛡️ +1.0%→본절보호 | 40점↓ 시에만 매도
