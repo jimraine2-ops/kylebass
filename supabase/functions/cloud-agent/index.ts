@@ -806,6 +806,16 @@ Deno.serve(async (req) => {
 
     const initialBalance = wallet.initial_balance || wallet.balance;
 
+    // ========== SESSION TRANSITION RESET (after openPos loaded) ==========
+    if (lastSessionType && lastSessionType !== currentSession) {
+      const heldBefore = new Set((openPos || []).map((p: any) => p.symbol));
+      const resetCount = activeUnifiedList.size;
+      activeUnifiedList.clear();
+      for (const s of heldBefore) activeUnifiedList.add(s);
+      await addLog('system', 'info', null, `[세션전환] ${lastSessionType} → ${currentSession} | 스캔 리스트 리셋 (${resetCount}개 초기화, 보유 ${heldBefore.size}개 유지) — 새 수급 기반 종목 유입 시작`, {});
+    }
+    lastSessionType = currentSession;
+
     // Always include held symbols in scan
     const heldSymbols = (openPos || []).map((p: any) => p.symbol);
     for (const s of heldSymbols) {
