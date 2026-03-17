@@ -49,9 +49,19 @@ export function TradeNotificationListener() {
           const priceKRW = Math.round((trade.price || 0) * 1350);
           const score = trade.entry_score ?? "N/A";
           const confidence = trade.ai_confidence ?? 0;
-          const isSuperPattern = (trade.ai_reason || '').includes('15%') || (trade.ai_reason || '').includes('슈퍼');
-          const is90Prob = confidence >= 90 || (trade.ai_reason || '').includes('익절 확률');
+          const aiReason = trade.ai_reason || '';
+          const isSuperPattern = aiReason.includes('15%') || aiReason.includes('슈퍼');
+          const is90Prob = confidence >= 90 || aiReason.includes('익절 확률');
           const targetPriceKRW = Math.round((trade.price || 0) * 1.15 * 1350);
+
+          // ★ 필승 로직 이름 파싱
+          let logicTag = '🚀 매수 완료';
+          if (aiReason.includes('스나이퍼 매수')) logicTag = '🎯 스나이퍼 매수 — 수급불균형 돌파';
+          else if (aiReason.includes('수급 돌파 매수')) logicTag = '🔫 수급 돌파 매수 — 세력미이탈 눌림목';
+          else if (aiReason.includes('선제적 요격')) logicTag = '🎯 선제적 요격 — 매집선취매';
+          else if (aiReason.includes('확정수익')) logicTag = '🏆 확정수익 매수';
+          else if (isSuperPattern) logicTag = '🎯 슈퍼 패턴 매수! 15% 수익 타겟';
+          else if (is90Prob) logicTag = `🏆 익절확률 ${confidence}% 필승 종목 매수`;
 
           const message = is90Prob
             ? `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 🏆익절확률: ${confidence}% | 🎯목표: ₩${targetPriceKRW.toLocaleString("ko-KR")}`
@@ -59,11 +69,7 @@ export function TradeNotificationListener() {
             ? `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 🎯15% 목표가: ₩${targetPriceKRW.toLocaleString("ko-KR")}`
             : `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 신뢰도: ${confidence}%`;
 
-          const title = is90Prob
-            ? `🏆 익절확률 ${confidence}% 필승 종목 매수 완료!`
-            : isSuperPattern
-            ? `🎯 슈퍼 패턴 매수! 15% 수익 타겟`
-            : `🚀 매수 완료`;
+          const title = logicTag;
 
           const duration = is90Prob ? 15000 : isSuperPattern ? 12000 : 8000;
           const borderColor = is90Prob ? '#f59e0b' : isSuperPattern ? 'hsl(var(--warning))' : 'hsl(var(--stock-up))';

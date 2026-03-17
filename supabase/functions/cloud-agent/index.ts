@@ -1828,7 +1828,10 @@ Deno.serve(async (req) => {
       const indDetails = Object.entries(r.scoring.indicators)
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
-      const logMsg = `[${isSuperEntry ? '🎯15%슈퍼매수' : isAccumEntry ? '🎯선제적요격-선취매' : '🏆확정수익매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${probTag}${spreadNote}${volRankTag}${burstTag}${condensationTag}${superTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const entryLogicTag = (r as any).entryLogicName || '[🏆확정수익매수]';
+      const orderFlowTag = (r as any).isOrderFlowEntry ? ` | 🎯수급불균형(매도/매수비 ${((r as any).data ? detectOrderFlowImbalance((r as any).data.closes, (r as any).data.opens, (r as any).data.volumes, (r as any).data.highs, (r as any).data.lows).askBidRatio.toFixed(1) : '?')}x)` : '';
+      const pullbackTag = (r as any).isPullbackEntry ? ` | 🔫눌림목(가격↓${detectPullbackWithForce((r as any).data?.closes || [], (r as any).data?.volumes || []).priceDropPct.toFixed(1)}%/거래량↓${detectPullbackWithForce((r as any).data?.closes || [], (r as any).data?.volumes || []).volumeDropPct.toFixed(1)}%)` : '';
+      const logMsg = `${entryLogicTag} [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${probTag}${orderFlowTag}${pullbackTag}${spreadNote}${volRankTag}${burstTag}${condensationTag}${superTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       // ★ 슈퍼 패턴 알림: "15% 익절이 보장된 슈퍼 패턴 종목 매수 완료"
       if (isSuperEntry) {
