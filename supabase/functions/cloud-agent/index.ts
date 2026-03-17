@@ -552,7 +552,9 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const currentVol = volumes[n];
   const avgVol = volumes.length >= 21 ? volumes.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 : currentVol;
   const rvol = avgVol > 0 ? currentVol / avgVol : 1;
-  const rvolScore = rvol >= 3 ? 10 : rvol >= 2.5 ? 8 : rvol >= 2 ? 6 : rvol >= 1.5 ? 4 : 2;
+  // ★ 데이장 완화: 거래량 0일 때 RVOL을 1.0으로 간주 (불이익 제거)
+  const effectiveRvol = (currentVol === 0 && isLowVolumeSession) ? 1.0 : rvol;
+  const rvolScore = effectiveRvol >= 3 ? 10 : effectiveRvol >= 2.5 ? 8 : effectiveRvol >= 2 ? 6 : effectiveRvol >= 1.5 ? 4 : effectiveRvol >= 0.8 ? 3 : 2;
   
   // 3. VWAP/캔들 패턴
   const ema9 = calculateEMA(closes, 9);
@@ -653,7 +655,7 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
     const superPattern = detectSuperPattern(closes, highs, lows, volumes, adxValue);
 
     return {
-    totalScore, trailingStop, rvol, changePct, metCount,
+    totalScore, trailingStop, rvol: effectiveRvol, changePct, metCount,
     vwap, bbLower, bbUpper,
     accumulation,
     adx: adxValue,
@@ -1132,11 +1134,13 @@ Deno.serve(async (req) => {
     if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 70);
     else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 67);
 
-    // Session adaptation — ★ 고속 캐치업: 최소 60점 강제 하한선 (급등 초입 선점)
+    // Session adaptation — ★ 데이장 완화: 절대 하한 35점 (필승패턴 활성화)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // 절대 하한 65점 (고정밀 진입 유지)
-    const adaptedRvolMin = entryRelax < 1.0 ? 1.2 : 1.5; // ★ 초고속 순환: RVOL 3x 상대적 급등 → 1.5x로 완화 (평소 대비 300%↑ 외에도 유입)
-    const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
+    // ★ 데이장/프리마켓/애프터마켓: 하한 35점, 정규장: 하한 60점
+    const sessionFloor = isLowVolumeSession ? 35 : 60;
+    const adaptedEntryThreshold = Math.max(rawAdapted, sessionFloor);
+    const adaptedRvolMin = entryRelax < 1.0 ? 0.5 : 1.5; // ★ 데이장: RVOL 0.5x (거의 해제)
+    const adaptedVwapMin = entryRelax < 1.0 ? 1 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
 
     if (entryRelax < 1.0) {
