@@ -1559,11 +1559,25 @@ Deno.serve(async (req) => {
         }));
 
         for (const r of results) {
-          if (!r || r.scoring.totalScore < adaptedEntryThreshold) continue;
+          if (!r) continue;
           const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
           const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
           if (alreadyHolding && !isPyramiding) continue;
           if (openCount >= MAX_POSITIONS) continue;
+
+          // ★ 필승 로직 1: 수급 불균형(Order Flow) 즉시 매수 — 점수보다 수급의 질 우선
+          const orderFlow = detectOrderFlowImbalance(r.data.closes, r.data.opens, r.data.volumes, r.data.highs, r.data.lows);
+          const isOrderFlowEntry = orderFlow.isImbalance;
+          
+          // ★ 필승 로직 2: 세력 미이탈 눌림목 선취매 — 무조건 익절 패턴
+          const pullback = detectPullbackWithForce(r.data.closes, r.data.volumes);
+          const isPullbackEntry = pullback.isPullback;
+          
+          // 필승 로직 진입 시 점수 문턱 완화 (수급 원리 우선)
+          const isWinningLogicEntry = isOrderFlowEntry || isPullbackEntry;
+          const effectiveThreshold = isWinningLogicEntry ? Math.min(adaptedEntryThreshold, 55) : adaptedEntryThreshold;
+          
+          if (r.scoring.totalScore < effectiveThreshold) continue;
 
           // ★ 유동성 하한선 & 수급 동기화
           const vlInfo = volumeLeaders.find(vl => vl.symbol === r.sym);
@@ -1571,7 +1585,7 @@ Deno.serve(async (req) => {
           const isAccumCandidate = isLowVolumeSession && accumPattern?.isAccumulating;
           
           // ★ 선취매: 매집 패턴 감지 시 거래대금 필터 해제 (필승 패턴이면 거래량 제한 무시)
-          if (!isAccumCandidate) {
+          if (!isAccumCandidate && !isWinningLogicEntry) {
             if (vlInfo && vlInfo.tradingValue < 10000) continue;
             const sessionAvgTradingValue = volumeLeaders.length > 0 
               ? volumeLeaders.reduce((sum, vl) => sum + vl.tradingValue, 0) / volumeLeaders.length 
@@ -1587,25 +1601,34 @@ Deno.serve(async (req) => {
           const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
           const isAccumEntry = isAccumCandidate;
           
-          // 최소 충족 조건: 10개 중 5개 이상 충족 (매집 패턴 시 3개로 완화 — 에너지 응축 포함)
-          const minMet = isAccumEntry ? 3 : 5;
+          // 최소 충족 조건 (필승 로직 진입 시 2개로 완화)
+          const minMet = isWinningLogicEntry ? 2 : isAccumEntry ? 3 : 5;
           if (metCount < minMet) continue;
           
-          // ★ 선취매: 매집 패턴 감지 시 RVOL 요건 완전 해제 (필승 패턴 = 거래량 무관)
-          // ★ 초고속 순환: RVOL 1.5x로 완화 (상대적 거래량 폭증 종목 포착)
-          if (!isAccumEntry && rvol < adaptedRvolMin) continue;
+          // ★ 필승 로직/선취매 시 RVOL 요건 해제
+          if (!isAccumEntry && !isWinningLogicEntry && rvol < adaptedRvolMin) continue;
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          // ★ 선취매: 매집 패턴 시 체결강도 60%로 완화 (조용한 매집은 양봉비율만으로 판단)
-          const minAggression = isAccumEntry ? 60 : 120;
+          // ★ 필승 로직 시 체결강도 요건 완화
+          const minAggression = isWinningLogicEntry ? 50 : isAccumEntry ? 60 : 120;
           if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
 
+          // ★ 진입 로직 이름 태깅
+          let entryLogicName = '';
+          if (isOrderFlowEntry) entryLogicName = orderFlow.logicName;
+          else if (isPullbackEntry) entryLogicName = pullback.logicName;
+          else if (isAccumEntry) entryLogicName = '[🎯선제적 요격] 매집선취매';
+          else entryLogicName = '[🏆확정수익] 지표돌파매수';
+
           // 수급 돌파/유동성 점수 계산
           (r as any).isVolumeBurst = rvol >= 2.0;
           (r as any).isAccumulationEntry = isAccumEntry;
+          (r as any).isOrderFlowEntry = isOrderFlowEntry;
+          (r as any).isPullbackEntry = isPullbackEntry;
+          (r as any).entryLogicName = entryLogicName;
           (r as any).accumPattern = accumPattern?.pattern || '';
           (r as any).accumCondensation = accumPattern?.condensation || 0;
           (r as any).accumStealthBuying = accumPattern?.stealthBuying || false;
@@ -1614,6 +1637,14 @@ Deno.serve(async (req) => {
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
+
+          // ★ 필승 로직 알림
+          if (isOrderFlowEntry) {
+            await addLog('unified', 'scan', r.sym, `[🎯스나이퍼 매수] ${r.sym} 수급불균형 돌파! 매도/매수비 ${orderFlow.askBidRatio.toFixed(1)}x ≥ 3x AND 체결강도 ${orderFlow.aggressionPct}% ≥ 150% → 즉시 전액 매수`, { orderFlow, score: r.scoring.totalScore });
+          }
+          if (isPullbackEntry) {
+            await addLog('unified', 'scan', r.sym, `[🔫수급 돌파 매수] ${r.sym} 세력미이탈 눌림목! 가격↓${pullback.priceDropPct.toFixed(1)}% vs 거래량↓${pullback.volumeDropPct.toFixed(1)}% (비율 ${pullback.ratio.toFixed(1)}x ≥ 5x) → 무조건 익절 패턴`, { pullback, score: r.scoring.totalScore });
+          }
 
           // ★ 선취매 알림 로그 (강화) — 선제적 요격 완전 구현
           if (isAccumEntry) {
