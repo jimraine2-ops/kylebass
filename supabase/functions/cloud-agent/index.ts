@@ -1559,10 +1559,8 @@ Deno.serve(async (req) => {
             if (capType === 'small' && price < MIN_PRICE_USD) return null;
             // ★ 필승 지시서: ₩10,000 ($7.41) 이상 종목 제외
             if (price > MAX_PRICE_USD) return null;
-            // ★ 유동성 확보: 거래대금 최소 세션 평균 이상 필터
-            const vlCheck = volumeLeaders.find(vl => vl.symbol === sym);
-            const sessionAvgVal = volumeLeaders.length > 0 ? volumeLeaders.reduce((s, vl) => s + vl.tradingValue, 0) / volumeLeaders.length : 0;
-            if (vlCheck && sessionAvgVal > 0 && vlCheck.tradingValue < sessionAvgVal && !isLowVolumeSession) return null;
+            // ★ 데이장 완화: 거래대금 사전 필터 해제 (후단 필승 로직에서 판단)
+            // 정규장에서만 유동성 사전 필터 적용
             const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
             if (!scoring) return null;
             lastScores.set(sym, scoring.totalScore);
