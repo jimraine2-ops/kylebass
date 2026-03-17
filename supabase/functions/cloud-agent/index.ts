@@ -477,6 +477,9 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
     const obvData = detectOBVDivergence(closes, volumes);
     const superPattern = detectSuperPattern(closes, highs, lows, volumes, adxValue);
 
+    // ★ 필승 패턴 A/B/C 감지
+    const criticalPatterns = detectCriticalPatterns(closes, highs, lows, opens, volumes, quote);
+
     return {
     totalScore, trailingStop, rvol, changePct, metCount,
     vwap, bbLower, bbUpper,
@@ -484,6 +487,7 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
     adx: adxValue,
     obv: obvData,
     superPattern,
+    criticalPatterns,
     indicators: {
       sentiment: { score: sentimentScore, details: `변동률 ${changePct.toFixed(2)}%` },
       rvol: { score: rvolScore, rvol, weight: isLowVolumeSession ? '×0.8(선취매)' : '×1.5', details: `RVOL ${rvol.toFixed(1)}x` },
