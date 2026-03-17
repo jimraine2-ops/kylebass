@@ -974,10 +974,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 전 종목 확장: 동적 발견 종목에서도 슬롯 충전
+    // ★ 전 종목 확장: 동적 발견 종목에서 롤링 슬롯 충전 (매 사이클 100개씩 순환)
     const dynSymbols = discoveredSymbols.length > 0 ? discoveredSymbols : [];
-    const dynStart = (cycleCount * 50) % Math.max(1, dynSymbols.length);
-    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(50, dynSymbols.length); i++) {
+    const dynStart = (cycleCount * 100) % Math.max(1, dynSymbols.length);
+    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(100, dynSymbols.length); i++) {
       const sym = dynSymbols[(dynStart + i) % dynSymbols.length];
       if (!activeUnifiedList.has(sym)) {
         activeUnifiedList.add(sym);
