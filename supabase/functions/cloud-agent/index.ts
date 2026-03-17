@@ -9,8 +9,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 1000;
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_KRW = 12000; // ★ 12,000원 미만 저가주 전용
-const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $8.89
+const MAX_PRICE_KRW = 50000; // ★ 50,000원 미만 중소형주 포함
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $37
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
@@ -1287,7 +1287,7 @@ Deno.serve(async (req) => {
     }
 
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
-    const MAX_POSITIONS = 3; // ★ 정예 1~3선: 100만 원을 최대 3개에만 극한 집중 투입
+    const MAX_POSITIONS = 5; // ★ 정예 1~5선: 100만 원을 최대 5개에 분산 투입
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
     if (!marketBuyHalt && !isOpeningRush) {
@@ -1339,17 +1339,17 @@ Deno.serve(async (req) => {
           const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
           const isAccumEntry = isAccumCandidate;
           
-          // 최소 충족 조건: 10개 중 5개 이상 충족 (매집 패턴 시 3개로 완화 — 에너지 응축 포함)
-          const minMet = isAccumEntry ? 3 : 5;
+          // 최소 충족 조건: 10개 중 4개 이상 충족 (매집 패턴 시 3개로 완화)
+          const minMet = isAccumEntry ? 3 : 4;
           if (metCount < minMet) continue;
           
-          // ★ 선취매: 매집 패턴 감지 시 RVOL 요건 완전 해제 (필승 패턴 = 거래량 무관)
-          if (!isAccumEntry && rvol < adaptedRvolMin) continue;
+          // ★ RVOL 완화: 1.0 이상이면 진입 (매집 패턴 시 해제)
+          if (!isAccumEntry && rvol < 1.0) continue;
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          // ★ 선취매: 매집 패턴 시 체결강도 60%로 완화 (조용한 매집은 양봉비율만으로 판단)
-          const minAggression = isAccumEntry ? 60 : 120;
+          // ★ 체결강도 완화: 80% 이상 (매집 패턴 시 40%)
+          const minAggression = isAccumEntry ? 40 : 80;
           if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
@@ -1435,9 +1435,9 @@ Deno.serve(async (req) => {
     // ★ 정예 1~3선 집중 투자: 63점+88% 확정 후보만 상위 3개 집중
     const filteredCandidates = candidates.filter(c => {
       const winProb = getWinProbability(c.scoring.totalScore);
-      return winProb >= 88;
+      return winProb >= 75; // ★ 75% 이상 (score 60+) → 적극적 진입
     });
-    const topCandidates = filteredCandidates.slice(0, 3);
+    const topCandidates = filteredCandidates.slice(0, 5);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
@@ -1458,7 +1458,7 @@ Deno.serve(async (req) => {
       const isScoreSurge = (r as any).isScoreSurge;
       
       // ★ 정예 1~3선 집중 투자: 슈퍼/급상승은 잔고의 50%까지 극한 집중
-      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0.50 : 0.33;
+      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
       const maxKRW = balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
