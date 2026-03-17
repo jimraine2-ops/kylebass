@@ -54,6 +54,11 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
     const scoreStrong = stock.totalScore >= 55;
     const showHoldingStatus = isPriceDown && scoreStrong;
 
+    // ★ 필승 패턴 감지 표시
+    const criticalPatterns = stock.criticalPatterns?.patterns || [];
+    const hasCriticalPattern = criticalPatterns.length > 0;
+    const criticalPatternConfidence = stock.criticalPatterns?.confidence || 0;
+
     return (
       <Card
         ref={ref}
