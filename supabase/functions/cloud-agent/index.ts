@@ -1376,6 +1376,7 @@ Deno.serve(async (req) => {
         openCount++;
         await addLog('unified', 'buy', dip.sym, msg, { type: 'dip_buy', score: dip.scoring.totalScore });
       }
+      } // end if openCount < MAX_POSITIONS
     }
 
     // ========== 일일 수익 목표 체크 (₩300,000) ==========
