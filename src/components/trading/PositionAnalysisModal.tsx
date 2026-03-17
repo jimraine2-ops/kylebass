@@ -182,8 +182,8 @@ export function PositionAnalysisModal({
   ];
 
   // PnL
-  const investmentKRW = Math.round(pos.price * pos.quantity * fxRate);
-  const currentValueKRW = Math.round(displayPrice * pos.quantity * fxRate);
+  const investmentKRW = Math.round((pos?.price || 0) * (pos?.quantity || 0) * fxRate);
+  const currentValueKRW = Math.round(displayPrice * (pos?.quantity || 0) * fxRate);
   const unrealizedPnl = currentValueKRW - investmentKRW;
   const unrealizedPnlPct = investmentKRW > 0 ? ((currentValueKRW / investmentKRW) - 1) * 100 : 0;
   const isProfit = unrealizedPnl >= 0;
