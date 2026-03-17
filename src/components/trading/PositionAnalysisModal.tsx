@@ -535,6 +535,23 @@ export function PositionAnalysisModal({
                 </p>
               </div>
 
+              {/* ★ 실시간 순매수 대금 (Money Flow) */}
+              <div className={cn(
+                "p-2.5 rounded-lg border text-center",
+                isNetBuying ? 'bg-stock-up/5 border-stock-up/30' : 'bg-stock-down/5 border-stock-down/30'
+              )}>
+                <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1">
+                  <DollarSign className="w-3 h-3" />
+                  실시간 순매수 대금
+                </p>
+                <p className={cn("text-lg font-bold font-mono", isNetBuying ? 'text-stock-up' : 'text-stock-down')}>
+                  {isNetBuying ? '+' : ''}{formatTurnoverKRW(Math.abs(netMoneyFlowKRW))}
+                </p>
+                <p className={cn("text-[10px] font-medium", isNetBuying ? 'text-stock-up' : 'text-stock-down')}>
+                  {isNetBuying ? '📈 순매수 유입 중' : '📉 순매도 유출 중'}
+                </p>
+              </div>
+
               {/* Buy/Sell Pressure Bar */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-[10px]">
