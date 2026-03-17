@@ -1271,7 +1271,7 @@ Deno.serve(async (req) => {
     }
 
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
-    const MAX_POSITIONS = 15;
+    const MAX_POSITIONS = 5; // ★ 정예 5선: 100만 원을 최대 5개에만 집중 투입
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
     if (!marketBuyHalt && !isOpeningRush) {
