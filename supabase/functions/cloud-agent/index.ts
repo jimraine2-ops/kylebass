@@ -1458,7 +1458,7 @@ Deno.serve(async (req) => {
       const isScoreSurge = (r as any).isScoreSurge;
       
       // ★ 정예 1~3선 집중 투자: 슈퍼/급상승은 잔고의 50%까지 극한 집중
-      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0.50 : 0.33;
+      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
       const maxKRW = balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
