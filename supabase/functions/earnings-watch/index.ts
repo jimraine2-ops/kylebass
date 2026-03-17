@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
             volume: quote.v || 0,
             quantScore: score,
             winProb,
-            isPreBuy: score >= 60 && winProb >= 88,
+            isPreBuy: score >= 65 && winProb >= 85,
             isHot: changePct >= 10,
             isSurging: changePct >= 5,
           };

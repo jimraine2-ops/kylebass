@@ -703,18 +703,8 @@ Deno.serve(async (req) => {
     const etTime = et2.getHours() * 60 + et2.getMinutes();
     const isOpeningRush = etTime >= 570 && etTime < 585; // 09:30~09:45 ET
 
-    // ========== SESSION TRANSITION RESET ==========
+    // ========== SESSION TRANSITION RESET (moved after wallet/positions load) ==========
     const currentSession = sessionInfo.session;
-    if (lastSessionType && lastSessionType !== currentSession) {
-      // 세션 전환 감지 → 스캔 리스트 초기화 (보유 종목은 유지)
-      const heldBefore = new Set((openPos || []).map((p: any) => p.symbol));
-      const resetCount = activeUnifiedList.size;
-      activeUnifiedList.clear();
-      // 보유 종목은 계속 유지
-      for (const s of heldBefore) activeUnifiedList.add(s);
-      await addLog('system', 'info', null, `[세션전환] ${lastSessionType} → ${currentSession} | 스캔 리스트 리셋 (${resetCount}개 초기화, 보유 ${heldBefore.size}개 유지) — 새 수급 기반 종목 유입 시작`, {});
-    }
-    lastSessionType = currentSession;
 
     // ========== UNIFIED DYNAMIC UNIVERSE ROTATION (★ 전 종목 확장 스캔) ==========
     const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
@@ -816,6 +806,16 @@ Deno.serve(async (req) => {
 
     const initialBalance = wallet.initial_balance || wallet.balance;
 
+    // ========== SESSION TRANSITION RESET (after openPos loaded) ==========
+    if (lastSessionType && lastSessionType !== currentSession) {
+      const heldBefore = new Set((openPos || []).map((p: any) => p.symbol));
+      const resetCount = activeUnifiedList.size;
+      activeUnifiedList.clear();
+      for (const s of heldBefore) activeUnifiedList.add(s);
+      await addLog('system', 'info', null, `[세션전환] ${lastSessionType} → ${currentSession} | 스캔 리스트 리셋 (${resetCount}개 초기화, 보유 ${heldBefore.size}개 유지) — 새 수급 기반 종목 유입 시작`, {});
+    }
+    lastSessionType = currentSession;
+
     // Always include held symbols in scan
     const heldSymbols = (openPos || []).map((p: any) => p.symbol);
     for (const s of heldSymbols) {
@@ -894,7 +894,7 @@ Deno.serve(async (req) => {
     // --- Market Trend Guard (비활성화: 시장잠금 OFF) ---
     let marketBearish = false;
     let marketBuyHalt = false;
-    let baseEntryThreshold = 63; // ★ 63점 돌파 필승형: 진입 문턱 63점
+    let baseEntryThreshold = 65; // ★ 65점 돌파 필승형: 진입 문턱 65점
     let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
@@ -928,7 +928,7 @@ Deno.serve(async (req) => {
 
     // Session adaptation — ★ 필승형: 최소 65점 강제 하한선 (장외에서도 65점 이하 진입 금지)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 63); // ★ 절대 하한 63점
+    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // ★ 절대 하한 65점
     const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
