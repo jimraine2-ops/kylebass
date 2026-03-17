@@ -177,7 +177,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             <div>
               <p className="text-lg font-bold text-stock-up">오늘의 목표 달성! 🎊</p>
               <p className="text-sm text-muted-foreground">
-                오늘 실현 수익: <span className="font-bold font-mono text-stock-up">₩{todayPnl.toLocaleString('ko-KR')}</span> / 목표 ₩300,000
+                오늘 실현 수익: <span className="font-bold font-mono text-stock-up">₩{todayPnl.toLocaleString('ko-KR')}</span> / 목표 ₩500,000
               </p>
             </div>
           </CardContent>
