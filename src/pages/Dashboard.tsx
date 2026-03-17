@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Radio, Bot, Wallet } from "lucide-react";
 import { Link } from "react-router-dom";
 import { UnifiedPortfolio } from "@/components/dashboard/UnifiedPortfolio";
-import { SuperScannerPanel } from "@/components/dashboard/SuperScannerPanel";
+
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useAIPortfolio, useScalpingPortfolio } from "@/hooks/useStockData";
@@ -72,9 +72,6 @@ export default function Dashboard() {
 
       {/* Section 1: Unified Portfolio (all open positions) */}
       <UnifiedPortfolio wsGetPrice={ws.getPrice} fxRate={fxRate} />
-
-      {/* Section 2: Super Scanner Top 30 */}
-      <SuperScannerPanel />
     </div>
   );
 }

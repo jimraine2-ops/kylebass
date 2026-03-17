@@ -9,6 +9,7 @@ import Dashboard from "@/pages/Dashboard";
 import StockDetail from "@/pages/StockDetail";
 import AITradingPage from "@/pages/AITradingPage";
 import UnifiedScanPage from "@/pages/UnifiedScanPage";
+import EarningsWatchPage from "@/pages/EarningsWatchPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
               <Route path="/stock/:symbol" element={<StockDetail />} />
               <Route path="/unified-scan" element={<UnifiedScanPage />} />
               <Route path="/ai-trading" element={<AITradingPage />} />
+              <Route path="/earnings-watch" element={<EarningsWatchPage />} />
               {/* Legacy redirects */}
               <Route path="/recommendations" element={<UnifiedScanPage />} />
               <Route path="/penny-stocks" element={<UnifiedScanPage />} />
