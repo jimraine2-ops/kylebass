@@ -944,9 +944,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Fill 50 active slots — ★ 초고속: 20 대형 + 30 소형 = 50개 (타임아웃 방지)
-    const LARGE_SLOTS = 20;
-    const SMALL_SLOTS = 30;
+    // Step 2: Fill 100 active slots — ★ 전 종목 확장: 40 대형 + 60 소형 = 100개 롤링
+    const LARGE_SLOTS = 40;
+    const SMALL_SLOTS = 60;
 
     const currentLarge: string[] = [];
     const currentSmall: string[] = [];
