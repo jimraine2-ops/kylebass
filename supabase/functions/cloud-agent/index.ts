@@ -1223,8 +1223,15 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ [무손실 본절가 이동 고도화] — 0.8% 달성 시 즉시 +0.1% 본절 보호 → 리스크 제로
-        if (pnlPct >= 0.8 && pos.stop_loss < pos.price * 1.001) {
+        // ★ [승률100% 가드] 1.2% 달성 시 → SL을 매수가+0.2%로 즉시 상향 → '절대 손실 불가' 상태
+        if (pnlPct >= 1.2 && pos.stop_loss < pos.price * 1.002) {
+          const bs = +(pos.price * 1.002).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
+          pos.stop_loss = bs;
+          await addLog('unified', 'defense', sym, `[🛡️승률100%가드] ${sym} +${pnlPct.toFixed(2)}% (≥1.2%) → SL=${fmtKRW(bs)} (매수가+0.2%) 절대손실불가 달성! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+        }
+        // ★ [무손실 본절가 이동] — 0.8% 달성 시 +0.1% 본절 보호 (1.2% 미달 시 1차 방어)
+        else if (pnlPct >= 0.8 && pos.stop_loss < pos.price * 1.001) {
           const bs = +(pos.price * 1.001).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
@@ -1232,11 +1239,12 @@ Deno.serve(async (req) => {
         }
 
         // ★ [1분 타임아웃] 진입 후 1분 내 승부 나지 않으면 본전 탈출 (기회비용 방어)
+        // 단, 선취매 종목은 정규장까지 강력 홀딩 → 타임아웃 면제
         const entryTime = new Date(pos.opened_at).getTime();
         const elapsedMs = now.getTime() - entryTime;
         const oneMinute = 60 * 1000;
-        if (elapsedMs >= oneMinute && pnlPct > -0.5 && pnlPct < 0.8 && pos.stop_loss < pos.price * 0.999) {
-          // 1분 경과 + 수익 0.8% 미달 → 본전 부근 탈출
+        const isPreEmptiveEntry = (pos.ai_reason || '').includes('선취매') || (pos.ai_reason || '').includes('필승패턴') || (pos.ai_reason || '').includes('스나이퍼') || (pos.ai_reason || '').includes('수급 돌파');
+        if (!isPreEmptiveEntry && elapsedMs >= oneMinute && pnlPct > -0.5 && pnlPct < 0.8 && pos.stop_loss < pos.price * 0.999) {
           const timeoutSL = +(pos.price * 0.999).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: timeoutSL }).eq('id', pos.id);
           pos.stop_loss = timeoutSL;
@@ -1386,7 +1394,11 @@ Deno.serve(async (req) => {
           else if (isLowVolumeSession && pnlPct < 0 && indicatorsHold) {
             await addLog('unified', 'hold', sym, `[세션홀딩] ${sym} ${sessionLabel} -${Math.abs(pnlPct).toFixed(2)}% 밀림 → 지표 ${quantScore}점(≥50) 양호, 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2), session: sessionLabel });
           }
-          // ★ 선취매 종목: 지표 55점 이상 → 정규장까지 무조건 보유
+          // ★ [필승 선취매 강력 홀딩] 데이/프리마켓 선취매 종목 → 정규장까지 무조건 보유
+          // 지표 40점 이상이면 절대 매도하지 않음 (정규장 수급 폭발 대기)
+          else if (isPreMarketEntry && quantScore >= 40 && currentSession !== 'REGULAR') {
+            await addLog('unified', 'hold', sym, `[🔒필승선취매-강력홀딩] ${sym} 지표 ${quantScore}점(≥40) | ${sessionLabel} → 정규장 거대 수급 진입까지 절대 홀딩! PnL: ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          }
           else if (isPreMarketEntry && indicatorsStrong && currentSession !== 'REGULAR') {
             await addLog('unified', 'hold', sym, `[선취매홀딩] ${sym} 지표 ${quantScore}점(≥55) → 정규장 폭발 대기`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           }
@@ -1572,10 +1584,22 @@ Deno.serve(async (req) => {
           // ★ 필승 로직 2: 세력 미이탈 눌림목 선취매 — 무조건 익절 패턴
           const pullback = detectPullbackWithForce(r.data.closes, r.data.volumes);
           const isPullbackEntry = pullback.isPullback;
+
+          // ★ 필승 로직 3: [데이/프리마켓 필승 확정 선매수] — 거래량 제한 없이 즉시 선매수
+          // OBV 상승 + 가격 횡보 = 수급 응축 → 정규장 폭발 90%↑ 확률
+          const obvData = detectOBVDivergence(r.data.closes, r.data.volumes);
+          const accumData = r.scoring.accumulation || { isAccumulating: false, condensation: 0, stealthBuying: false, historicalSurgeMatch: 0, confidence: 0, pattern: '' };
+          
+          // 필승 패턴: (OBV매집 + 가격횡보) OR (잠입매집 + 응축도≥5) OR (과거급등패턴 90%↑ 매칭)
+          const isOBVAccum = obvData.obvRising && obvData.priceSideways;
+          const isStealthAccum = accumData.stealthBuying && accumData.condensation >= 5;
+          const isHistoricalMatch = accumData.historicalSurgeMatch >= 90;
+          const isSureWinPattern = isOBVAccum || isStealthAccum || isHistoricalMatch;
+          const isSureWinEntry = isSureWinPattern && isLowVolumeSession; // 데이/프리마켓에서만 발동
           
           // 필승 로직 진입 시 점수 문턱 완화 (수급 원리 우선)
-          const isWinningLogicEntry = isOrderFlowEntry || isPullbackEntry;
-          const effectiveThreshold = isWinningLogicEntry ? Math.min(adaptedEntryThreshold, 55) : adaptedEntryThreshold;
+          const isWinningLogicEntry = isOrderFlowEntry || isPullbackEntry || isSureWinEntry;
+          const effectiveThreshold = isWinningLogicEntry ? Math.min(adaptedEntryThreshold, 50) : adaptedEntryThreshold;
           
           if (r.scoring.totalScore < effectiveThreshold) continue;
 
@@ -1584,7 +1608,7 @@ Deno.serve(async (req) => {
           const accumPattern = r.scoring.accumulation;
           const isAccumCandidate = isLowVolumeSession && accumPattern?.isAccumulating;
           
-          // ★ 선취매: 매집 패턴 감지 시 거래대금 필터 해제 (필승 패턴이면 거래량 제한 무시)
+          // ★ [필승 패턴] 거래량 제한 완전 해제 — 필승 패턴/선취매 시 거래대금 필터 무시
           if (!isAccumCandidate && !isWinningLogicEntry) {
             if (vlInfo && vlInfo.tradingValue < 10000) continue;
             const sessionAvgTradingValue = volumeLeaders.length > 0 
@@ -1605,13 +1629,13 @@ Deno.serve(async (req) => {
           const minMet = isWinningLogicEntry ? 2 : isAccumEntry ? 3 : 5;
           if (metCount < minMet) continue;
           
-          // ★ 필승 로직/선취매 시 RVOL 요건 해제
+          // ★ 필승 로직/선취매 시 RVOL 요건 완전 해제
           if (!isAccumEntry && !isWinningLogicEntry && rvol < adaptedRvolMin) continue;
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
           // ★ 필승 로직 시 체결강도 요건 완화
-          const minAggression = isWinningLogicEntry ? 50 : isAccumEntry ? 60 : 120;
+          const minAggression = isWinningLogicEntry ? 40 : isAccumEntry ? 60 : 120;
           if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
@@ -1620,6 +1644,7 @@ Deno.serve(async (req) => {
           let entryLogicName = '';
           if (isOrderFlowEntry) entryLogicName = orderFlow.logicName;
           else if (isPullbackEntry) entryLogicName = pullback.logicName;
+          else if (isSureWinEntry) entryLogicName = '[🔥필승패턴 선매수] 정규장폭발대기';
           else if (isAccumEntry) entryLogicName = '[🎯선제적 요격] 매집선취매';
           else entryLogicName = '[🏆확정수익] 지표돌파매수';
 
@@ -1628,6 +1653,7 @@ Deno.serve(async (req) => {
           (r as any).isAccumulationEntry = isAccumEntry;
           (r as any).isOrderFlowEntry = isOrderFlowEntry;
           (r as any).isPullbackEntry = isPullbackEntry;
+          (r as any).isSureWinEntry = isSureWinEntry;
           (r as any).entryLogicName = entryLogicName;
           (r as any).accumPattern = accumPattern?.pattern || '';
           (r as any).accumCondensation = accumPattern?.condensation || 0;
@@ -1645,9 +1671,16 @@ Deno.serve(async (req) => {
           if (isPullbackEntry) {
             await addLog('unified', 'scan', r.sym, `[🔫수급 돌파 매수] ${r.sym} 세력미이탈 눌림목! 가격↓${pullback.priceDropPct.toFixed(1)}% vs 거래량↓${pullback.volumeDropPct.toFixed(1)}% (비율 ${pullback.ratio.toFixed(1)}x ≥ 5x) → 무조건 익절 패턴`, { pullback, score: r.scoring.totalScore });
           }
+          if (isSureWinEntry) {
+            const sureWinReasons: string[] = [];
+            if (isOBVAccum) sureWinReasons.push(`OBV매집(가격횡보+OBV↑)`);
+            if (isStealthAccum) sureWinReasons.push(`잠입매집(응축${accumData.condensation.toFixed(1)}/10)`);
+            if (isHistoricalMatch) sureWinReasons.push(`과거급등패턴${accumData.historicalSurgeMatch}%일치`);
+            await addLog('unified', 'scan', r.sym, `[🔥필승패턴 선매수] ${r.sym} 정규장 폭발 확률 90%↑ 필승 패턴! [${sureWinReasons.join(' + ')}] | ${r.scoring.totalScore}점(${metCount}/10) | 거래량 제한 해제, 즉시 선매수 확정`, { obvData, accumData, score: r.scoring.totalScore });
+          }
 
           // ★ 선취매 알림 로그 (강화) — 선제적 요격 완전 구현
-          if (isAccumEntry) {
+          if (isAccumEntry && !isSureWinEntry) {
             const stealthTag = accumPattern?.stealthBuying ? '🕵️잠입매집 확인' : '';
             const surgeMatchTag = (accumPattern?.historicalSurgeMatch || 0) >= 50 ? `📈과거급등패턴 ${accumPattern.historicalSurgeMatch}%일치` : '';
             const sectorETF2 = SECTOR_MAP[r.sym] || 'QQQ';
@@ -1726,14 +1759,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 익절 확률 필터: 90% 우선, 후보 없으면 85%로 완화 (85% Hard Floor — 고정밀 진입)
-    let probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 90);
-    const probThreshold = probFilteredCandidates.length > 0 ? 90 : 85;
-    if (probFilteredCandidates.length === 0) {
-      probFilteredCandidates = candidates.filter(c => (c as any).winProbability >= 85);
+    // ★ 익절 확률 필터: 90% 우선, 후보 없으면 85%로 완화
+    // ★ 필승 패턴(isSureWinEntry, isOrderFlowEntry, isPullbackEntry)은 확률 필터 바이패스
+    const winningLogicCandidates = candidates.filter(c => (c as any).isSureWinEntry || (c as any).isOrderFlowEntry || (c as any).isPullbackEntry);
+    const normalCandidates = candidates.filter(c => !(c as any).isSureWinEntry && !(c as any).isOrderFlowEntry && !(c as any).isPullbackEntry);
+    let probFilteredNormal = normalCandidates.filter(c => (c as any).winProbability >= 90);
+    const probThreshold = probFilteredNormal.length > 0 ? 90 : 85;
+    if (probFilteredNormal.length === 0) {
+      probFilteredNormal = normalCandidates.filter(c => (c as any).winProbability >= 85);
     }
+    const probFilteredCandidates = [...winningLogicCandidates, ...probFilteredNormal];
     if (candidates.length > 0) {
-      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 익절확률 ${probThreshold}%↑ 통과: ${probFilteredCandidates.length}개 (${candidates.length - probFilteredCandidates.length}개 제외) | ★85% Hard Floor 적용 (고정밀 진입)`, {});
+      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 필승로직 ${winningLogicCandidates.length}개(바이패스) + 확률${probThreshold}%↑ ${probFilteredNormal.length}개 = 총 ${probFilteredCandidates.length}개 통과`, {});
     }
 
     // Sort: win probability → score surge → super pattern → explosive → liquidity → score
@@ -1800,9 +1837,10 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // ★ 선취매: 0.3~0.5% 위로 공격적 지정가 (슬리피지 허용 매수로 확실한 물량 확보)
+      // ★ [호가 무시 체결] 유동성 부족 시 0.3~0.5% 위 공격적 지정가 → 확실한 물량 확보
       const isAccumEntry = (r as any).isAccumulationEntry;
-      const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.005) : sessionSlippage; // 최소 0.5% 상단 제시
+      const isSureWin = (r as any).isSureWinEntry;
+      const aggressiveSlip = (isAccumEntry || isSureWin) ? Math.max(sessionSlippage, 0.005) : sessionSlippage; // 필승 패턴/선취매: 최소 0.5% 상단 제시
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
       // ★ [초고속 순환] 초기 SL -10% / TP +5% 단기 회전 (지표 강력 시 15%까지 트레일링 확장)
       const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망

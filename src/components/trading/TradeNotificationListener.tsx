@@ -56,7 +56,8 @@ export function TradeNotificationListener() {
 
           // ★ 필승 로직 이름 파싱
           let logicTag = '🚀 매수 완료';
-          if (aiReason.includes('스나이퍼 매수')) logicTag = '🎯 스나이퍼 매수 — 수급불균형 돌파';
+          if (aiReason.includes('필승패턴 선매수')) logicTag = '🔥 필승패턴 선매수 — 정규장 폭발 대기';
+          else if (aiReason.includes('스나이퍼 매수')) logicTag = '🎯 스나이퍼 매수 — 수급불균형 돌파';
           else if (aiReason.includes('수급 돌파 매수')) logicTag = '🔫 수급 돌파 매수 — 세력미이탈 눌림목';
           else if (aiReason.includes('선제적 요격')) logicTag = '🎯 선제적 요격 — 매집선취매';
           else if (aiReason.includes('확정수익')) logicTag = '🏆 확정수익 매수';
