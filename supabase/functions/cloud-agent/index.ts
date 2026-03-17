@@ -1689,7 +1689,7 @@ Deno.serve(async (req) => {
 
           candidates.push(r);
         }
-        if (i + 5 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 150)); // ★ 초고속: 300ms→150ms
+        if (i + 10 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 50)); // ★ 초고속: 150ms→50ms
       }
     }
 
