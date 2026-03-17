@@ -381,6 +381,66 @@ function calculateWinProbability(
   };
 }
 
+// ===== 수급 불균형(Order Flow) 즉시 매수 로직 =====
+// 매도 잔량 > 매수 잔량 × 3 AND 체결 강도 > 150% → 스나이퍼 매수
+function detectOrderFlowImbalance(closes: number[], opens: number[], volumes: number[], highs: number[], lows: number[]): { isImbalance: boolean; aggressionPct: number; askBidRatio: number; logicName: string } {
+  const n = closes.length - 1;
+  if (n < 5) return { isImbalance: false, aggressionPct: 0, askBidRatio: 0, logicName: '' };
+  
+  // 체결 강도: 양봉비율 × 거래량 가속
+  let bullCount = 0, volInc = 0;
+  for (let i = Math.max(0, n - 4); i <= n; i++) {
+    if (closes[i] > opens[i]) bullCount++;
+    if (i > 0 && volumes[i] > volumes[i - 1]) volInc++;
+  }
+  const bullRatio = (bullCount / 5) * 100;
+  const volAccel = volInc >= 3 ? 1.5 : volInc >= 2 ? 1.2 : 1.0;
+  const aggressionPct = Math.round(bullRatio * volAccel);
+  
+  // 매도/매수 잔량 비율 근사: 하락 시 거래량 vs 상승 시 거래량
+  let sellVol = 0, buyVol = 0;
+  for (let i = Math.max(0, n - 9); i <= n; i++) {
+    if (i > 0 && closes[i] < closes[i - 1]) sellVol += volumes[i];
+    else buyVol += volumes[i];
+  }
+  const askBidRatio = buyVol > 0 ? sellVol / buyVol : 0;
+  
+  // 수급 불균형 조건: 매도 잔량 ≥ 매수 × 3 AND 체결 강도 ≥ 150%
+  // 이는 매도 물량을 흡수하며 올라가는 "세력 매집" 신호
+  const isImbalance = askBidRatio >= 3 && aggressionPct >= 150;
+  const logicName = isImbalance ? '[🎯스나이퍼 매수] 수급불균형 돌파' : '';
+  
+  return { isImbalance, aggressionPct, askBidRatio, logicName };
+}
+
+// ===== 세력 이탈 없는 눌림목 선취매 =====
+// 가격 하락 폭 대비 거래량 감소 폭이 5배 이상 → 세력 미이탈 → 무조건 익절 패턴
+function detectPullbackWithForce(closes: number[], volumes: number[]): { isPullback: boolean; priceDropPct: number; volumeDropPct: number; ratio: number; logicName: string } {
+  const n = closes.length - 1;
+  if (n < 10) return { isPullback: false, priceDropPct: 0, volumeDropPct: 0, ratio: 0, logicName: '' };
+  
+  // 최근 5봉 vs 이전 5봉 비교
+  const recentCloses = closes.slice(-5);
+  const prevCloses = closes.slice(-10, -5);
+  const recentVols = volumes.slice(-5);
+  const prevVols = volumes.slice(-10, -5);
+  
+  const avgRecentPrice = recentCloses.reduce((a, b) => a + b, 0) / 5;
+  const avgPrevPrice = prevCloses.reduce((a, b) => a + b, 0) / 5;
+  const avgRecentVol = recentVols.reduce((a, b) => a + b, 0) / 5;
+  const avgPrevVol = prevVols.reduce((a, b) => a + b, 0) / 5;
+  
+  const priceDropPct = avgPrevPrice > 0 ? ((avgPrevPrice - avgRecentPrice) / avgPrevPrice) * 100 : 0;
+  const volumeDropPct = avgPrevVol > 0 ? ((avgPrevVol - avgRecentVol) / avgPrevVol) * 100 : 0;
+  
+  // 가격은 하락했지만 거래량 감소 폭이 5배 이상 → 세력 미이탈
+  const ratio = priceDropPct > 0 && volumeDropPct > 0 ? volumeDropPct / priceDropPct : 0;
+  const isPullback = priceDropPct > 0.5 && priceDropPct < 10 && ratio >= 5;
+  const logicName = isPullback ? '[🔫수급 돌파 매수] 세력미이탈 눌림목' : '';
+  
+  return { isPullback, priceDropPct, volumeDropPct, ratio, logicName };
+}
+
 // ===== Accumulation Pattern Detection (매집 패턴 포착) — ★ 선제적 요격 강화 =====
 function detectAccumulation(closes: number[], highs: number[], lows: number[], volumes: number[], rsi: number[]): { isAccumulating: boolean; confidence: number; pattern: string; condensation: number; stealthBuying: boolean; historicalSurgeMatch: number } {
   const n = closes.length - 1;
