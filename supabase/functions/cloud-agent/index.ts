@@ -1346,9 +1346,14 @@ Deno.serve(async (req) => {
     }
 
     // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
-    if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS) {
+    if (dipBuyCandidates.length > 0) {
+      // DB 실시간 재확인
+      const { count: dipLiveCount } = await supabase.from('unified_trades').select('*', { count: 'exact', head: true }).eq('status', 'open');
+      openCount = dipLiveCount || 0;
+      if (openCount < MAX_POSITIONS) {
       dipBuyCandidates.sort((a, b) => b.scoring.totalScore - a.scoring.totalScore);
       for (const dip of dipBuyCandidates.slice(0, 2)) {
+        if (openCount >= MAX_POSITIONS) break;
         const maxKRW = balance * 0.05;
         const priceKRW = toKRW(dip.price);
         const qty = Math.floor(maxKRW / priceKRW);
