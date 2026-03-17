@@ -130,8 +130,8 @@ export default function UnifiedScanPage() {
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 ₩12,000 미만 저가주 전용 | 63점 돌파 & 88% 확정 익절 엔진</p>
-          <p>✅ 진입: [주당 ≤ ₩12,000] AND [합산 ≥ 63점] AND [익절확률 ≥ 88%] → 상위 1~3종목에 ₩100만 원 극한 집중</p>
+          <p className="font-medium text-yellow-400">🏆 ₩50,000 미만 중소형주 | 63점 돌파 & 75% 익절확률 엔진</p>
+          <p>✅ 진입: [주당 ≤ ₩50,000] AND [합산 ≥ 63점] AND [익절확률 ≥ 75%] → 상위 1~5종목에 분산 투입</p>
           <p>🛡️ 본절 보호: +1.0% 도달 시 SL을 매수가+0.1%로 상향 → '패배 없는 게임' | 지표 40점 미만 시에만 매도</p>
           <p>🎯 대시세 추격: 저가주 변동성 활용, 지표 40점↑ 유지 시 30~50% 대폭 상승 끝까지 추격</p>
           <p>🚫 상장폐지 위험 종목 자동 배제 | 데이장 88% 확률 보장 시 선매수</p>

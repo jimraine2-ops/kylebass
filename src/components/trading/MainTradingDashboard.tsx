@@ -118,8 +118,8 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 ₩12,000 미만 저가주 전용 | 63점 & 88% 확정 익절</p>
-          <p>✅ 진입: [주당 ≤ ₩12,000] AND [합산 ≥ 63점] AND [익절확률 ≥ 88%] → 정예 1~3종목 극한 집중</p>
+          <p className="font-medium text-yellow-400">🏆 ₩50,000 미만 중소형주 | 63점 & 75% 익절확률</p>
+          <p>✅ 진입: [주당 ≤ ₩50,000] AND [합산 ≥ 63점] AND [익절확률 ≥ 75%] → 정예 1~5종목 분산 투입</p>
           <p>🛡️ 본절 보호: +1.0% → SL=매수가+0.1% | 지표 40점↓ 시에만 매도</p>
           <p>🎯 대시세 추격: 30~50% 대폭 상승 끝까지 추격 | 🚫 상장폐지 위험 종목 배제</p>
         </CardContent>
