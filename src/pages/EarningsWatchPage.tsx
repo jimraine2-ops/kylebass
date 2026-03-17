@@ -61,7 +61,7 @@ export default function EarningsWatchPage() {
         </h2>
         <div className="flex items-center gap-2">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
-            💰 ₩12,000 미만 전용
+            📊 전 종목 실적 스캔
           </Badge>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${isFetching ? 'animate-spin' : ''}`} />
