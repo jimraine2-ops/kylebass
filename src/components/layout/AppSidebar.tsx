@@ -16,6 +16,7 @@ const menuItems = [
   { title: "대시보드", url: "/", icon: BarChart3 },
   { title: "통합 실시간 거래 현황", url: "/unified-scan", icon: Target },
   { title: "통합 KPI (자율 매매)", url: "/ai-trading", icon: Bot },
+  { title: "실적 임박 필승주", url: "/earnings-watch", icon: CalendarDays },
   { title: "종목 검색", url: "/stock/AAPL", icon: TrendingUp },
 ];
 
