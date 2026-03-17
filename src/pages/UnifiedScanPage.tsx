@@ -89,7 +89,7 @@ export default function UnifiedScanPage() {
   useEffect(() => {
     if (allStocks.length === 0) return;
     const now = Date.now();
-    const currentSymbols = new Set(allStocks.map((s: any) => s.symbol));
+    const currentSymbols = new Set(allStocks.map((s: any) => s.symbol as string));
     const newMap = new Map(newSymbols);
 
     // 새로운 종목 감지
