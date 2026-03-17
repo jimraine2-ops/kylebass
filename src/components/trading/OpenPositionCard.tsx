@@ -263,21 +263,28 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         </div>
       )}
 
-      {/* ★ 변동성 구간 홀딩 상태 표시: -1%~-9% 하락 + 지표 50점 이상 */}
-      {!isProfit && unrealizedPnlPct > -10 && unrealizedPnlPct < -1 && score !== null && score >= 50 && (
-        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-primary/10 border border-primary/20">
-          <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="text-primary">[변동성 구간: 지표 기반 홀딩 중] 정상 흔들림 — 대시세 대기</span>
-          <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/30 text-primary ml-auto">
-            손절 기준: -10%
+      {/* ★ 철갑 홀딩 상태 표시: 가격 하락 + 지표 50점 이상 → 홀딩 권장 */}
+      {!isProfit && score !== null && score >= 50 && (
+        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1.5 rounded bg-stock-up/10 border border-stock-up/30">
+          <ShieldCheck className="w-4 h-4 text-stock-up shrink-0" />
+          <span className="text-stock-up">[익절 확률 {aiJudgment?.winProb || 90}% 유지 중 — 철갑 홀딩 권장] 가격 노이즈 무시, 30~50% 대시세 대기</span>
+          <Badge className="ml-auto text-[9px] px-1.5 py-0 bg-stock-up/20 text-stock-up border-stock-up/30">
+            기계적 손절 OFF
           </Badge>
         </div>
       )}
-      {/* -9%~-10% 근접 경고 */}
-      {!isProfit && unrealizedPnlPct <= -10 && score !== null && score >= 50 && (
+      {/* 지표 40~49점 경고 */}
+      {!isProfit && score !== null && score >= 40 && score < 50 && (
         <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-warning/10 border border-warning/20">
           <Shield className="w-3.5 h-3.5 text-warning shrink-0" />
-          <span className="text-warning">[⚠️ -10% 도달] 지표 {score}점(≥50) 양호 — 수급 기반 홀딩 유지 중</span>
+          <span className="text-warning">[⚠️ 추세 약화 감시 중] 지표 {score}점 → 40점 미만 시 자산 보호 매도</span>
+        </div>
+      )}
+      {/* 지표 40점 미만 → 추세 붕괴 */}
+      {!isProfit && score !== null && score < 40 && (
+        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-destructive/10 border border-destructive/20 animate-pulse">
+          <Shield className="w-3.5 h-3.5 text-destructive shrink-0" />
+          <span className="text-destructive">[🚨 추세 붕괴] 지표 {score}점 미만 → 자산 보호 매도 진행 중</span>
         </div>
       )}
 
