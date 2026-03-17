@@ -1414,8 +1414,13 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 집중 투자: 후보를 상위 5개로 제한 (분산은 소액 자산의 적)
-    const topCandidates = candidates.slice(0, 5);
+    // ★ 정예 5선: 70점+90% 확정 후보만 상위 5개 집중 (분산은 소액 자산의 적)
+    // 익절 확률 90% 미만 필터 제거
+    const filteredCandidates = candidates.filter(c => {
+      const winProb = getWinProbability(c.scoring.totalScore);
+      return winProb >= 90;
+    });
+    const topCandidates = filteredCandidates.slice(0, 5);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
