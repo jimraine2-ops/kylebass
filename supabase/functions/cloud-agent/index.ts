@@ -1596,7 +1596,16 @@ Deno.serve(async (req) => {
     }
 
     for (const r of topCandidates) {
-      if (openCount >= MAX_POSITIONS) break;
+      // ★ 레이스 컨디션 방지: 매수 직전 DB에서 실시간 open 포지션 수 재확인
+      const { count: liveOpenCount } = await supabase
+        .from('unified_trades')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'open');
+      openCount = liveOpenCount || 0;
+      if (openCount >= MAX_POSITIONS) {
+        await addLog('unified', 'hold', r.sym, `[포지션한도] 🚫 현재 ${openCount}/${MAX_POSITIONS}개 보유 — ${r.sym} 매수 차단 (DB 실시간 검증)`, { openCount, MAX_POSITIONS });
+        break;
+      }
       const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
       const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
       const isSuperEntry = (r as any).isSuperPattern;
