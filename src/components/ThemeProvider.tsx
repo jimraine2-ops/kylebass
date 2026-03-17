@@ -1,17 +1,24 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = "dark" | "light" | "system";
+export type ColorTheme = "light" | "dark" | "ocean" | "emerald" | "purple" | "sunset" | "rose";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
-  defaultTheme?: Theme;
+  defaultTheme?: ColorTheme;
   storageKey?: string;
 };
 
 type ThemeProviderState = {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
+  theme: ColorTheme;
+  setTheme: (theme: ColorTheme) => void;
 };
+
+const ALL_THEME_CLASSES = ["light", "dark", "theme-ocean", "theme-emerald", "theme-purple", "theme-sunset", "theme-rose"] as const;
+
+function themeToClass(theme: ColorTheme): string {
+  if (theme === "light" || theme === "dark") return theme;
+  return `theme-${theme}`;
+}
 
 const ThemeProviderContext = createContext<ThemeProviderState>({
   theme: "dark",
@@ -23,29 +30,23 @@ export function ThemeProvider({
   defaultTheme = "dark",
   storageKey = "stockpulse-theme",
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
+  const [theme, setTheme] = useState<ColorTheme>(
+    () => (localStorage.getItem(storageKey) as ColorTheme) || defaultTheme
   );
 
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove("light", "dark");
-
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
-      root.classList.add(systemTheme);
-    } else {
-      root.classList.add(theme);
-    }
+    // Remove all theme classes
+    ALL_THEME_CLASSES.forEach(cls => root.classList.remove(cls));
+    // Add the active one
+    root.classList.add(themeToClass(theme));
   }, [theme]);
 
   const value = {
     theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme);
-      setTheme(theme);
+    setTheme: (t: ColorTheme) => {
+      localStorage.setItem(storageKey, t);
+      setTheme(t);
     },
   };
 
