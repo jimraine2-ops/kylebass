@@ -653,7 +653,7 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
     const superPattern = detectSuperPattern(closes, highs, lows, volumes, adxValue);
 
     return {
-    totalScore, trailingStop, rvol: effectiveRvol, changePct, metCount,
+    totalScore, trailingStop, rvol, changePct, metCount,
     vwap, bbLower, bbUpper,
     accumulation,
     adx: adxValue,
