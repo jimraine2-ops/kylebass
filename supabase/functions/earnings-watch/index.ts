@@ -7,7 +7,7 @@ const corsHeaders = {
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
-const MAX_PRICE_USD = 12000 / KRW_RATE; // ≈ $8.89
+
 
 function getToken(): string { return Deno.env.get('FINNHUB_API_KEY') || ''; }
 
