@@ -1565,6 +1565,7 @@ Deno.serve(async (req) => {
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
       const condensationTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)})` : '';
       const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟 집중투자(${(positionPct*100).toFixed(0)}%)` : '';
+      const criticalTag = isCriticalPatternEntry ? ` | 🎯필승패턴[${(r as any).criticalPatterns.join('+')}] 익절확률${(r as any).criticalPatternConfidence}%` : '';
       
       // ★ 엔진 개편: 지표 상세 근거 로그
       const indDetails = Object.entries(r.scoring.indicators)
