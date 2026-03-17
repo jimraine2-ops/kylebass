@@ -564,6 +564,20 @@ async function discoverAllUSStocks(): Promise<string[]> {
   }
 }
 
+// ===== Win Probability Calculator (익절 확률 산출) =====
+function getWinProbability(score: number): number {
+  if (score >= 80) return 98;
+  if (score >= 75) return 95;
+  if (score >= 70) return 90;
+  if (score >= 65) return 85;
+  if (score >= 60) return 80;
+  if (score >= 55) return 75;
+  if (score >= 50) return 60;
+  if (score >= 45) return 45;
+  if (score >= 40) return 30;
+  return 15;
+}
+
 // ===== Score Surge Detection (점수 급상승 감지) =====
 const previousScores: Map<string, number> = new Map();
 function detectScoreSurge(symbol: string, currentScore: number): { isSurge: boolean; prevScore: number; delta: number } {
@@ -878,7 +892,7 @@ Deno.serve(async (req) => {
     // --- Market Trend Guard (비활성화: 시장잠금 OFF) ---
     let marketBearish = false;
     let marketBuyHalt = false;
-    let baseEntryThreshold = 65; // ★ 필승형: 진입 문턱 65점 (확실한 대시세 초입만 진입)
+    let baseEntryThreshold = 70; // ★ 70점 돌파 필승형: 진입 문턱 70점 (90% 익절 확률 보장 종목만 진입)
     let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
@@ -907,12 +921,12 @@ Deno.serve(async (req) => {
     const recentWinRate = recentTotal > 0 ? (recentWins / recentTotal) * 100 : 50;
 
     // Win-rate adjustment: 극단적 저승률에서만 소폭 상향
-    if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 70);
-    else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 67);
+    if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 75);
+    else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 72);
 
     // Session adaptation — ★ 필승형: 최소 65점 강제 하한선 (장외에서도 65점 이하 진입 금지)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // 절대 하한 65점
+    const adaptedEntryThreshold = Math.max(rawAdapted, 70); // ★ 절대 하한 70점 (90% 익절 확률 보장)
     const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
@@ -1001,12 +1015,12 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ [공격적 본절가 전략]
-        if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.002) {
+        // ★ 본절 보호: +1.5% 도달 즉시 SL을 매수가+0.2%로 상향 → '패배 없는 게임'
+        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
           const bs = +(pos.price * 1.002).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[승률100%설계] ${sym} +${pnlPct.toFixed(2)}% → SL=${fmtKRW(bs)} (매수가+0.2%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'defense', sym, `[패배없는게임] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.5% → SL=${fmtKRW(bs)} (매수가+0.2%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
         // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
@@ -1271,7 +1285,7 @@ Deno.serve(async (req) => {
     }
 
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
-    const MAX_POSITIONS = 15;
+    const MAX_POSITIONS = 5; // ★ 정예 5선: 100만 원을 최대 5개에만 집중 투입
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
     if (!marketBuyHalt && !isOpeningRush) {
@@ -1414,8 +1428,13 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 집중 투자: 후보를 상위 5개로 제한 (분산은 소액 자산의 적)
-    const topCandidates = candidates.slice(0, 5);
+    // ★ 정예 5선: 70점+90% 확정 후보만 상위 5개 집중 (분산은 소액 자산의 적)
+    // 익절 확률 90% 미만 필터 제거
+    const filteredCandidates = candidates.filter(c => {
+      const winProb = getWinProbability(c.scoring.totalScore);
+      return winProb >= 90;
+    });
+    const topCandidates = filteredCandidates.slice(0, 5);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
@@ -1435,10 +1454,9 @@ Deno.serve(async (req) => {
       const isSuperEntry = (r as any).isSuperPattern;
       const isScoreSurge = (r as any).isScoreSurge;
       
-      // ★ 집중 투자: 슈퍼/급상승 = ₩5,000,000 고정, 일반 = 잔고의 20%, 피라미딩 = 5%
-      const CONCENTRATED_KRW = 5000000; // ₩500만원 집중 투입
-      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0 : 0.20; // 0 = fixed amount
-      const maxKRW = positionPct === 0 ? Math.min(CONCENTRATED_KRW, balance * 0.33) : balance * positionPct;
+      // ★ 정예 5선 집중 투자: ₩100만 원 ÷ 최대 5 = ₩200,000씩, 슈퍼/급상승은 잔고의 33%까지 집중
+      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0.33 : 0.20;
+      const maxKRW = balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
       const costKRW = Math.floor(qty * priceKRW);

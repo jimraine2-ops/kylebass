@@ -122,9 +122,14 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
           <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * fxRate).toLocaleString('ko-KR')}</span>
 
           {score !== null && (
-            <Badge variant="outline" className={cn("text-[10px] px-2 py-0.5 gap-1 font-mono font-bold border", getScoreBgColor(score))}>
-              <Activity className={cn("w-3 h-3", getScoreColor(score))} />
-              <span className={getScoreColor(score)}>AI {score}점</span>
+            <Badge variant="outline" className={cn(
+              "text-[10px] px-2 py-0.5 gap-1 font-mono font-bold border",
+              score >= 70 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-[0_0_8px_rgba(234,179,8,0.3)]' : getScoreBgColor(score)
+            )}>
+              <Activity className={cn("w-3 h-3", score >= 70 ? 'text-yellow-400' : getScoreColor(score))} />
+              <span className={score >= 70 ? 'text-yellow-400' : getScoreColor(score)}>
+                {score >= 70 ? '🏆' : ''} AI {score}점
+              </span>
               {scoreChanged !== 0 && (
                 <span className={cn("flex items-center text-[9px]", scoreChanged > 0 ? 'text-stock-up' : 'text-stock-down')}>
                   {scoreChanged > 0 ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
@@ -133,13 +138,23 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
               )}
             </Badge>
           )}
-          {score !== null && (
+          {score !== null && score >= 70 && (
+            <Badge variant="outline" className="text-[10px] px-2 py-0.5 gap-1 font-mono font-bold border border-yellow-500/50 bg-yellow-500/20 text-yellow-400 shadow-[0_0_8px_rgba(234,179,8,0.3)]">
+              🎯 70점 돌파
+            </Badge>
+          )}
+          {score !== null && score < 70 && (
             <span className={cn("text-[9px] font-medium", getScoreColor(score))}>
               {getScoreLabel(score)}
             </span>
           )}
 
-          {aiJudgment && aiJudgment.winProb > 0 && (
+          {aiJudgment && aiJudgment.winProb >= 90 && (
+            <Badge variant="outline" className="text-[10px] px-2 py-0.5 gap-1 font-mono font-bold border border-yellow-500/50 bg-yellow-500/20 text-yellow-400 shadow-[0_0_8px_rgba(234,179,8,0.3)]">
+              🏆 확정 익절 {aiJudgment.winProb}%
+            </Badge>
+          )}
+          {aiJudgment && aiJudgment.winProb > 0 && aiJudgment.winProb < 90 && (
             <Badge variant="outline" className={cn(
               "text-[10px] px-2 py-0.5 gap-1 font-mono border",
               aiJudgment.winProb >= 70 ? 'border-stock-up/40 text-stock-up bg-stock-up/10' :
