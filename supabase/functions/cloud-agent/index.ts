@@ -1521,7 +1521,8 @@ Deno.serve(async (req) => {
         const volTag = volRank <= 20 ? ` Vol#${volRank}` : '';
         const burstTag = (c as any).isVolumeBurst ? '🔥' : '';
         const surgeTag = (c as any).isScoreSurge ? '🚨급상승' : '';
-        return `${i+1}.${burstTag}${surgeTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
+        const cpTag = (c as any).hasCriticalPattern ? `🎯[${(c as any).criticalPatterns.join('+')}]` : '';
+        return `${i+1}.${burstTag}${surgeTag}${cpTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
       }).join(', ');
       await addLog('unified', 'scan', null, `[🌐전종목스캔] [${timeStr}] 매수 후보 ${candidates.length}개 중 TOP ${topCandidates.length}개 집중 투자: ${summary}`, {});
     }
