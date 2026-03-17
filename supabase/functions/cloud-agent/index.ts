@@ -894,8 +894,14 @@ Deno.serve(async (req) => {
     const entryRelax = sessionInfo.entryRelax;
     const sessionRvolMin = 1.5;
 
-    // ★ 동적 발견 비활성화: 타임아웃 방지 (기존 풀만 사용)
+    // ★ 전 종목 동적 발견 활성화: 매 사이클마다 Finnhub 전 종목 심볼 갱신
     const sessionSlippage = sessionInfo.aggressiveSlippage;
+    try {
+      const discovered = await discoverAllUSStocks();
+      if (discovered.length > 0) {
+        await addLog('system', 'scan', null, `[전종목스캔] 동적 발견 ${discovered.length}개 심볼 로드 완료 (기존 풀 ${LARGE_SET.size + SMALL_SET.size}개 + 신규 ${discovered.length}개 = 총 ${LARGE_SET.size + SMALL_SET.size + discovered.length}개)`, {});
+      }
+    } catch { /* non-critical */ }
 
     // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
     const etStr2 = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
