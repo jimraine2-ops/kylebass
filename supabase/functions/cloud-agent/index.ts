@@ -1437,7 +1437,7 @@ Deno.serve(async (req) => {
       const winProb = getWinProbability(c.scoring.totalScore);
       return winProb >= 75; // ★ 75% 이상 (score 60+) → 적극적 진입
     });
-    const topCandidates = filteredCandidates.slice(0, 3);
+    const topCandidates = filteredCandidates.slice(0, 5);
 
     if (topCandidates.length > 0) {
       const summary = topCandidates.map((c, i) => {
