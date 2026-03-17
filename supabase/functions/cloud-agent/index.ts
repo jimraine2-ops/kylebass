@@ -1432,10 +1432,10 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 정예 1~3선 집중 투자: 63점+88% 확정 후보만 상위 3개 집중
+    // ★ 정예 1~5선 집중 투자: 63점+85% 확정 후보만 상위 5개 집중
     const filteredCandidates = candidates.filter(c => {
       const winProb = getWinProbability(c.scoring.totalScore);
-      return winProb >= 75; // ★ 75% 이상 (score 60+) → 적극적 진입
+      return winProb >= 85; // ★ 85% 이상 (score 70+) → 진입
     });
     const topCandidates = filteredCandidates.slice(0, 5);
 
