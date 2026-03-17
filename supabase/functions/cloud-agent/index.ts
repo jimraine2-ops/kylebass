@@ -1394,7 +1394,11 @@ Deno.serve(async (req) => {
           else if (isLowVolumeSession && pnlPct < 0 && indicatorsHold) {
             await addLog('unified', 'hold', sym, `[세션홀딩] ${sym} ${sessionLabel} -${Math.abs(pnlPct).toFixed(2)}% 밀림 → 지표 ${quantScore}점(≥50) 양호, 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2), session: sessionLabel });
           }
-          // ★ 선취매 종목: 지표 55점 이상 → 정규장까지 무조건 보유
+          // ★ [필승 선취매 강력 홀딩] 데이/프리마켓 선취매 종목 → 정규장까지 무조건 보유
+          // 지표 40점 이상이면 절대 매도하지 않음 (정규장 수급 폭발 대기)
+          else if (isPreMarketEntry && quantScore >= 40 && currentSession !== 'REGULAR') {
+            await addLog('unified', 'hold', sym, `[🔒필승선취매-강력홀딩] ${sym} 지표 ${quantScore}점(≥40) | ${sessionLabel} → 정규장 거대 수급 진입까지 절대 홀딩! PnL: ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          }
           else if (isPreMarketEntry && indicatorsStrong && currentSession !== 'REGULAR') {
             await addLog('unified', 'hold', sym, `[선취매홀딩] ${sym} 지표 ${quantScore}점(≥55) → 정규장 폭발 대기`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           }
