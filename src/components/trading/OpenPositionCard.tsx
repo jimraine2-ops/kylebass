@@ -113,11 +113,11 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
   const winProb = parseWinProbability(pos.ai_reason);
   const is90ProbEntry = winProb !== null && winProb >= 90;
 
-  // ★ 15% 목표가 & 진행률 계산
+  // ★ 30~50% 목표가 & 진행률 계산
   const isSuperTarget = (pos.ai_reason || '').includes('15%') || (pos.ai_reason || '').includes('슈퍼');
-  const targetPct = isSuperTarget ? 15 : (pos.take_profit && pos.price > 0)
+  const targetPct = isSuperTarget ? 50 : (pos.take_profit && pos.price > 0)
     ? ((pos.take_profit - pos.price) / pos.price * 100)
-    : 5;
+    : 30; // ★ 기본 목표 30%
   const targetProgress = targetPct > 0 ? Math.min(100, Math.max(0, (unrealizedPnlPct / targetPct) * 100)) : 0;
   const targetPriceKRW = Math.round(pos.price * (1 + targetPct / 100) * fxRate);
 
