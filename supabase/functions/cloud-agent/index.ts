@@ -1788,9 +1788,10 @@ Deno.serve(async (req) => {
       const isSuperEntry = (r as any).isSuperPattern;
       const isScoreSurge = (r as any).isScoreSurge;
       
-      // ★ 복리 매매: 현재 잔고 전액 투입 (100만 원이 130만 원이 되면 130만 원 전체 투입)
-      const positionPct = isPyramiding ? 0.05 : 0; // 모든 진입에 전액 집중
-      const maxKRW = positionPct === 0 ? balance : balance * positionPct; // ★ 복리: 잔고 전액 (상한 제거)
+      // ★ 정예 3선: 100만 원 ÷ 3 = 33만 원씩 집중 투입 (복리 적용: 잔고 ÷ 남은 슬롯)
+      const remainingSlots = MAX_POSITIONS - openCount;
+      const positionPct = isPyramiding ? 0.05 : 0;
+      const maxKRW = positionPct === 0 ? Math.floor(balance / Math.max(remainingSlots, 1)) : balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
       const costKRW = Math.floor(qty * priceKRW);
