@@ -124,6 +124,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
   // ★ 선취매 진입 감지
   const isPreBuyEntry = (pos.ai_reason || '').includes('선취매') || (pos.ai_reason || '').includes('필승패턴') || (pos.ai_reason || '').includes('선제적 요격');
 
+  return (
     <div
       className={cn(
         "p-3 rounded-lg bg-muted/50 border space-y-2 transition-all",
