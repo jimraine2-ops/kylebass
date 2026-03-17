@@ -892,7 +892,7 @@ Deno.serve(async (req) => {
     // --- Market Trend Guard (비활성화: 시장잠금 OFF) ---
     let marketBearish = false;
     let marketBuyHalt = false;
-    let baseEntryThreshold = 70; // ★ 70점 돌파 필승형: 진입 문턱 70점 (90% 익절 확률 보장 종목만 진입)
+    let baseEntryThreshold = 63; // ★ 63점 돌파 필승형: 진입 문턱 63점
     let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
@@ -926,7 +926,7 @@ Deno.serve(async (req) => {
 
     // Session adaptation — ★ 필승형: 최소 65점 강제 하한선 (장외에서도 65점 이하 진입 금지)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 70); // ★ 절대 하한 70점 (90% 익절 확률 보장)
+    const adaptedEntryThreshold = Math.max(rawAdapted, 63); // ★ 절대 하한 63점
     const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';

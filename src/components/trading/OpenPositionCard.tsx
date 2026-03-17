@@ -124,11 +124,11 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
           {score !== null && (
             <Badge variant="outline" className={cn(
               "text-[10px] px-2 py-0.5 gap-1 font-mono font-bold border",
-              score >= 70 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-[0_0_8px_rgba(234,179,8,0.3)]' : getScoreBgColor(score)
+              score >= 63 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-[0_0_8px_rgba(234,179,8,0.3)]' : getScoreBgColor(score)
             )}>
-              <Activity className={cn("w-3 h-3", score >= 70 ? 'text-yellow-400' : getScoreColor(score))} />
-              <span className={score >= 70 ? 'text-yellow-400' : getScoreColor(score)}>
-                {score >= 70 ? '🏆' : ''} AI {score}점
+              <Activity className={cn("w-3 h-3", score >= 63 ? 'text-yellow-400' : getScoreColor(score))} />
+              <span className={score >= 63 ? 'text-yellow-400' : getScoreColor(score)}>
+                {score >= 63 ? '🏆' : ''} AI {score}점
               </span>
               {scoreChanged !== 0 && (
                 <span className={cn("flex items-center text-[9px]", scoreChanged > 0 ? 'text-stock-up' : 'text-stock-down')}>
@@ -138,18 +138,18 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
               )}
             </Badge>
           )}
-          {score !== null && score >= 70 && (
+          {score !== null && score >= 63 && (
             <Badge variant="outline" className="text-[10px] px-2 py-0.5 gap-1 font-mono font-bold border border-yellow-500/50 bg-yellow-500/20 text-yellow-400 shadow-[0_0_8px_rgba(234,179,8,0.3)]">
-              🎯 70점 돌파
+              🎯 63점 돌파
             </Badge>
           )}
-          {score !== null && score < 70 && (
+          {score !== null && score < 63 && (
             <span className={cn("text-[9px] font-medium", getScoreColor(score))}>
               {getScoreLabel(score)}
             </span>
           )}
 
-          {aiJudgment && aiJudgment.winProb >= 90 && (
+          {aiJudgment && aiJudgment.winProb >= 80 && (
             <Badge variant="outline" className="text-[10px] px-2 py-0.5 gap-1 font-mono font-bold border border-yellow-500/50 bg-yellow-500/20 text-yellow-400 shadow-[0_0_8px_rgba(234,179,8,0.3)]">
               🏆 확정 익절 {aiJudgment.winProb}%
             </Badge>

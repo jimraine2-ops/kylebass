@@ -98,7 +98,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🏆 70점 돌파 & 90% 확정 익절 엔진
+            🏆 63점 돌파 & 80% 확정 익절 엔진
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
             📡 Finnhub 실시간 + Twelve Data 교차검증
@@ -107,7 +107,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
             🎯 정예 5선 집중 | ₩100만 원
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🛡️ +1.5%→본절보호 | 철갑홀딩(65점+)
+            🛡️ +1.5%→본절보호 | 철갑홀딩(60점+)
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
@@ -118,10 +118,10 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 70점 돌파 & 90% 확정 익절 전략</p>
-          <p>✅ 진입: [합산 점수 ≥ 70] AND [익절확률 ≥ 90%] → 정예 5종목에만 집중 투입</p>
-          <p>🛡️ 본절 보호: +1.5% → SL=매수가+0.2% | 지표 65점+ 시 철갑 홀딩 (가격 노이즈 무시)</p>
-          <p>🎯 데이/프리마켓: 70점 필승 패턴 감지 시 거래량 무관 선매수 → 정규장 폭발 대기</p>
+          <p className="font-medium text-yellow-400">🏆 63점 돌파 & 80% 확정 익절 전략</p>
+          <p>✅ 진입: [합산 점수 ≥ 63] AND [익절확률 ≥ 80%] → 정예 5종목에만 집중 투입</p>
+          <p>🛡️ 본절 보호: +1.5% → SL=매수가+0.2% | 지표 60점+ 시 철갑 홀딩 (가격 노이즈 무시)</p>
+          <p>🎯 데이/프리마켓: 63점 필승 패턴 감지 시 거래량 무관 선매수 → 정규장 폭발 대기</p>
         </CardContent>
       </Card>
 
