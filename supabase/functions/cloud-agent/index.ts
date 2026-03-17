@@ -1635,8 +1635,8 @@ Deno.serve(async (req) => {
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          // ★ 필승 로직 시 체결강도 요건 완화
-          const minAggression = isWinningLogicEntry ? 40 : isAccumEntry ? 60 : 120;
+          // ★ 필승 로직 시 체결강도 요건 최소화 (데이장 대응)
+          const minAggression = isWinningLogicEntry ? 0 : isAccumEntry ? 40 : 120;
           if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
