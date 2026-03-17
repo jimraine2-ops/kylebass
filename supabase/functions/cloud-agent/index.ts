@@ -433,9 +433,9 @@ function detectPullbackWithForce(closes: number[], volumes: number[]): { isPullb
   const priceDropPct = avgPrevPrice > 0 ? ((avgPrevPrice - avgRecentPrice) / avgPrevPrice) * 100 : 0;
   const volumeDropPct = avgPrevVol > 0 ? ((avgPrevVol - avgRecentVol) / avgPrevVol) * 100 : 0;
   
-  // 가격은 하락했지만 거래량 감소 폭이 5배 이상 → 세력 미이탈
+  // ★ 눌림목 조건 완화: 비율 ≥ 3x, 가격하락 ≥ 0.3% (데이장 대응)
   const ratio = priceDropPct > 0 && volumeDropPct > 0 ? volumeDropPct / priceDropPct : 0;
-  const isPullback = priceDropPct > 0.5 && priceDropPct < 10 && ratio >= 5;
+  const isPullback = priceDropPct > 0.3 && priceDropPct < 10 && ratio >= 3;
   const logicName = isPullback ? '[🔫수급 돌파 매수] 세력미이탈 눌림목' : '';
   
   return { isPullback, priceDropPct, volumeDropPct, ratio, logicName };
