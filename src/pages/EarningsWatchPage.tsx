@@ -16,8 +16,8 @@ function useEarningsWatch() {
       if (error) throw error;
       return data;
     },
-    refetchInterval: 5 * 60 * 1000, // 5분마다
-    staleTime: 2 * 60 * 1000,
+    refetchInterval: 60 * 60 * 1000, // 1시간마다
+    staleTime: 30 * 60 * 1000,
   });
 }
 
