@@ -1222,32 +1222,19 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ [승률100% 가드] 1.2% 달성 시 → SL을 매수가+0.2%로 즉시 상향 → '절대 손실 불가' 상태
-        if (pnlPct >= 1.2 && pos.stop_loss < pos.price * 1.002) {
+        // ★ [승률100% 가드] 1.5% 달성 시 → SL을 매수가+0.2%로 즉시 상향 → '절대 손실 불가' 상태
+        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
           const bs = +(pos.price * 1.002).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[🛡️승률100%가드] ${sym} +${pnlPct.toFixed(2)}% (≥1.2%) → SL=${fmtKRW(bs)} (매수가+0.2%) 절대손실불가 달성! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'defense', sym, `[🛡️승률100%가드] ${sym} +${pnlPct.toFixed(2)}% (≥1.5%) → SL=${fmtKRW(bs)} (매수가+0.2%) 절대손실불가 달성! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
-        // ★ [무손실 본절가 이동] — 0.8% 달성 시 +0.1% 본절 보호 (1.2% 미달 시 1차 방어)
-        else if (pnlPct >= 0.8 && pos.stop_loss < pos.price * 1.001) {
+        // ★ [무손실 본절가 이동] — 1.0% 달성 시 +0.1% 본절 보호 (1.5% 미달 시 1차 방어)
+        else if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.001) {
           const bs = +(pos.price * 1.001).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[무손실본절] ${sym} +${pnlPct.toFixed(2)}% (≥0.8%) → SL=${fmtKRW(bs)} (매수가+0.1%) 리스크제로 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-        }
-
-        // ★ [1분 타임아웃] 진입 후 1분 내 승부 나지 않으면 본전 탈출 (기회비용 방어)
-        // 단, 선취매 종목은 정규장까지 강력 홀딩 → 타임아웃 면제
-        const entryTime = new Date(pos.opened_at).getTime();
-        const elapsedMs = now.getTime() - entryTime;
-        const oneMinute = 60 * 1000;
-        const isPreEmptiveEntry = (pos.ai_reason || '').includes('선취매') || (pos.ai_reason || '').includes('필승패턴') || (pos.ai_reason || '').includes('스나이퍼') || (pos.ai_reason || '').includes('수급 돌파');
-        if (!isPreEmptiveEntry && elapsedMs >= oneMinute && pnlPct > -0.5 && pnlPct < 0.8 && pos.stop_loss < pos.price * 0.999) {
-          const timeoutSL = +(pos.price * 0.999).toFixed(4);
-          await supabase.from('unified_trades').update({ stop_loss: timeoutSL }).eq('id', pos.id);
-          pos.stop_loss = timeoutSL;
-          await addLog('unified', 'defense', sym, `[⏱️1분타임아웃] ${sym} ${(elapsedMs/1000).toFixed(0)}초 경과 + PnL ${pnlPct.toFixed(2)}%(<0.8%) → SL=본전-0.1% 기회비용 방어`, { quantScore, pnlPct: +pnlPct.toFixed(2), elapsedSec: +(elapsedMs/1000).toFixed(0) });
+          await addLog('unified', 'defense', sym, `[무손실본절] ${sym} +${pnlPct.toFixed(2)}% (≥1.0%) → SL=${fmtKRW(bs)} (매수가+0.1%) 리스크제로 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
         // ★ [3단계 프로세스] 정규장 +8% 돌파 → 무조건 익절 확정 (본절 보호 강화)
@@ -1270,120 +1257,105 @@ Deno.serve(async (req) => {
           }
         }
 
-        // 1. 익절 로직 — ★ 초고속 순환: 3~5% 빠른 회전 + 지표 강력 시 15~50% 트레일링 추격
-        if (pnlPct >= 30.0) {
-          // ★ 30%+ 대시세: 지표 65점 이상이면 고점-2% 트레일링으로 50%까지 추격
-          if (quantScore >= 65) {
+        // 1. 익절 로직 — ★ 철갑 홀딩: 목표 수익률 30~50%, 지표 무결성이 깨지기 전까지 끝까지 홀딩
+        if (pnlPct >= 50.0) {
+          // ★ 50%+ 대시세: 즉시 전량 수익 확정
+          shouldClose = true;
+          closeReason = `[🏆50%대시세달성] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 최종 목표 달성 → 전량 수익 확정`;
+          newStatus = 'mega_profit';
+        } else if (pnlPct >= 30.0) {
+          // ★ 30%+ 대시세: 지표 50점 이상이면 50%까지 추격, 아니면 고점-2% 트레일링 익절
+          if (quantScore >= 50) {
             const drop = ((peakPrice - price) / peakPrice) * 100;
-            if (drop >= 2.0) {
+            if (drop >= 3.0) {
               shouldClose = true;
-              closeReason = `[🏆30%+대시세익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% (지표 ${quantScore}점) → 대시세 수익 확정`;
+              closeReason = `[🏆30%+트레일링익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% (지표 ${quantScore}점) → 대시세 수익 확정`;
               newStatus = 'mega_profit';
             } else {
-              await addLog('unified', 'hold', sym, `[🚀50%추격] ${sym} +${pnlPct.toFixed(2)}% 대시세 진행 중! 지표 ${quantScore}점(≥65) → 고점-2% 트레일링`, { quantScore, pnlPct: +pnlPct.toFixed(2), peakPrice, drop });
+              await addLog('unified', 'hold', sym, `[🚀50%추격] ${sym} +${pnlPct.toFixed(2)}% 대시세 진행 중! 지표 ${quantScore}점(≥50) → 고점-3% 트레일링`, { quantScore, pnlPct: +pnlPct.toFixed(2), peakPrice, drop });
             }
           } else {
-            const drop = ((peakPrice - price) / peakPrice) * 100;
-            if (drop >= 1.5) {
-              shouldClose = true;
-              closeReason = `[🏆30%트레일링] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% → 대시세 수익 확정`;
-              newStatus = 'mega_profit';
-            }
+            shouldClose = true;
+            closeReason = `[🏆30%익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% + 지표 ${quantScore}점(<50) → 수익 확정`;
+            newStatus = 'mega_profit';
           }
         } else if (pnlPct >= 15.0) {
-          // ★ 15% 도달: 지표 70점 이상이면 30%까지 트레일링
-          const indicatorsOver70 = quantScore >= 70;
-          if (indicatorsOver70) {
+          // ★ 15% 도달: 지표 50점 이상이면 30%까지 트레일링 — 수익을 끝까지 짜냄
+          if (quantScore >= 50) {
             const drop = ((peakPrice - price) / peakPrice) * 100;
-            if (drop >= 1.0) {
+            if (drop >= 2.0) {
               shouldClose = true;
               closeReason = `[🏆15%+트레일링익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% → 수익 극대화 확정`;
               newStatus = 'trailing_profit';
             } else {
-              await addLog('unified', 'hold', sym, `[🎯15%돌파→30%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥70) → 트레일링`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+              await addLog('unified', 'hold', sym, `[🎯15%돌파→30%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥50) → 고점-2% 트레일링, 수익 극대화`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
             }
           } else {
             shouldClose = true;
-            closeReason = `[🏆15%목표익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 목표 도달 (지표 ${quantScore}점<70) → 전량 수익 확정`;
+            closeReason = `[🏆15%목표익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 달성 + 지표 ${quantScore}점(<50) → 전량 수익 확정`;
             newStatus = 'profit_taken';
           }
-        } else if (pnlPct >= 5.0 && pnlPct < 15.0) {
-          // ★ 초고속 순환: 5%+ 도달 → 지표 70점 이상이면 15%까지 트레일링, 아니면 즉시 익절
-          if (quantScore >= 70) {
-            await addLog('unified', 'hold', sym, `[🎯5%→15%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥70) → 15% 목표까지 확장 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-          } else if (quantScore >= 60) {
+        } else if (pnlPct >= 8.0 && pnlPct < 15.0) {
+          // ★ 8~15% 구간: 지표 50점 이상이면 15% 추격, 아니면 고점-1.5% 트레일링
+          if (quantScore >= 50) {
+            await addLog('unified', 'hold', sym, `[🎯8%→15%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥50) → 15% 목표까지 철갑 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          } else {
             const drop = ((peakPrice - price) / peakPrice) * 100;
-            if (drop >= 0.5) {
+            if (drop >= 1.5) {
               shouldClose = true;
-              closeReason = `[⚡5%+빠른익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% + 지표 ${quantScore}점(<70) → 빠른 자금 회수`;
-              newStatus = 'quick_profit';
-            } else {
-              await addLog('unified', 'hold', sym, `[🔄5%회전대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(60~69) → 고점-0.5% 시 익절`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+              closeReason = `[⚡8%+트레일링] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% + 지표 ${quantScore}점(<50) → 수익 확정`;
+              newStatus = 'trailing_profit';
             }
+          }
+        } else if (pnlPct >= 5.0 && pnlPct < 8.0) {
+          // ★ 5~8% 구간: 지표 50점 이상이면 홀딩, 아니면 고점-1% 트레일링
+          if (quantScore >= 50) {
+            await addLog('unified', 'hold', sym, `[🎯5%→15%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥50) → 15% 목표까지 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           } else {
-            shouldClose = true;
-            closeReason = `[⚡5%순환익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% (지표 ${quantScore}점<60) → 즉시 자금 회수 & 다음 종목 갈아타기`;
-            newStatus = 'quick_profit';
+            const drop = ((peakPrice - price) / peakPrice) * 100;
+            if (drop >= 1.0) {
+              shouldClose = true;
+              closeReason = `[⚡5%+트레일링] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% + 지표 약화 → 수익 확정`;
+              newStatus = 'quick_profit';
+            }
           }
-        } else if (pnlPct >= 3.0 && pnlPct < 5.0) {
-          // ★ 초고속 순환: 3~5% 구간 → 지표 65점 이상이면 5%까지 홀딩, 아니면 즉시 익절
-          if (quantScore >= 65) {
-            await addLog('unified', 'hold', sym, `[🔄3%→5%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥65) → 5% 목표까지 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-          } else {
-            shouldClose = true;
-            closeReason = `[⚡3%빠른순환] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% (지표 ${quantScore}점<65) → 빠른 자금 순환`;
-            newStatus = 'quick_profit';
-          }
-        } else if (pnlPct >= 1.0 && pnlPct < 3.0 && quantScore >= 55) {
-          await addLog('unified', 'hold', sym, `[🎯5%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥55) → 목표가까지 홀딩 유지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-        } else if (pnlPct >= 3.0) {
-          const drop = ((peakPrice - price) / peakPrice) * 100;
-          const dropThreshold = isIronHold ? 1.0 : 0.5;
-          if (drop >= dropThreshold && !indicatorsStrong) {
-            shouldClose = true;
-            closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 후 고점-${drop.toFixed(2)}% + 지표 약화(${quantScore}점) → 수익 확정`;
-            newStatus = 'trailing_profit';
-          }
+        } else if (pnlPct >= 1.5 && pnlPct < 5.0 && quantScore >= 50) {
+          await addLog('unified', 'hold', sym, `[🎯철갑홀딩] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥50) → 목표 30~50%까지 홀딩 유지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         } else if (pos.take_profit && price >= pos.take_profit) {
-          // ★ TP 도달 (5%): 지표 강하면 확장, 아니면 즉시 확정
-          if (quantScore >= 70) {
-            await addLog('unified', 'hold', sym, `[🎯TP도달→15%추격] ${sym} TP 도달 + 지표 ${quantScore}점(≥70) → 15%까지 트레일링 확장`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-            const newTP = +(price * 1.10).toFixed(4);
+          // ★ TP 도달: 지표 50점 이상이면 확장, 아니면 즉시 확정
+          if (quantScore >= 50) {
+            await addLog('unified', 'hold', sym, `[🎯TP도달→30%추격] ${sym} TP 도달 + 지표 ${quantScore}점(≥50) → 30%까지 트레일링 확장`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+            const newTP = +(price * 1.30).toFixed(4);
             await supabase.from('unified_trades').update({ take_profit: newTP }).eq('id', pos.id);
           } else {
             shouldClose = true;
-            closeReason = `[⚡TP익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 목표가 도달 → 즉시 자금 회수`;
+            closeReason = `[⚡TP익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 목표가 도달 → 수익 확정`;
             newStatus = 'quick_profit';
           }
         }
 
-        // 2. ★ [손절 -10% 하향] SL 터치 — 지표 우선 홀딩 강화, -10% 미만에서만 손절 검토
+        // 2. ★ [철갑 홀딩] 기계적 손절 폐기 — 오직 익절 확률 40% 미만 또는 추세 완전 붕괴 시에만 매도
         if (!shouldClose && pos.stop_loss && price <= pos.stop_loss) {
           if (pnlPct >= 0) {
+            // 본절 보호(+0.2% 이상)에서 터치 → 수익 확정 매도
             shouldClose = true;
             closeReason = `[본절방어] [${sessionLabel}] [${timeStr}] [${sym}] 본절가 터치 (${quantScore}점)`;
             newStatus = 'breakeven_exit';
-          } else if (pnlPct > -10 && indicatorsHold) {
-            // ★ -1%~-9%: 정상적인 흔들림, 지표 50점 이상 → 무조건 홀딩
-            await addLog('unified', 'hold', sym, `[변동성 구간: 지표 기반 홀딩 중] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 정상 변동성 | 지표 ${quantScore}점(≥50) → 대시세 대기, 매도 유보`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold });
-          } else if (pnlPct > -10 && quantScore >= 40) {
-            // ★ -1%~-9% + 지표 40~49: 경고만, 매도 유보 (노이즈 무시)
-            await addLog('unified', 'warning', sym, `[변동성 구간: 주의 관찰] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 변동성 구간 + 지표 ${quantScore}점(40~49) → 매도 유보`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-          } else if (pnlPct <= -10 && indicatorsHold && (coreIntact || technicalSafe)) {
-            // ★ -10% 이하지만 지표 50점 이상 + 기술 안전 → 수급 기반 홀딩 유지
-            await addLog('unified', 'hold', sym, `[AI 판단: 홀딩 권장] ${sym} -${Math.abs(pnlPct).toFixed(2)}% -10% 도달 BUT 지표 ${quantScore}점(≥50) + ${coreIntact ? 'VWAP+이평선 정배열' : '기술안전'} → 수급 살아있음, 홀딩`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold });
-          } else if (pnlPct <= -10 && quantScore >= 40) {
-            // ★ -10% 이하 + 지표 40~49: 경고, 매도 검토
-            await addLog('unified', 'warning', sym, `[⚠️ 손절 경고] ${sym} -${Math.abs(pnlPct).toFixed(2)}% -10% 이하 + 지표 ${quantScore}점(40~49) → 매도 임박`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          } else if (indicatorsHold) {
+            // ★ 지표 50점 이상 → 가격 하락 무시, 절대 홀딩 (개미 털기 내성)
+            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩: 익절확률 유지 중] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 하락 BUT 지표 ${quantScore}점(≥50) → 익절 확률 90% 유지, 가격 노이즈 무시 홀딩`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold });
+          } else if (quantScore >= 40) {
+            // ★ 지표 40~49점: 경고만, 아직 매도 안 함 (추세 붕괴 전까지 대기)
+            await addLog('unified', 'warning', sym, `[⚠️주의 관찰] ${sym} -${Math.abs(pnlPct).toFixed(2)}% + 지표 ${quantScore}점(40~49) → 추세 붕괴 감시 중, 매도 유보`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           } else {
-            // ★ 최종 방어선: -10% 이하 + 지표 40점 미만 → 자산 보호 매도
+            // ★ 최종 방어선: 익절 확률 40% 미만(지표 <40점) → 추세 완전 붕괴 → 자산 보호 매도
             shouldClose = true;
-            closeReason = `[추세완전이탈] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% (-10%↓) + 지표 ${quantScore}점(<40) → 자산 보호 매도`;
+            closeReason = `[추세완전붕괴] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% + 지표 ${quantScore}점(<40) 익절확률 40%미만 → 자산 보호 매도`;
             newStatus = 'trend_collapse';
           }
         }
 
-        // 3. ★ 지표 무결성 중심 판단 (손절 -10% 동기화)
+        // 3. ★ 철갑 홀딩 중심 판단 — 지표 무결성이 깨지기 전까지 가격 하락에 굴하지 않음
         if (!shouldClose) {
           // ★ Iron Hold: 필승 패턴(응축도≥6 + 지표≥50) → 일시적 하락 무시
           if (isIronHold && pnlPct < 0) {
@@ -1394,37 +1366,27 @@ Deno.serve(async (req) => {
             await addLog('unified', 'hold', sym, `[세션홀딩] ${sym} ${sessionLabel} -${Math.abs(pnlPct).toFixed(2)}% 밀림 → 지표 ${quantScore}점(≥50) 양호, 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2), session: sessionLabel });
           }
           // ★ [필승 선취매 강력 홀딩] 데이/프리마켓 선취매 종목 → 정규장까지 무조건 보유
-          // 지표 40점 이상이면 절대 매도하지 않음 (정규장 수급 폭발 대기)
           else if (isPreMarketEntry && quantScore >= 40 && currentSession !== 'REGULAR') {
             await addLog('unified', 'hold', sym, `[🔒필승선취매-강력홀딩] ${sym} 지표 ${quantScore}점(≥40) | ${sessionLabel} → 정규장 거대 수급 진입까지 절대 홀딩! PnL: ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           }
-          else if (isPreMarketEntry && indicatorsStrong && currentSession !== 'REGULAR') {
-            await addLog('unified', 'hold', sym, `[선취매홀딩] ${sym} 지표 ${quantScore}점(≥55) → 정규장 폭발 대기`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          // ★ 철갑 홀딩: 지표 50점 이상이면 가격 하락 무관 홀딩 — 30~50% 대시세 대기
+          else if (pnlPct < 0 && indicatorsHold) {
+            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩: 익절확률 90% 유지 중] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 가격 하락 → 지표 ${quantScore}점(≥50) 무결성 유지, 30~50% 대시세까지 홀딩 권장`, { quantScore, vwapCross, aboveBB, pnlPct: +pnlPct.toFixed(2) });
           }
-          // ★ 일반 홀딩: -9%까지는 정상 변동성, 지표 50+ → 홀딩
-          else if (pnlPct < 0 && pnlPct > -10 && indicatorsHold) {
-            await addLog('unified', 'hold', sym, `[변동성 구간: 지표 기반 홀딩 중] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 정상 변동성 | 지표 ${quantScore}점(≥50) → 30~50% 대시세 대기`, { quantScore, vwapCross, aboveBB, pnlPct: +pnlPct.toFixed(2) });
-          }
-          // ★ [확정적 수익] 지표 50점 미만 → 즉시 매도 (승률 90% 모델 기반: 50점 하한선)
-          else if (quantScore < 50) {
+          // ★ 추세 붕괴 판정: 지표 40점 미만 → 익절 확률 40% 미만 → 매도
+          else if (quantScore < 40) {
             shouldClose = true;
-            closeReason = `[확정수익-50점이탈] [${sessionLabel}] [${timeStr}] [${sym}] ${quantScore}점(<50) + ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}% → 승률 모델 기준 매도`;
+            closeReason = `[추세붕괴-40점미만] [${sessionLabel}] [${timeStr}] [${sym}] ${quantScore}점(<40) 익절확률 40%미만 + ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}% → 자산 보호 매도`;
             newStatus = pnlPct >= 0 ? 'profit_taken' : 'trend_collapse';
           }
-          // -10% 이하 + VWAP 이탈 → 매도
-          else if (pnlPct <= -10 && !vwapCross && !emaAligned) {
-            shouldClose = true;
-            closeReason = `[복합위험] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% (-10%↓) + ${quantScore}점 + VWAP이탈 → 매도`;
-            newStatus = 'indicator_exit';
-          }
-          // 40~49점 → 경고만
-          else if (quantScore < 50 && quantScore >= 40) {
-            await addLog('unified', 'warning', sym, `[주의] ${sym} ${quantScore}점(40~49) ⚠️ 지표 약화 중 — ${pnlPct > -10 ? '변동성 구간 홀딩' : '손절 임박'} | PnL: ${pnlPct.toFixed(2)}%`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          // 40~49점 → 경고만 (아직 추세 붕괴 아님)
+          else if (quantScore >= 40 && quantScore < 50 && pnlPct < 0) {
+            await addLog('unified', 'warning', sym, `[⚠️주의 관찰] ${sym} ${quantScore}점(40~49) + PnL ${pnlPct.toFixed(2)}% → 추세 약화 감시 중, 40점 미만 시 매도`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           }
           // 블랙리스트 + 지표 미달
-          else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && !indicatorsHold) {
+          else if (blacklistSymbols.has(sym) && pnlPct <= 0.2 && quantScore < 40) {
             shouldClose = true;
-            closeReason = `[블랙리스트] [${sessionLabel}] [${timeStr}] [${sym}] + 지표 미달(${quantScore}점<50)`;
+            closeReason = `[블랙리스트] [${sessionLabel}] [${timeStr}] [${sym}] + 지표 미달(${quantScore}점<40)`;
             newStatus = 'early_exit';
           }
         }
@@ -1435,24 +1397,28 @@ Deno.serve(async (req) => {
           await addLog('unified', 'scan', sym, `[역발상추매후보] ${sym} 지표 ${quantScore}점(${metCount}/10) 가격 -${Math.abs(pnlPct).toFixed(2)}% → 추매 검토`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
-        // Partial exit at +2%
-        if (!shouldClose && pnlPct >= 2) {
+        // ★ 철갑 홀딩: 분할 익절 폐기 — 30~50% 목표까지 전량 홀딩
+        // (분할 매도 대신 수익을 끝까지 짜냄)
+
+        // Partial exit at +15% (첫 분할: 30% 물량만 확보)
+        if (!shouldClose && pnlPct >= 15) {
           const partialExits = pos.partial_exits || [];
           const hasFirst = partialExits.some((e: any) => e.type === 'first_partial');
           if (!hasFirst) {
-            const sellQty = Math.floor(pos.quantity * 0.5);
+            const sellQty = Math.floor(pos.quantity * 0.3); // 30%만 분할 익절
             if (sellQty > 0) {
               const sellValue = Math.floor(sellQty * price * KRW_RATE);
               const partialPnl = sellValue - Math.floor(sellQty * pos.price * KRW_RATE);
               partialExits.push({ type: 'first_partial', qty: sellQty, price, pnl: partialPnl, at: now.toISOString() });
               await supabase.from('unified_trades').update({
                 quantity: pos.quantity - sellQty, partial_exits: partialExits,
-                stop_loss: Math.max(+(price - 2.0 * (price * 0.02)).toFixed(4), pos.stop_loss || 0),
+                stop_loss: Math.max(+(pos.price * 1.05).toFixed(4), pos.stop_loss || 0),
               }).eq('id', pos.id);
               const newBal = balance + sellValue;
               await supabase.from('unified_wallet').update({ balance: newBal, updated_at: now.toISOString() }).eq('id', wallet.id);
               balance = newBal;
-              await addLog('unified', 'exit', sym, `[50%익절] ${sym} +${pnlPct.toFixed(1)}% | PnL: ${fmtKRWRaw(partialPnl)}`, {});
+              await addLog('unified', 'exit', sym, `[30%분할익절] ${sym} +${pnlPct.toFixed(1)}% | PnL: ${fmtKRWRaw(partialPnl)} → 나머지 70% 30~50% 추격 홀딩`, {});
+            }
             }
           }
         }
@@ -1491,8 +1457,8 @@ Deno.serve(async (req) => {
         const costKRW = Math.floor(qty * priceKRW);
         if (qty <= 0 || costKRW > balance) continue;
         const ap = applySessionSlippage(dip.price, 'buy', spreadMul, sessionSlippage);
-        const sl = +(ap * 0.90).toFixed(4);
-        const tp = +(ap * 1.15).toFixed(4);
+        const sl = +(ap * 0.85).toFixed(4);
+        const tp = +(ap * 1.30).toFixed(4);
         const bb = Math.round(balance);
         const nb = balance - costKRW;
         const msg = `[역발상추매] [${sessionLabel}] [${timeStr}] ${dip.sym} ${dip.scoring.totalScore}점(${dip.scoring.metCount}/10) 눌림 추매 [${qty}주@${fmtKRW(ap)}|${fmtKRWRaw(costKRW)}] [잔고: ${fmtKRWRaw(bb)}→${fmtKRWRaw(nb)}]`;
@@ -1761,14 +1727,14 @@ Deno.serve(async (req) => {
     // ★ 필승 패턴(isSureWinEntry, isOrderFlowEntry, isPullbackEntry)은 확률 필터 바이패스
     const winningLogicCandidates = candidates.filter(c => (c as any).isSureWinEntry || (c as any).isOrderFlowEntry || (c as any).isPullbackEntry);
     const normalCandidates = candidates.filter(c => !(c as any).isSureWinEntry && !(c as any).isOrderFlowEntry && !(c as any).isPullbackEntry);
+    // ★ 익절 확률 필터: 90% 미만은 거들떠보지도 마라 (Hard Floor 90%)
+    // 필승 패턴(isSureWinEntry, isOrderFlowEntry, isPullbackEntry)은 확률 필터 바이패스
     let probFilteredNormal = normalCandidates.filter(c => (c as any).winProbability >= 90);
-    const probThreshold = probFilteredNormal.length > 0 ? 90 : 85;
-    if (probFilteredNormal.length === 0) {
-      probFilteredNormal = normalCandidates.filter(c => (c as any).winProbability >= 85);
-    }
+    const probThreshold = 90; // ★ 하드 코어: 90% 미만 절대 진입 불가
     const probFilteredCandidates = [...winningLogicCandidates, ...probFilteredNormal];
     if (candidates.length > 0) {
-      await addLog('unified', 'scan', null, `[익절확률필터] 후보 ${candidates.length}개 → 필승로직 ${winningLogicCandidates.length}개(바이패스) + 확률${probThreshold}%↑ ${probFilteredNormal.length}개 = 총 ${probFilteredCandidates.length}개 통과`, {});
+      const rejected90 = normalCandidates.filter(c => (c as any).winProbability < 90).length;
+      await addLog('unified', 'scan', null, `[🎯90%스나이퍼필터] 후보 ${candidates.length}개 → 필승로직 ${winningLogicCandidates.length}개(바이패스) + 확률90%↑ ${probFilteredNormal.length}개 = 총 ${probFilteredCandidates.length}개 통과 | 90%미만 ${rejected90}개 탈락`, {});
     }
 
     // Sort: win probability → score surge → super pattern → explosive → liquidity → score
@@ -1841,9 +1807,9 @@ Deno.serve(async (req) => {
       const aggressiveSlip = (isAccumEntry || isSureWin) ? Math.max(sessionSlippage, 0.005) : sessionSlippage; // 필승 패턴/선취매: 최소 0.5% 상단 제시
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
       // ★ 15% 수익 목표: SL -10% / TP +15% (지표 강력 시 트레일링으로 30%까지 확장)
-      const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망
-      // ★ TP +15%: 15% 수익을 가져갈 수 있는 종목으로 진입
-      const takeProfit = +(adjustedPrice * 1.15).toFixed(4);
+      const stopLoss = +(adjustedPrice * 0.85).toFixed(4); // ★ -15% 최대 안전망 (기계적 손절 폐기, 지표 기반 매도만)
+      // ★ TP +30%: 목표 수익률 30% (지표 유지 시 50%까지 트레일링)
+      const takeProfit = +(adjustedPrice * 1.30).toFixed(4);
       const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? '선제적요격-선취매' : currentSession === 'DAY' ? '1단계-선취매' : currentSession === 'PRE_MARKET' ? '2단계-확증' : '3단계-가속';
       const winProb = (r as any).winProbability || 0;
       const winReasonsStr = ((r as any).winReasons || []).join('+');
@@ -1932,7 +1898,7 @@ Deno.serve(async (req) => {
       total_cycles: (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 ₩10K미만 필승 자동매매 엔진 완료 — 선제적요격+88%↑정밀타격 | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 잠입매집+과거급등패턴+섹터동조 분석 | 본절방어:+1%→SL+0.1%`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 90% 스나이퍼 + 철갑 홀딩 엔진 완료 — 익절확률90%↑만 진입 | 기계적손절 폐기 | 30~50% 목표 | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 본절방어:+1.5%→SL+0.2%`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

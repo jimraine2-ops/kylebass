@@ -63,31 +63,31 @@ function parseWinReasons(aiReason: string | null): string[] {
 function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: string; color: string; winProb: number } | null {
   if (score === null) return null;
   let winProb = 0;
-  if (score >= 70) winProb = 90;
-  else if (score >= 65) winProb = 85;
-  else if (score >= 60) winProb = 80;
-  else if (score >= 55) winProb = 75;
-  else if (score >= 50) winProb = 60;
-  else if (score >= 45) winProb = 45;
-  else if (score >= 40) winProb = 30;
+  if (score >= 70) winProb = 95;
+  else if (score >= 65) winProb = 92;
+  else if (score >= 60) winProb = 90;
+  else if (score >= 55) winProb = 85;
+  else if (score >= 50) winProb = 75;
+  else if (score >= 45) winProb = 50;
+  else if (score >= 40) winProb = 35;
   else winProb = 15;
-  if (pnlPct >= 2) winProb = Math.min(98, winProb + 10);
-  else if (pnlPct >= 1) winProb = Math.min(95, winProb + 5);
+  if (pnlPct >= 5) winProb = Math.min(99, winProb + 5);
+  else if (pnlPct >= 2) winProb = Math.min(98, winProb + 3);
 
   if (pnlPct < 0 && score >= 50) {
-    return { message: `[AI 판단: 홀딩 권장 - 지표 양호] 눌림목 구간, 반등 대기`, color: 'text-stock-up', winProb };
+    return { message: `[익절 확률 ${winProb}% 유지 중 — 철갑 홀딩 권장] 가격 노이즈 무시, 30~50% 대시세 대기`, color: 'text-stock-up', winProb };
   }
   if (pnlPct < 0 && score >= 40 && score < 50) {
-    return { message: `[AI 판단: 주의 관찰 중] 지표 약화, 추세 감시`, color: 'text-warning', winProb };
+    return { message: `[⚠️ 익절 확률 ${winProb}% — 추세 감시 중] 40점 미만 시 자산 보호 매도`, color: 'text-warning', winProb };
   }
   if (pnlPct < 0 && score < 40) {
-    return { message: `[AI 판단: 매도 검토] 추세 이탈 위험`, color: 'text-destructive', winProb };
+    return { message: `[🚨 익절 확률 ${winProb}% 미만 — 추세 붕괴] 자산 보호 매도 검토`, color: 'text-destructive', winProb };
   }
   if (pnlPct >= 0 && score >= 55) {
-    return { message: `[AI 판단: 강력 보유] 추가 상승 기대`, color: 'text-stock-up', winProb };
+    return { message: `[익절 확률 ${winProb}% — 강력 보유] 30~50% 수익 극대화 추격 중`, color: 'text-stock-up', winProb };
   }
   if (pnlPct >= 0 && score >= 45) {
-    return { message: `[AI 판단: 보유 유지] 안정 구간`, color: 'text-primary', winProb };
+    return { message: `[익절 확률 ${winProb}% — 보유 유지] 지표 안정 구간`, color: 'text-primary', winProb };
   }
   return { message: '', color: 'text-muted-foreground', winProb };
 }
@@ -113,11 +113,11 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
   const winProb = parseWinProbability(pos.ai_reason);
   const is90ProbEntry = winProb !== null && winProb >= 90;
 
-  // ★ 15% 목표가 & 진행률 계산
+  // ★ 30~50% 목표가 & 진행률 계산
   const isSuperTarget = (pos.ai_reason || '').includes('15%') || (pos.ai_reason || '').includes('슈퍼');
-  const targetPct = isSuperTarget ? 15 : (pos.take_profit && pos.price > 0)
+  const targetPct = isSuperTarget ? 50 : (pos.take_profit && pos.price > 0)
     ? ((pos.take_profit - pos.price) / pos.price * 100)
-    : 5;
+    : 30; // ★ 기본 목표 30%
   const targetProgress = targetPct > 0 ? Math.min(100, Math.max(0, (unrealizedPnlPct / targetPct) * 100)) : 0;
   const targetPriceKRW = Math.round(pos.price * (1 + targetPct / 100) * fxRate);
 
@@ -229,7 +229,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         <div className="flex-1">
           <div className="flex items-center justify-between text-[10px] mb-0.5">
             <span className={cn("font-semibold", isSuperTarget ? 'text-warning' : 'text-muted-foreground')}>
-              {isSuperTarget ? '🎯 15% 슈퍼 타겟' : `목표 +${targetPct.toFixed(1)}%`}
+              {isSuperTarget ? '🎯 50% 슈퍼 타겟' : `목표 +${targetPct.toFixed(1)}%`}
             </span>
             <span className="text-muted-foreground font-mono">
               ₩{targetPriceKRW.toLocaleString('ko-KR')} | {unrealizedPnlPct.toFixed(1)}% / {targetPct.toFixed(1)}%
@@ -263,21 +263,28 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         </div>
       )}
 
-      {/* ★ 변동성 구간 홀딩 상태 표시: -1%~-9% 하락 + 지표 50점 이상 */}
-      {!isProfit && unrealizedPnlPct > -10 && unrealizedPnlPct < -1 && score !== null && score >= 50 && (
-        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-primary/10 border border-primary/20">
-          <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="text-primary">[변동성 구간: 지표 기반 홀딩 중] 정상 흔들림 — 대시세 대기</span>
-          <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/30 text-primary ml-auto">
-            손절 기준: -10%
+      {/* ★ 철갑 홀딩 상태 표시: 가격 하락 + 지표 50점 이상 → 홀딩 권장 */}
+      {!isProfit && score !== null && score >= 50 && (
+        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1.5 rounded bg-stock-up/10 border border-stock-up/30">
+          <ShieldCheck className="w-4 h-4 text-stock-up shrink-0" />
+          <span className="text-stock-up">[익절 확률 {aiJudgment?.winProb || 90}% 유지 중 — 철갑 홀딩 권장] 가격 노이즈 무시, 30~50% 대시세 대기</span>
+          <Badge className="ml-auto text-[9px] px-1.5 py-0 bg-stock-up/20 text-stock-up border-stock-up/30">
+            기계적 손절 OFF
           </Badge>
         </div>
       )}
-      {/* -9%~-10% 근접 경고 */}
-      {!isProfit && unrealizedPnlPct <= -10 && score !== null && score >= 50 && (
+      {/* 지표 40~49점 경고 */}
+      {!isProfit && score !== null && score >= 40 && score < 50 && (
         <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-warning/10 border border-warning/20">
           <Shield className="w-3.5 h-3.5 text-warning shrink-0" />
-          <span className="text-warning">[⚠️ -10% 도달] 지표 {score}점(≥50) 양호 — 수급 기반 홀딩 유지 중</span>
+          <span className="text-warning">[⚠️ 추세 약화 감시 중] 지표 {score}점 → 40점 미만 시 자산 보호 매도</span>
+        </div>
+      )}
+      {/* 지표 40점 미만 → 추세 붕괴 */}
+      {!isProfit && score !== null && score < 40 && (
+        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-destructive/10 border border-destructive/20 animate-pulse">
+          <Shield className="w-3.5 h-3.5 text-destructive shrink-0" />
+          <span className="text-destructive">[🚨 추세 붕괴] 지표 {score}점 미만 → 자산 보호 매도 진행 중</span>
         </div>
       )}
 
@@ -310,7 +317,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         )}
         {isDanger && (
           <span className="text-destructive font-bold animate-pulse">
-            ⚠️ 지표 추세 이탈 — 40점 미만 시 자동 매도
+            ⚠️ 추세 붕괴 — 익절확률 40% 미만 시 자동 매도
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">

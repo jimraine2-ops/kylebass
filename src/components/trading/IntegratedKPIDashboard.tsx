@@ -99,7 +99,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
     }, []);
 
   // ★ 일일 수익 목표 체크
-  const DAILY_TARGET_KRW = 300000;
+  const DAILY_TARGET_KRW = 500000;
   const todayPnl = useMemo(() => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -158,14 +158,14 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
       <Card className="border-primary/20">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📋 전문 트레이너 모드 — 무조건 익절 시스템 v3</p>
-          <p>✅ 진입: [합산 ≥ 55점] AND [체결강도 ≥ 120%] AND [5/10 지표 충족] AND [RVOL ≥ 2.0] → 무조건 익절 후보만 편입</p>
-          <p>🛡️ 본절보호: +1.0% 도달 즉시 SL → 매수가+0.2% 상향 | 마이너스 마감 원천 차단</p>
-          <p>📊 QQQ 모멘텀: 나스닥 상승 시 진입 점수 보너스 부여 (승률 극대화)</p>
-          <p>📉 지표우선 동적방어: 점수 유지 시 눌림목 홀딩 | ATR 기반 추세이탈만 손절</p>
-          <p>📈 피라미딩: 80점 돌파 시 +5% 추가 매수 | +2% 시 50% 1차 익절</p>
-          <p>🏆 세션최적화: 프리/데이 → 소형주, 정규장 → 대형주 우선</p>
-          <p className="text-primary font-medium">💰 일일 목표 ₩300,000 — 달성 시 축하 알림 ☁️</p>
+          <p className="font-medium text-foreground">📋 90% 익절 확률 스나이퍼 매수 + 철갑 홀딩 전략</p>
+          <p>✅ 진입: [합산 ≥ 65점] AND [익절 확률 ≥ 90%] → 100만 원 집중 투입</p>
+          <p>🛡️ 철갑 홀딩: 지표 50점 이상이면 가격 하락 무관 절대 홀딩 — 기계적 손절 폐기</p>
+          <p>🚨 매도 기준: 익절 확률 40% 미만(지표 &lt;40점) 또는 추세 완전 붕괴 시에만 매도</p>
+          <p>📈 목표: 30~50% 수익 극대화 — 지표 무결성 유지 시 끝까지 홀딩</p>
+          <p>🔒 안전 잠금: +1.5% 도달 시 SL → 매수가+0.2% (절대 손실 불가)</p>
+          <p>📊 분할: +15% 시 30% 분할 익절, 나머지 70% 50%까지 추격</p>
+          <p className="text-primary font-medium">💰 일일 목표 ₩500,000 — 달성 시 축하 알림 ☁️</p>
         </CardContent>
       </Card>
 
@@ -177,7 +177,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             <div>
               <p className="text-lg font-bold text-stock-up">오늘의 목표 달성! 🎊</p>
               <p className="text-sm text-muted-foreground">
-                오늘 실현 수익: <span className="font-bold font-mono text-stock-up">₩{todayPnl.toLocaleString('ko-KR')}</span> / 목표 ₩300,000
+                오늘 실현 수익: <span className="font-bold font-mono text-stock-up">₩{todayPnl.toLocaleString('ko-KR')}</span> / 목표 ₩500,000
               </p>
             </div>
           </CardContent>
@@ -188,7 +188,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-muted-foreground">💰 일일 목표 진행률</span>
               <span className="text-xs font-mono font-bold">
-                ₩{todayPnl.toLocaleString('ko-KR')} / ₩300,000 ({dailyProgress.toFixed(1)}%)
+                ₩{todayPnl.toLocaleString('ko-KR')} / ₩500,000 ({dailyProgress.toFixed(1)}%)
               </span>
             </div>
             <div className="w-full bg-muted rounded-full h-2">
