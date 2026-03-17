@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { Search, Trash2, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef, Fragment } from "react";
 
 interface TradeLogTableProps {
   closedTrades: any[];
