@@ -1,17 +1,22 @@
 import { Badge } from "@/components/ui/badge";
-import { Radio, Bot, Wallet } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Radio, Bot, CalendarDays } from "lucide-react";
 import { UnifiedPortfolio } from "@/components/dashboard/UnifiedPortfolio";
+import { IntegratedKPIDashboard } from "@/components/trading/IntegratedKPIDashboard";
+import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
+import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
+import { SessionIndicator } from "@/components/trading/SessionIndicator";
+import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
+import { EarningsWatchSection } from "@/components/dashboard/EarningsWatchSection";
 
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
-import { useAIPortfolio, useScalpingPortfolio } from "@/hooks/useStockData";
+import { useAIPortfolio, useScalpingPortfolio, useUnifiedPortfolio } from "@/hooks/useStockData";
 import { useMemo } from "react";
-import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 
 export default function Dashboard() {
   const { data: mainData } = useAIPortfolio();
   const { data: scalpData } = useScalpingPortfolio();
+  const { data: unifiedData } = useUnifiedPortfolio();
   const { rate: fxRate, isLive: fxLive } = useExchangeRate();
 
   // Collect all held symbols for WebSocket
@@ -19,59 +24,59 @@ export default function Dashboard() {
     const syms = new Set<string>();
     (mainData?.openPositions || []).forEach((p: any) => syms.add(p.symbol));
     (scalpData?.openPositions || []).forEach((p: any) => syms.add(p.symbol));
+    (unifiedData?.openPositions || []).forEach((p: any) => syms.add(p.symbol));
     return Array.from(syms);
-  }, [mainData?.openPositions, scalpData?.openPositions]);
+  }, [mainData?.openPositions, scalpData?.openPositions, unifiedData?.openPositions]);
 
   const ws = useWebSocketPrices(allSymbols);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-lg font-semibold">통합 대시보드</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <LiveSyncIndicator
             isConnected={ws.isConnected}
             latencyMs={ws.latencyMs}
             lastUpdateAt={ws.lastUpdateAt}
           />
-          <Badge variant="outline" className={`text-[10px] px-2 py-0.5 gap-1 ${fxLive ? 'border-[hsl(var(--stock-up)/0.3)] text-[hsl(var(--stock-up))]' : 'border-[hsl(var(--warning)/0.3)] text-[hsl(var(--warning))]'}`}>
+          <Badge variant="outline" className={`text-[10px] px-2 py-0.5 gap-1 ${fxLive ? 'border-stock-up/30 text-stock-up' : 'border-warning/30 text-warning'}`}>
             💱 {fxLive ? '실시간' : '고정'} ₩{fxRate.toLocaleString('ko-KR')}/USD
           </Badge>
+          <SessionIndicator />
           <Badge variant="outline" className="text-[10px]">
             <Radio className="w-3 h-3 mr-1" />실시간
           </Badge>
         </div>
       </div>
 
-      {/* Quick AI Trading Link */}
-      <Link to="/ai-trading" className="block">
-        <div className="flex items-center gap-3 p-3 rounded-lg border border-primary/20 hover:border-primary/40 transition-colors bg-primary/5">
-          <Bot className="w-5 h-5 text-primary shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold">AI 자율 매매 대시보드</p>
-            <p className="text-[11px] text-muted-foreground">상세 KPI, 거래 로그, 에이전트 상태 확인</p>
-          </div>
-          <div className="flex items-center gap-4 text-xs shrink-0">
-            <div className="text-right">
-              <p className="text-[10px] text-muted-foreground">대형주</p>
-              <p className={`font-bold font-mono ${(mainData?.stats?.cumulativeReturn || 0) >= 0 ? 'text-[hsl(var(--stock-up))]' : 'text-[hsl(var(--stock-down))]'}`}>
-                {(mainData?.stats?.cumulativeReturn || 0) >= 0 ? '+' : ''}{mainData?.stats?.cumulativeReturn || 0}%
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] text-muted-foreground">소형주</p>
-              <p className={`font-bold font-mono ${(scalpData?.stats?.cumulativeReturn || 0) >= 0 ? 'text-[hsl(var(--stock-up))]' : 'text-[hsl(var(--stock-down))]'}`}>
-                {(scalpData?.stats?.cumulativeReturn || 0) >= 0 ? '+' : ''}{scalpData?.stats?.cumulativeReturn || 0}%
-              </p>
-            </div>
-            <Wallet className="w-4 h-4 text-muted-foreground" />
-          </div>
-        </div>
-      </Link>
+      {/* Server Status */}
+      <ServerStatusBanner />
 
-      {/* Section 1: Unified Portfolio (all open positions) */}
-      <UnifiedPortfolio wsGetPrice={ws.getPrice} fxRate={fxRate} />
+      {/* Section 1: 통합 KPI (자율매매) */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Bot className="w-4.5 h-4.5 text-primary" />
+          <h3 className="text-sm font-semibold">AI 자율매매 KPI</h3>
+        </div>
+        <AgentLogViewer />
+        <IntegratedKPIDashboard wsGetPrice={ws.getPrice} wsConnected={ws.isConnected} fxRate={fxRate} />
+      </section>
+
+      {/* Section 2: 포트폴리오 현황 */}
+      <section className="space-y-3">
+        <UnifiedPortfolio wsGetPrice={ws.getPrice} fxRate={fxRate} />
+      </section>
+
+      {/* Section 3: 실적 임박 필승주 */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="w-4.5 h-4.5 text-primary" />
+          <h3 className="text-sm font-semibold">실적 임박 필승주</h3>
+        </div>
+        <EarningsWatchSection />
+      </section>
     </div>
   );
 }
