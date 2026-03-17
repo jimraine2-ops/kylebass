@@ -94,7 +94,7 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
                       {stock.capType === 'large' ? '대형' : '소형'}
                     </Badge>
                   )}
-                  {stock.regularMarketPrice && toKRW(stock.regularMarketPrice) < 12000 && (
+                  {stock.regularMarketPrice && (stock.regularMarketPrice * 1350) < 12000 && (
                     <Badge variant="outline" className="text-[9px] px-1 py-0 border-yellow-500/50 bg-yellow-500/20 text-yellow-400 font-bold">
                       💰 ₩12K 미만
                     </Badge>
