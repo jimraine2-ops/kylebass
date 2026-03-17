@@ -149,7 +149,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
             </span>
           )}
 
-          {aiJudgment && aiJudgment.winProb >= 90 && (
+          {aiJudgment && aiJudgment.winProb >= 80 && (
             <Badge variant="outline" className="text-[10px] px-2 py-0.5 gap-1 font-mono font-bold border border-yellow-500/50 bg-yellow-500/20 text-yellow-400 shadow-[0_0_8px_rgba(234,179,8,0.3)]">
               🏆 확정 익절 {aiJudgment.winProb}%
             </Badge>
