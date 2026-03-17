@@ -1840,10 +1840,10 @@ Deno.serve(async (req) => {
       const isSureWin = (r as any).isSureWinEntry;
       const aggressiveSlip = (isAccumEntry || isSureWin) ? Math.max(sessionSlippage, 0.005) : sessionSlippage; // 필승 패턴/선취매: 최소 0.5% 상단 제시
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
-      // ★ [초고속 순환] 초기 SL -10% / TP +5% 단기 회전 (지표 강력 시 15%까지 트레일링 확장)
+      // ★ 15% 수익 목표: SL -10% / TP +15% (지표 강력 시 트레일링으로 30%까지 확장)
       const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망
-      // ★ 짧고 굵은 회전: TP +5% (빠른 자금 회수 → 다음 65점 종목 갈아타기)
-      const takeProfit = +(adjustedPrice * 1.05).toFixed(4);
+      // ★ TP +15%: 15% 수익을 가져갈 수 있는 종목으로 진입
+      const takeProfit = +(adjustedPrice * 1.15).toFixed(4);
       const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? '선제적요격-선취매' : currentSession === 'DAY' ? '1단계-선취매' : currentSession === 'PRE_MARKET' ? '2단계-확증' : '3단계-가속';
       const winProb = (r as any).winProbability || 0;
       const winReasonsStr = ((r as any).winReasons || []).join('+');
