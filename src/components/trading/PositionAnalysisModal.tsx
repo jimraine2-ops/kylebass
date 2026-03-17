@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { formatStockName } from "@/lib/koreanStockMap";
-import { Activity, BarChart3, TrendingUp, TrendingDown, Zap, Volume2, RefreshCw } from "lucide-react";
+import { Activity, BarChart3, TrendingUp, TrendingDown, Zap, Volume2, RefreshCw, Info, DollarSign } from "lucide-react";
 import { usePositionQuant } from "@/hooks/usePositionQuant";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip as RechartsTooltip,
