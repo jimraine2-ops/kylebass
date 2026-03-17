@@ -120,6 +120,12 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
           <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${tag.color}`}>
             {tag.label}
           </Badge>
+          {/* ★ 선취매 완료 황금 배지 */}
+          {(pos.ai_reason || '').includes('선취매') && (
+            <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-bold border-yellow-500/50 bg-yellow-500/20 text-yellow-400 shadow-[0_0_8px_rgba(234,179,8,0.3)]">
+              📡 선취매 완료: 정규장 폭발 대기 중
+            </Badge>
+          )}
           <span className="font-bold text-sm">{formatStockName(pos.symbol)}</span>
           <span className="text-xs text-muted-foreground">{pos.quantity}주 @ ₩{Math.round((pos.price || 0) * fxRate).toLocaleString('ko-KR')}</span>
 

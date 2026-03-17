@@ -98,16 +98,16 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🏆 필승 패턴 A/B/C | 90%+ 익절확률
+            🏆 필승 패턴 A/B/C + 에너지 응축 | 90%+ 익절확률
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            📡 Finnhub 실시간 + Twelve Data 교차검증
+            📡 데이/프리 선취매 | 고래 매집 탐지
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🎯 정예 5선 집중 | +0.5%→본절보호
+            🎯 정예 5선 | +0.5%→본절보호 | 20~50% 추격
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🛡️ 패턴 유지 시 30~50% 추격
+            🐋 저유동성 선취매 | 📦 분할잠입매집
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
@@ -119,8 +119,9 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
           <p className="font-medium text-yellow-400">🏆 10대 지표 필승 패턴 다이렉트 매매 | 100% 익절 목표</p>
-          <p>🎯 패턴 A/B/C 감지 → 점수 무관 즉시 매수 | +0.5% 도달 → 본절보호(100% 익절)</p>
-          <p>🛡️ 패턴 유지 시 30~50% 끝까지 추격 | 🚫 90% 미만 자동 차단 | 상장폐지 종목 배제</p>
+          <p>🎯 패턴 A/B/C + 에너지 응축 패턴 감지 → 점수 무관 즉시 매수</p>
+          <p>📡 데이/프리마켓: 거래량 無해도 고래 매집 + RSI 저점반등 → 익절확률 90%↑ 즉시 선매수</p>
+          <p>🛡️ +0.5% 도달 → 본절보호(100% 익절) | 정규장 20~50% 추격 | 🚫 90% 미만 차단</p>
         </CardContent>
       </Card>
 

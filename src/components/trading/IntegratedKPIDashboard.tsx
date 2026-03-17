@@ -138,16 +138,16 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🏆 필승 패턴 A/B/C | 90%+ 익절확률
+            🏆 필승 패턴 A/B/C + 에너지 응축 | 90%+ 익절확률
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            📡 Finnhub 실시간 + Twelve Data 교차검증
+            📡 데이/프리 선취매 | 고래 매집 탐지
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🎯 정예 5선 집중 | +0.5%→본절보호 | ₩100만 원
+            🎯 정예 5선 | +0.5%→본절보호 | 정규장 20~50% 추격
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🛡️ 패턴 유지 시 30~50% 끝까지 추격
+            🐋 저유동성 선취매 | 📦 분할잠입매집
           </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
