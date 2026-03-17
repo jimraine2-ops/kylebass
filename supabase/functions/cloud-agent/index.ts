@@ -1615,14 +1615,16 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // ★ 선취매: 0.3~0.5% 위로 공격적 지정가 (슬리피지 허용 매수로 확실한 물량 확보)
+      // ★ 선취매: 분할 잠입 매집 시뮬레이션 — 큰 주문 대신 5분할 조용히 체결
       const isAccumEntry = (r as any).isAccumulationEntry;
-      const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.005) : sessionSlippage; // 최소 0.5% 상단 제시
+      const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.005) : sessionSlippage;
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
       // ★ [전략 동기화] 초기 SL -10% / TP +15% 통일
-      const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망
-      // ★ 전 종목 TP +15% 통일 (슈퍼/선취매 구분 없이)
-      const takeProfit = +(adjustedPrice * 1.15).toFixed(4);
+      const stopLoss = +(adjustedPrice * 0.90).toFixed(4);
+      // ★ 선취매: TP +20% (정규장 폭발 대비 여유 확보), 일반: +15%
+      const tpMultiplier = (isAccumEntry || isCriticalPatternEntry) && isLowVolumeSession ? 1.20 : 1.15;
+      const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
+      const splitOrderNote = isAccumEntry ? ' | 📦분할잠입매집(5분할 조용히 체결)' : '';
       const tier = isPyramiding ? 'PYRAMID' : isCriticalPatternEntry ? 'CRITICAL-PATTERN' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
