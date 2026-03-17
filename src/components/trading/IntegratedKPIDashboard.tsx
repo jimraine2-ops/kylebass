@@ -331,9 +331,9 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
               <span className="text-xs text-muted-foreground">매수 여력 (종목당)</span>
             </div>
             <p className="text-xl font-bold font-mono">
-              ₩{Math.round(confirmedBalance * 0.1).toLocaleString('ko-KR')}
+              ₩{Math.round(confirmedBalance * 0.33).toLocaleString('ko-KR')}
             </p>
-            <p className="text-[10px] text-muted-foreground">확정 잔고의 10%</p>
+            <p className="text-[10px] text-muted-foreground">확정 잔고의 33% (슈퍼/급상승)</p>
           </CardContent>
         </Card>
       </div>
