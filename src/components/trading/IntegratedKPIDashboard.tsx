@@ -227,7 +227,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             <p className="text-xl font-bold font-mono text-stock-up">
               ₩{Math.round(Math.max(0, confirmedBalance)).toLocaleString('ko-KR')}
             </p>
-            <p className="text-[10px] text-muted-foreground mt-1">종목당 최대: ₩{Math.round(Math.max(0, confirmedBalance) * 0.10).toLocaleString('ko-KR')} (10%)</p>
+            <p className="text-[10px] text-muted-foreground mt-1">종목당 최대: ₩{Math.round(Math.max(0, confirmedBalance) * 0.33).toLocaleString('ko-KR')} (33%)</p>
           </CardContent>
         </Card>
         <Card className="border-primary/30">
