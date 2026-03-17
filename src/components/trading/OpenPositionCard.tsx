@@ -228,8 +228,10 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         <Target className={cn("w-3.5 h-3.5 shrink-0", isSuperTarget ? 'text-warning' : 'text-primary')} />
         <div className="flex-1">
           <div className="flex items-center justify-between text-[10px] mb-0.5">
-            <span className={cn("font-semibold", isSuperTarget ? 'text-warning' : 'text-muted-foreground')}>
-              {isSuperTarget ? '🎯 15% 슈퍼 타겟' : `목표 +${targetPct.toFixed(1)}%`}
+            <span className={cn("font-semibold", ion={cn("font-semibold",
+
+Let me redo this properly:
+
             </span>
             <span className="text-muted-foreground font-mono">
               ₩{targetPriceKRW.toLocaleString('ko-KR')} | {unrealizedPnlPct.toFixed(1)}% / {targetPct.toFixed(1)}%
