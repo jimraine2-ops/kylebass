@@ -552,9 +552,7 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const currentVol = volumes[n];
   const avgVol = volumes.length >= 21 ? volumes.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 : currentVol;
   const rvol = avgVol > 0 ? currentVol / avgVol : 1;
-  // ★ 데이장 완화: 거래량 0일 때 RVOL을 1.0으로 간주 (불이익 제거)
-  const effectiveRvol = (currentVol === 0 && isLowVolumeSession) ? 1.0 : rvol;
-  const rvolScore = effectiveRvol >= 3 ? 10 : effectiveRvol >= 2.5 ? 8 : effectiveRvol >= 2 ? 6 : effectiveRvol >= 1.5 ? 4 : effectiveRvol >= 0.8 ? 3 : 2;
+  const rvolScore = rvol >= 3 ? 10 : rvol >= 2.5 ? 8 : rvol >= 2 ? 6 : rvol >= 1.5 ? 4 : 2;
   
   // 3. VWAP/캔들 패턴
   const ema9 = calculateEMA(closes, 9);
@@ -655,7 +653,7 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
     const superPattern = detectSuperPattern(closes, highs, lows, volumes, adxValue);
 
     return {
-    totalScore, trailingStop, rvol: effectiveRvol, changePct, metCount,
+    totalScore, trailingStop, rvol, changePct, metCount,
     vwap, bbLower, bbUpper,
     accumulation,
     adx: adxValue,
@@ -769,8 +767,11 @@ async function discoverAllUSStocks(): Promise<string[]> {
   try {
     const token = getToken();
     if (!token) return [];
-    // Finnhub US stock symbols
-    const res = await fetch(`${FINNHUB_BASE}/stock/symbol?exchange=US&token=${token}`);
+    // ★ 3초 타임아웃: 콜드스타트 시 전종목 스캔이 cron 타임아웃 유발 방지
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${FINNHUB_BASE}/stock/symbol?exchange=US&token=${token}`, { signal: controller.signal });
+    clearTimeout(timeout);
     if (!res.ok) return discoveredSymbols;
     const symbols = await res.json();
     if (!Array.isArray(symbols)) return discoveredSymbols;
@@ -817,7 +818,7 @@ async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: strin
   const dynamicPool = discoveredSymbols.length > 0 ? discoveredSymbols : [];
   const allSymbols = [...allKnown, ...dynamicPool];
   
-  // ★ 확장 샘플: 200개로 증가 (기존 100 → 200)
+  // ★ 확장 샘플: 200개
   const sampleSize = 200;
   const cycleOffset = Math.floor(Math.random() * allSymbols.length);
   const sample: string[] = [];
@@ -903,7 +904,7 @@ Deno.serve(async (req) => {
     try {
       const discovered = await discoverAllUSStocks();
       if (discovered.length > 0) {
-        await addLog('system', 'scan', null, `[🌐전종목스캔] Finnhub 전 종목 심볼 ${discovered.length}개 동적 발견 (기존 ${LARGE_SET.size}+${SMALL_SET.size} + 신규 ${discovered.length} = ${LARGE_SET.size + SMALL_SET.size + discovered.length}개 전수조사 풀)`, {});
+        await addLog('system', 'scan', null, `[🌐전종목스캔] Finnhub 전 종목 심볼 ${discovered.length}개 동적 발견`, {});
       }
     } catch { /* non-critical */ }
     const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
@@ -1135,13 +1136,13 @@ Deno.serve(async (req) => {
     else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 67);
 
     // Session adaptation — ★ 데이장 완화: 절대 하한 35점 (필승패턴 활성화)
+    const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
     // ★ 데이장/프리마켓/애프터마켓: 하한 35점, 정규장: 하한 60점
     const sessionFloor = isLowVolumeSession ? 35 : 60;
     const adaptedEntryThreshold = Math.max(rawAdapted, sessionFloor);
     const adaptedRvolMin = entryRelax < 1.0 ? 0.5 : 1.5; // ★ 데이장: RVOL 0.5x (거의 해제)
     const adaptedVwapMin = entryRelax < 1.0 ? 1 : 4;
-    const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
 
     if (entryRelax < 1.0) {
       await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점 | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin} | 선취매모드: ${isLowVolumeSession ? 'ON' : 'OFF'}`, {});
