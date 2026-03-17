@@ -911,7 +911,6 @@ Deno.serve(async (req) => {
         }
       } catch { /* non-critical */ }
     }
-    } catch { /* non-critical */ }
     const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
 
     // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
