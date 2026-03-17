@@ -295,7 +295,7 @@ export function TradeLogTable({ closedTrades, openPositions = [] }: TradeLogTabl
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
