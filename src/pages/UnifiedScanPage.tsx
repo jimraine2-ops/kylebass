@@ -130,10 +130,10 @@ export default function UnifiedScanPage() {
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 70점 돌파 & 90% 확정 익절 엔진 — 정예 5선 집중 투입</p>
-          <p>✅ 진입: [합산 ≥ 70점] AND [익절확률 ≥ 90%] → 상위 5종목에만 ₩100만 원 집중 배분</p>
-          <p>🛡️ 본절 보호: +1.5% 도달 시 SL을 매수가+0.2%로 상향 → '패배 없는 게임' | 지표 65점 이상 시 철갑 홀딩</p>
-          <p>🎯 데이/프리마켓: 70점 필승 패턴 시 거래량 무관 선매수 → 정규장 폭발력 전환</p>
+          <p className="font-medium text-yellow-400">🏆 63점 돌파 & 80% 확정 익절 엔진 — 정예 5선 집중 투입</p>
+          <p>✅ 진입: [합산 ≥ 63점] AND [익절확률 ≥ 80%] → 상위 5종목에만 ₩100만 원 집중 배분</p>
+          <p>🛡️ 본절 보호: +1.5% 도달 시 SL을 매수가+0.2%로 상향 → '패배 없는 게임' | 지표 60점 이상 시 철갑 홀딩</p>
+          <p>🎯 데이/프리마켓: 63점 필승 패턴 시 거래량 무관 선매수 → 정규장 폭발력 전환</p>
         </CardContent>
       </Card>
 

@@ -161,10 +161,10 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 70점 돌파 & 90% 확정 익절 전략</p>
-          <p>✅ 진입: [합산 점수 ≥ 70] AND [익절확률 ≥ 90%] → 정예 5종목에만 집중 투입</p>
-          <p>🛡️ 본절 보호: +1.5% → SL=매수가+0.2% | 지표 65점+ 시 철갑 홀딩 (가격 노이즈 무시)</p>
-          <p>🎯 데이/프리마켓: 70점 필승 패턴 감지 시 거래량 무관 선매수 → 정규장 폭발 대기</p>
+          <p className="font-medium text-yellow-400">🏆 63점 돌파 & 80% 확정 익절 전략</p>
+          <p>✅ 진입: [합산 점수 ≥ 63] AND [익절확률 ≥ 80%] → 정예 5종목에만 집중 투입</p>
+          <p>🛡️ 본절 보호: +1.5% → SL=매수가+0.2% | 지표 60점+ 시 철갑 홀딩 (가격 노이즈 무시)</p>
+          <p>🎯 데이/프리마켓: 63점 필승 패턴 감지 시 거래량 무관 선매수 → 정규장 폭발 대기</p>
           <p>📈 피라미딩: 80점 돌파 시 +5% 추가 매수 | +2% 시 50% 1차 익절</p>
           <p className="text-yellow-400 font-medium">💰 일일 목표 ₩300,000 — 달성 시 축하 알림 ☁️</p>
         </CardContent>
