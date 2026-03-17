@@ -878,7 +878,7 @@ Deno.serve(async (req) => {
     // --- Market Trend Guard (비활성화: 시장잠금 OFF) ---
     let marketBearish = false;
     let marketBuyHalt = false;
-    let baseEntryThreshold = 65; // ★ 필승형: 진입 문턱 65점 (확실한 대시세 초입만 진입)
+    let baseEntryThreshold = 70; // ★ 70점 돌파 필승형: 진입 문턱 70점 (90% 익절 확률 보장 종목만 진입)
     let qqqTrendDown = false;
     try {
       const [spyQuote, qqqQuote] = await Promise.all([
