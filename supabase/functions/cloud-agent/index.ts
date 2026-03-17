@@ -1258,9 +1258,13 @@ Deno.serve(async (req) => {
           else if (isLowVolumeSession && pnlPct < 0 && indicatorsHold) {
             await addLog('unified', 'hold', sym, `[세션홀딩] ${sym} ${sessionLabel} -${Math.abs(pnlPct).toFixed(2)}% 밀림 → 지표 ${quantScore}점(≥50) 양호, 홀딩`, { quantScore, pnlPct: +pnlPct.toFixed(2), session: sessionLabel });
           }
-          // ★ 선취매 종목: 지표 55점 이상 → 정규장까지 무조건 보유
-          else if (isPreMarketEntry && indicatorsStrong && currentSession !== 'REGULAR') {
-            await addLog('unified', 'hold', sym, `[선취매홀딩] ${sym} 지표 ${quantScore}점(≥55) → 정규장 폭발 대기`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          // ★ 선취매 종목: 지표 50점 이상 → 정규장까지 무조건 보유, 20~50% 추격
+          else if (isPreMarketEntry && indicatorsHold && currentSession !== 'REGULAR') {
+            await addLog('unified', 'hold', sym, `[선취매 완료: 정규장 폭발 대기 중] ${sym} 지표 ${quantScore}점(≥50) → 정규장 20~50% 대시세 추격 목표`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          }
+          // ★ 선취매 종목: 정규장 진입 후에도 지표 55점 이상이면 끝까지 홀딩
+          else if (isPreMarketEntry && indicatorsStrong && currentSession === 'REGULAR') {
+            await addLog('unified', 'hold', sym, `[선취매→정규장 추격] ${sym} 정규장 진입! 지표 ${quantScore}점(≥55) → 목표 수익 50만 원 달성까지 추격`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           }
           // ★ 일반 홀딩: -9%까지는 정상 변동성, 지표 50+ → 홀딩
           else if (pnlPct < 0 && pnlPct > -10 && indicatorsHold) {
