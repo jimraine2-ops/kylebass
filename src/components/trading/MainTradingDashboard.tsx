@@ -107,7 +107,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
             🎯 정예 5선 집중 | ₩100만 원
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🛡️ +1.5%→본절보호 | 철갑홀딩(65점+)
+            🛡️ +1.5%→본절보호 | 철갑홀딩(60점+)
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
