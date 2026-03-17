@@ -1222,32 +1222,19 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ [승률100% 가드] 1.2% 달성 시 → SL을 매수가+0.2%로 즉시 상향 → '절대 손실 불가' 상태
-        if (pnlPct >= 1.2 && pos.stop_loss < pos.price * 1.002) {
+        // ★ [승률100% 가드] 1.5% 달성 시 → SL을 매수가+0.2%로 즉시 상향 → '절대 손실 불가' 상태
+        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
           const bs = +(pos.price * 1.002).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[🛡️승률100%가드] ${sym} +${pnlPct.toFixed(2)}% (≥1.2%) → SL=${fmtKRW(bs)} (매수가+0.2%) 절대손실불가 달성! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'defense', sym, `[🛡️승률100%가드] ${sym} +${pnlPct.toFixed(2)}% (≥1.5%) → SL=${fmtKRW(bs)} (매수가+0.2%) 절대손실불가 달성! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
-        // ★ [무손실 본절가 이동] — 0.8% 달성 시 +0.1% 본절 보호 (1.2% 미달 시 1차 방어)
-        else if (pnlPct >= 0.8 && pos.stop_loss < pos.price * 1.001) {
+        // ★ [무손실 본절가 이동] — 1.0% 달성 시 +0.1% 본절 보호 (1.5% 미달 시 1차 방어)
+        else if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.001) {
           const bs = +(pos.price * 1.001).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[무손실본절] ${sym} +${pnlPct.toFixed(2)}% (≥0.8%) → SL=${fmtKRW(bs)} (매수가+0.1%) 리스크제로 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-        }
-
-        // ★ [1분 타임아웃] 진입 후 1분 내 승부 나지 않으면 본전 탈출 (기회비용 방어)
-        // 단, 선취매 종목은 정규장까지 강력 홀딩 → 타임아웃 면제
-        const entryTime = new Date(pos.opened_at).getTime();
-        const elapsedMs = now.getTime() - entryTime;
-        const oneMinute = 60 * 1000;
-        const isPreEmptiveEntry = (pos.ai_reason || '').includes('선취매') || (pos.ai_reason || '').includes('필승패턴') || (pos.ai_reason || '').includes('스나이퍼') || (pos.ai_reason || '').includes('수급 돌파');
-        if (!isPreEmptiveEntry && elapsedMs >= oneMinute && pnlPct > -0.5 && pnlPct < 0.8 && pos.stop_loss < pos.price * 0.999) {
-          const timeoutSL = +(pos.price * 0.999).toFixed(4);
-          await supabase.from('unified_trades').update({ stop_loss: timeoutSL }).eq('id', pos.id);
-          pos.stop_loss = timeoutSL;
-          await addLog('unified', 'defense', sym, `[⏱️1분타임아웃] ${sym} ${(elapsedMs/1000).toFixed(0)}초 경과 + PnL ${pnlPct.toFixed(2)}%(<0.8%) → SL=본전-0.1% 기회비용 방어`, { quantScore, pnlPct: +pnlPct.toFixed(2), elapsedSec: +(elapsedMs/1000).toFixed(0) });
+          await addLog('unified', 'defense', sym, `[무손실본절] ${sym} +${pnlPct.toFixed(2)}% (≥1.0%) → SL=${fmtKRW(bs)} (매수가+0.1%) 리스크제로 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
         // ★ [3단계 프로세스] 정규장 +8% 돌파 → 무조건 익절 확정 (본절 보호 강화)
