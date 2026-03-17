@@ -2,7 +2,7 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bot, BarChart3, TrendingUp } from "lucide-react";
+import { Bot, BarChart3, TrendingUp, Sparkles } from "lucide-react";
 import { INDICATOR_LABELS } from "./RadarChartCard";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
@@ -35,10 +35,12 @@ interface StockCardProps {
   onTrade: (stock: any) => void;
   isTrading: boolean;
   isAutoMode?: boolean;
+  isNew?: boolean;
+  isReplacementCandidate?: boolean;
 }
 
 export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
-  ({ stock, idx, isSelected, onSelect, onTrade, isTrading, isAutoMode }, ref) => {
+  ({ stock, idx, isSelected, onSelect, onTrade, isTrading, isAutoMode, isNew, isReplacementCandidate }, ref) => {
     const isUp = (stock.changePct || stock.regularMarketChangePercent || 0) >= 0;
     const changePct = stock.changePct || stock.regularMarketChangePercent || 0;
     const price = stock.price || stock.regularMarketPrice || 0;
@@ -64,12 +66,16 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
     return (
       <Card
         ref={ref}
-        className={`cursor-pointer transition-all hover:border-primary/40 ${
+        className={`cursor-pointer transition-all duration-300 hover:border-primary/40 ${
           isSelected ? 'border-primary ring-1 ring-primary/20' : ''
         } ${
           isGoldenHighlight 
             ? 'border-warning/60 ring-2 ring-warning/30 shadow-[0_0_20px_rgba(234,179,8,0.25)] bg-gradient-to-br from-warning/5 to-transparent' 
             : ''
+        } ${
+          isNew ? 'animate-[slideIn_0.4s_ease-out] border-primary/60 ring-1 ring-primary/30' : ''
+        } ${
+          isReplacementCandidate ? 'border-stock-up/60 ring-2 ring-stock-up/30 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : ''
         }`}
         onClick={() => onSelect(stock)}
       >
@@ -87,7 +93,20 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
                     {isUp ? '+' : ''}{changePct?.toFixed(2)}%
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                  {/* NEW 배지 — 30초간 표시 */}
+                  {isNew && (
+                    <Badge className="text-[9px] px-1.5 py-0 bg-gradient-to-r from-primary to-blue-500 text-primary-foreground border-0 animate-pulse font-bold gap-0.5">
+                      <Sparkles className="w-2.5 h-2.5" />
+                      NEW
+                    </Badge>
+                  )}
+                  {/* 교체 후보 배지 */}
+                  {isReplacementCandidate && (
+                    <Badge className="text-[9px] px-1.5 py-0 bg-gradient-to-r from-stock-up to-emerald-400 text-white border-0 font-bold">
+                      🔄 교체 추천 95%↑
+                    </Badge>
+                  )}
                   {/* 거래대금 (원화) */}
                   {tradingValueUSD > 0 && (
                     <Badge variant="outline" className="text-[9px] px-1 py-0 gap-0.5 border-primary/30 text-primary">
