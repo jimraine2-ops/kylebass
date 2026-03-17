@@ -9,8 +9,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 1000;
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_KRW = 12000; // ★ 12,000원 미만 저가주 전용
-const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $8.89
+const MAX_PRICE_KRW = 50000; // ★ 50,000원 미만 중소형주 포함
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $37
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
