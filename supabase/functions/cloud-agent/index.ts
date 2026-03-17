@@ -1132,11 +1132,13 @@ Deno.serve(async (req) => {
     if (recentWinRate < 15) baseEntryThreshold = Math.max(baseEntryThreshold, 70);
     else if (recentWinRate < 25) baseEntryThreshold = Math.max(baseEntryThreshold, 67);
 
-    // Session adaptation — ★ 고속 캐치업: 최소 60점 강제 하한선 (급등 초입 선점)
+    // Session adaptation — ★ 데이장 완화: 절대 하한 35점 (필승패턴 활성화)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // 절대 하한 65점 (고정밀 진입 유지)
-    const adaptedRvolMin = entryRelax < 1.0 ? 1.2 : 1.5; // ★ 초고속 순환: RVOL 3x 상대적 급등 → 1.5x로 완화 (평소 대비 300%↑ 외에도 유입)
-    const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
+    // ★ 데이장/프리마켓/애프터마켓: 하한 35점, 정규장: 하한 60점
+    const sessionFloor = isLowVolumeSession ? 35 : 60;
+    const adaptedEntryThreshold = Math.max(rawAdapted, sessionFloor);
+    const adaptedRvolMin = entryRelax < 1.0 ? 0.5 : 1.5; // ★ 데이장: RVOL 0.5x (거의 해제)
+    const adaptedVwapMin = entryRelax < 1.0 ? 1 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
 
     if (entryRelax < 1.0) {
