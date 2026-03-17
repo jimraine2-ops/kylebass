@@ -97,17 +97,17 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
+          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
+            🏆 70점 돌파 & 90% 확정 익절 엔진
+          </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            📡 데이터: Finnhub 실시간 + Twelve Data 교차검증
+            📡 Finnhub 실시간 + Twelve Data 교차검증
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            ⚡ 슬리피지 ±0.02% 적용
-          </Badge>
-          <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔥 대형주 퀀트 전략 (진입 임계: 50점)
+            🎯 정예 5선 집중 | ₩100만 원
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            📊 10대 지표 기반 통합 포트폴리오
+            🛡️ +1.5%→본절보호 | 철갑홀딩(65점+)
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
@@ -116,12 +116,12 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
         </Button>
       </div>
 
-      <Card className="border-primary/20">
+      <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📋 대형주 트레이딩 엔진: 10대 지표 퀀트 전략</p>
-          <p>✅ Main 진입: [합산 점수 ≥ 50] AND [현재가 {'>'} VWAP] AND [RVOL {'>'} 1.2]</p>
-          <p>✅ Quant 진입: [합산 점수 ≥ 50] AND [호재 {'>'} 0] AND [RVOL {'>'} 1.5] AND [현재가 {'>'} VWAP] → 15%</p>
-          <p>🏷️ 거래 태그: [Main] 또는 [Quant] 태그로 전략 구분</p>
+          <p className="font-medium text-yellow-400">🏆 70점 돌파 & 90% 확정 익절 전략</p>
+          <p>✅ 진입: [합산 점수 ≥ 70] AND [익절확률 ≥ 90%] → 정예 5종목에만 집중 투입</p>
+          <p>🛡️ 본절 보호: +1.5% → SL=매수가+0.2% | 지표 65점+ 시 철갑 홀딩 (가격 노이즈 무시)</p>
+          <p>🎯 데이/프리마켓: 70점 필승 패턴 감지 시 거래량 무관 선매수 → 정규장 폭발 대기</p>
         </CardContent>
       </Card>
 

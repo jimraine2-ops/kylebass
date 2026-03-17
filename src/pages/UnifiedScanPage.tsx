@@ -110,7 +110,7 @@ export default function UnifiedScanPage() {
             <div className={`w-2.5 h-2.5 rounded-full ${wsConnected ? 'bg-stock-up animate-pulse' : 'bg-muted-foreground'}`} />
             {wsConnected ? 'LIVE: WebSocket' : 'REST 폴링'}
           </div>
-          <Badge variant="outline" className="text-[10px]">보유: {openPositions.length}/15</Badge>
+          <Badge variant="outline" className="text-[10px]">보유: {openPositions.length}/5</Badge>
           <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">
             <Flame className="w-3 h-3 mr-1" />+10% 급등: {hotStocks.length}개
           </Badge>
@@ -128,11 +128,12 @@ export default function UnifiedScanPage() {
         </div>
       </div>
 
-      <Card className="border-primary/20">
+      <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📊 통합 실시간 스캐너 — 대형 30 + 소형 50 = 80종목 실시간 모니터링</p>
-          <p>✅ 진입: [합산 ≥ 55점] AND 3중 조건 충족 시 자동 매수 | 🔥급등 예상 패턴 우선 진입 | ₩4억 통합 잔고에서 점수순 배분</p>
-          <p>🏷️ 대형/소형 자동 태깅 | 전 세션(24h) 거래 활성화 | Cloud Agent 1분 간격 자율 실행</p>
+          <p className="font-medium text-yellow-400">🏆 70점 돌파 & 90% 확정 익절 엔진 — 정예 5선 집중 투입</p>
+          <p>✅ 진입: [합산 ≥ 70점] AND [익절확률 ≥ 90%] → 상위 5종목에만 ₩100만 원 집중 배분</p>
+          <p>🛡️ 본절 보호: +1.5% 도달 시 SL을 매수가+0.2%로 상향 → '패배 없는 게임' | 지표 65점 이상 시 철갑 홀딩</p>
+          <p>🎯 데이/프리마켓: 70점 필승 패턴 시 거래량 무관 선매수 → 정규장 폭발력 전환</p>
         </CardContent>
       </Card>
 
