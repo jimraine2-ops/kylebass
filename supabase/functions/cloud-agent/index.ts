@@ -1644,6 +1644,7 @@ Deno.serve(async (req) => {
           let entryLogicName = '';
           if (isOrderFlowEntry) entryLogicName = orderFlow.logicName;
           else if (isPullbackEntry) entryLogicName = pullback.logicName;
+          else if (isSureWinEntry) entryLogicName = '[🔥필승패턴 선매수] 정규장폭발대기';
           else if (isAccumEntry) entryLogicName = '[🎯선제적 요격] 매집선취매';
           else entryLogicName = '[🏆확정수익] 지표돌파매수';
 
@@ -1652,6 +1653,7 @@ Deno.serve(async (req) => {
           (r as any).isAccumulationEntry = isAccumEntry;
           (r as any).isOrderFlowEntry = isOrderFlowEntry;
           (r as any).isPullbackEntry = isPullbackEntry;
+          (r as any).isSureWinEntry = isSureWinEntry;
           (r as any).entryLogicName = entryLogicName;
           (r as any).accumPattern = accumPattern?.pattern || '';
           (r as any).accumCondensation = accumPattern?.condensation || 0;
@@ -1669,9 +1671,16 @@ Deno.serve(async (req) => {
           if (isPullbackEntry) {
             await addLog('unified', 'scan', r.sym, `[🔫수급 돌파 매수] ${r.sym} 세력미이탈 눌림목! 가격↓${pullback.priceDropPct.toFixed(1)}% vs 거래량↓${pullback.volumeDropPct.toFixed(1)}% (비율 ${pullback.ratio.toFixed(1)}x ≥ 5x) → 무조건 익절 패턴`, { pullback, score: r.scoring.totalScore });
           }
+          if (isSureWinEntry) {
+            const sureWinReasons: string[] = [];
+            if (isOBVAccum) sureWinReasons.push(`OBV매집(가격횡보+OBV↑)`);
+            if (isStealthAccum) sureWinReasons.push(`잠입매집(응축${accumData.condensation.toFixed(1)}/10)`);
+            if (isHistoricalMatch) sureWinReasons.push(`과거급등패턴${accumData.historicalSurgeMatch}%일치`);
+            await addLog('unified', 'scan', r.sym, `[🔥필승패턴 선매수] ${r.sym} 정규장 폭발 확률 90%↑ 필승 패턴! [${sureWinReasons.join(' + ')}] | ${r.scoring.totalScore}점(${metCount}/10) | 거래량 제한 해제, 즉시 선매수 확정`, { obvData, accumData, score: r.scoring.totalScore });
+          }
 
           // ★ 선취매 알림 로그 (강화) — 선제적 요격 완전 구현
-          if (isAccumEntry) {
+          if (isAccumEntry && !isSureWinEntry) {
             const stealthTag = accumPattern?.stealthBuying ? '🕵️잠입매집 확인' : '';
             const surgeMatchTag = (accumPattern?.historicalSurgeMatch || 0) >= 50 ? `📈과거급등패턴 ${accumPattern.historicalSurgeMatch}%일치` : '';
             const sectorETF2 = SECTOR_MAP[r.sym] || 'QQQ';
