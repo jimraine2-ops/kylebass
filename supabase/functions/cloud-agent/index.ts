@@ -820,8 +820,8 @@ async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: strin
   const dynamicPool = discoveredSymbols.length > 0 ? discoveredSymbols : [];
   const allSymbols = [...allKnown, ...dynamicPool];
   
-  // ★ 샘플: 100개 (타임아웃 방지 — 200→100 축소)
-  const sampleSize = 100;
+  // ★ 샘플: 50개 (타임아웃 방지)
+  const sampleSize = 50;
   const cycleOffset = Math.floor(Math.random() * allSymbols.length);
   const sample: string[] = [];
   for (let i = 0; i < Math.min(sampleSize, allSymbols.length); i++) {
