@@ -552,9 +552,7 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
   const currentVol = volumes[n];
   const avgVol = volumes.length >= 21 ? volumes.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 : currentVol;
   const rvol = avgVol > 0 ? currentVol / avgVol : 1;
-  // ★ 데이장 완화: 거래량 0일 때 RVOL을 1.0으로 간주 (불이익 제거)
-  const effectiveRvol = (currentVol === 0 && isLowVolumeSession) ? 1.0 : rvol;
-  const rvolScore = effectiveRvol >= 3 ? 10 : effectiveRvol >= 2.5 ? 8 : effectiveRvol >= 2 ? 6 : effectiveRvol >= 1.5 ? 4 : effectiveRvol >= 0.8 ? 3 : 2;
+  const rvolScore = rvol >= 3 ? 10 : rvol >= 2.5 ? 8 : rvol >= 2 ? 6 : rvol >= 1.5 ? 4 : 2;
   
   // 3. VWAP/캔들 패턴
   const ema9 = calculateEMA(closes, 9);
