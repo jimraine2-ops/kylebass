@@ -1490,14 +1490,16 @@ Deno.serve(async (req) => {
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
 
-          // ★ 필승 패턴 알림 로그
+          // ★ 필승 패턴 알림 로그 (고래/에너지 응축 포함)
           if (hasCriticalPattern) {
-            await addLog('unified', 'scan', r.sym, `[🎯필승패턴감지] ${r.sym} [${cp.patterns.join('+')}] 익절확률 ${cp.confidence}% | ${r.scoring.totalScore}점(${metCount}/10) → 패턴 기반 즉시 진입`, { criticalPatterns: cp, score: r.scoring.totalScore });
+            const whaleTag = cp.whaleTrace?.detected ? ` | 🐋고래매집(지지선${fmtKRW(cp.whaleTrace.supportLevel)})` : '';
+            const energyTag = cp.energyCondensation?.detected ? ` | ⚡에너지응축[${cp.energyCondensation.signals.join('+')}]` : '';
+            await addLog('unified', 'scan', r.sym, `[🎯필승패턴감지] ${r.sym} [${cp.patterns.join('+')}] 익절확률 ${cp.confidence}% | ${r.scoring.totalScore}점(${metCount}/10)${whaleTag}${energyTag} → 패턴 기반 즉시 진입`, { criticalPatterns: cp, score: r.scoring.totalScore });
           }
 
           // ★ 선취매 알림 로그
           if (isAccumEntry) {
-            await addLog('unified', 'scan', r.sym, `[데이장 선취매] 지표 완벽 확인. 정규장 폭발을 대비해 ${r.sym}을 미리 매수합니다. | 매집패턴: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation });
+            await addLog('unified', 'scan', r.sym, `[데이장 선취매] 에너지 응축 패턴 확인. 거래량 無해도 지표 발산 직전! ${r.sym} 미리 매수합니다. | 매집패턴: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation });
           }
 
           candidates.push(r);
