@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { Search, Trash2, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef, Fragment } from "react";
 
 interface TradeLogTableProps {
   closedTrades: any[];
@@ -58,7 +58,7 @@ function formatHoldDuration(openedAt: string, closedAt: string | null): string {
   return `${hrs}시간 ${mins % 60}분`;
 }
 
-export function TradeLogTable({ closedTrades, openPositions = [] }: TradeLogTableProps) {
+export const TradeLogTable = forwardRef<HTMLDivElement, TradeLogTableProps>(function TradeLogTable({ closedTrades, openPositions = [] }, _ref) {
   const [searchQuery, setSearchQuery] = useState('');
   const [tabFilter, setTabFilter] = useState<TabFilter>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -208,9 +208,8 @@ export function TradeLogTable({ closedTrades, openPositions = [] }: TradeLogTabl
                   const isExpanded = expandedId === entry.id;
 
                   return (
-                    <>
+                    <Fragment key={entry.id}>
                       <tr
-                        key={entry.id}
                         className={`border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer ${
                           isOpen ? 'bg-primary/5' : statusInfo.isExit ? 'bg-stock-down/5' : ''
                         }`}
@@ -296,7 +295,7 @@ export function TradeLogTable({ closedTrades, openPositions = [] }: TradeLogTabl
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -323,4 +322,4 @@ export function TradeLogTable({ closedTrades, openPositions = [] }: TradeLogTabl
       </CardContent>
     </Card>
   );
-}
+});
