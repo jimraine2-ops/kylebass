@@ -1533,9 +1533,10 @@ Deno.serve(async (req) => {
       const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
       const isSuperEntry = (r as any).isSuperPattern;
       const isScoreSurge = (r as any).isScoreSurge;
+      const isCriticalPatternEntry = (r as any).hasCriticalPattern;
       
-      // ★ 정예 1~3선 집중 투자: 슈퍼/급상승은 잔고의 50%까지 극한 집중
-      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
+      // ★ 정예 1~3선 집중 투자: 필승패턴/슈퍼/급상승은 잔고의 35%까지 집중
+      const positionPct = isPyramiding ? 0.05 : (isCriticalPatternEntry || isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
       const maxKRW = balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
