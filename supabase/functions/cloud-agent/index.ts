@@ -1898,7 +1898,7 @@ Deno.serve(async (req) => {
       total_cycles: (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 90% 스나이퍼 + 철갑 홀딩 엔진 완료 — 익절확률90%↑만 진입 | 기계적손절 폐기 | 30~50% 목표 | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 본절방어:+1.5%→SL+0.2%`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 65점+90%스나이퍼 정예3선 + 철갑홀딩 엔진 완료 — 33만원씩 분할투입 | 기계적손절폐기 | 30~50%목표 | 본절방어:+1.5%→SL+0.1%`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
