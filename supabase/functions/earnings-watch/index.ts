@@ -102,8 +102,6 @@ Deno.serve(async (req) => {
           if (!quote || !quote.c || quote.c <= 0) return null;
 
           const priceKRW = quote.c * KRW_RATE;
-          // Filter: only sub-₩12,000 stocks
-          if (quote.c > MAX_PRICE_USD) return null;
 
           const score = quickScore(quote);
           const winProb = getWinProbability(score);

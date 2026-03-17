@@ -182,9 +182,6 @@ function EarningsCard({ stock }: { stock: any }) {
           <Badge variant="outline" className={`text-[10px] font-mono ${stock.winProb >= 88 ? 'border-yellow-500/50 text-yellow-400 bg-yellow-500/10' : stock.winProb >= 70 ? 'border-stock-up/40 text-stock-up' : 'border-muted'}`}>
             {stock.winProb >= 88 ? '🏆' : '📊'} 익절 {stock.winProb}%
           </Badge>
-          <Badge variant="outline" className="text-[9px] px-1 py-0">
-            💰 ₩12K↓
-          </Badge>
         </div>
 
         {/* Earnings estimate */}
