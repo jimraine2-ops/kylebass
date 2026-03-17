@@ -1397,24 +1397,28 @@ Deno.serve(async (req) => {
           await addLog('unified', 'scan', sym, `[역발상추매후보] ${sym} 지표 ${quantScore}점(${metCount}/10) 가격 -${Math.abs(pnlPct).toFixed(2)}% → 추매 검토`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
-        // Partial exit at +2%
-        if (!shouldClose && pnlPct >= 2) {
+        // ★ 철갑 홀딩: 분할 익절 폐기 — 30~50% 목표까지 전량 홀딩
+        // (분할 매도 대신 수익을 끝까지 짜냄)
+
+        // Partial exit at +15% (첫 분할: 30% 물량만 확보)
+        if (!shouldClose && pnlPct >= 15) {
           const partialExits = pos.partial_exits || [];
           const hasFirst = partialExits.some((e: any) => e.type === 'first_partial');
           if (!hasFirst) {
-            const sellQty = Math.floor(pos.quantity * 0.5);
+            const sellQty = Math.floor(pos.quantity * 0.3); // 30%만 분할 익절
             if (sellQty > 0) {
               const sellValue = Math.floor(sellQty * price * KRW_RATE);
               const partialPnl = sellValue - Math.floor(sellQty * pos.price * KRW_RATE);
               partialExits.push({ type: 'first_partial', qty: sellQty, price, pnl: partialPnl, at: now.toISOString() });
               await supabase.from('unified_trades').update({
                 quantity: pos.quantity - sellQty, partial_exits: partialExits,
-                stop_loss: Math.max(+(price - 2.0 * (price * 0.02)).toFixed(4), pos.stop_loss || 0),
+                stop_loss: Math.max(+(pos.price * 1.05).toFixed(4), pos.stop_loss || 0),
               }).eq('id', pos.id);
               const newBal = balance + sellValue;
               await supabase.from('unified_wallet').update({ balance: newBal, updated_at: now.toISOString() }).eq('id', wallet.id);
               balance = newBal;
-              await addLog('unified', 'exit', sym, `[50%익절] ${sym} +${pnlPct.toFixed(1)}% | PnL: ${fmtKRWRaw(partialPnl)}`, {});
+              await addLog('unified', 'exit', sym, `[30%분할익절] ${sym} +${pnlPct.toFixed(1)}% | PnL: ${fmtKRWRaw(partialPnl)} → 나머지 70% 30~50% 추격 홀딩`, {});
+            }
             }
           }
         }
