@@ -74,7 +74,7 @@ export default function EarningsWatchPage() {
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
           <p className="font-medium text-yellow-400">🏆 실적 발표 임박 저가주 — 88% 확정 익절 선취매</p>
-          <p>✅ 타겟: [주당 ≤ ₩12,000] AND [실적 발표 48시간 이내] → 실적 기대감 폭발 선점</p>
+          <p>✅ 타겟: [실적 발표 48시간 이내] 전 종목 → 실적 기대감 폭발 선점</p>
           <p>🎯 선취매: 지표 60점↑ AND 익절확률 88%↑ → 거래량 무관 즉시 매수</p>
           <p>🚨 급등 전조: 실적주 지표 60점 돌파 시 "실적주 폭발 전조 포착" 알림</p>
         </CardContent>
