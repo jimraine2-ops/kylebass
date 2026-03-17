@@ -1343,8 +1343,8 @@ Deno.serve(async (req) => {
           const minMet = isAccumEntry ? 3 : 4;
           if (metCount < minMet) continue;
           
-          // ★ 선취매: 매집 패턴 감지 시 RVOL 요건 완전 해제 (필승 패턴 = 거래량 무관)
-          if (!isAccumEntry && rvol < adaptedRvolMin) continue;
+          // ★ RVOL 완화: 1.0 이상이면 진입 (매집 패턴 시 해제)
+          if (!isAccumEntry && rvol < 1.0) continue;
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
