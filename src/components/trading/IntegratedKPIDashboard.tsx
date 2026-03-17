@@ -137,14 +137,17 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            📊 통합 10대 지표 기반 포트폴리오
+          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
+            🏆 70점 돌파 & 90% 확정 익절 엔진
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
             📡 Finnhub 실시간 + Twelve Data 교차검증
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            ⚡ 슬리피지 ±0.02% 적용
+            🎯 정예 5선 집중 | ₩100만 원
+          </Badge>
+          <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
+            🛡️ +1.5%→본절보호 | 철갑홀딩(65점+)
           </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
@@ -156,16 +159,14 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
         </Button>
       </div>
 
-      <Card className="border-primary/20">
+      <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📋 전문 트레이너 모드 — 무조건 익절 시스템 v3</p>
-          <p>✅ 진입: [합산 ≥ 55점] AND [체결강도 ≥ 120%] AND [5/10 지표 충족] AND [RVOL ≥ 2.0] → 무조건 익절 후보만 편입</p>
-          <p>🛡️ 본절보호: +1.0% 도달 즉시 SL → 매수가+0.2% 상향 | 마이너스 마감 원천 차단</p>
-          <p>📊 QQQ 모멘텀: 나스닥 상승 시 진입 점수 보너스 부여 (승률 극대화)</p>
-          <p>📉 지표우선 동적방어: 점수 유지 시 눌림목 홀딩 | ATR 기반 추세이탈만 손절</p>
+          <p className="font-medium text-yellow-400">🏆 70점 돌파 & 90% 확정 익절 전략</p>
+          <p>✅ 진입: [합산 점수 ≥ 70] AND [익절확률 ≥ 90%] → 정예 5종목에만 집중 투입</p>
+          <p>🛡️ 본절 보호: +1.5% → SL=매수가+0.2% | 지표 65점+ 시 철갑 홀딩 (가격 노이즈 무시)</p>
+          <p>🎯 데이/프리마켓: 70점 필승 패턴 감지 시 거래량 무관 선매수 → 정규장 폭발 대기</p>
           <p>📈 피라미딩: 80점 돌파 시 +5% 추가 매수 | +2% 시 50% 1차 익절</p>
-          <p>🏆 세션최적화: 프리/데이 → 소형주, 정규장 → 대형주 우선</p>
-          <p className="text-primary font-medium">💰 일일 목표 ₩300,000 — 달성 시 축하 알림 ☁️</p>
+          <p className="text-yellow-400 font-medium">💰 일일 목표 ₩300,000 — 달성 시 축하 알림 ☁️</p>
         </CardContent>
       </Card>
 
