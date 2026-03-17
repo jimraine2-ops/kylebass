@@ -703,18 +703,8 @@ Deno.serve(async (req) => {
     const etTime = et2.getHours() * 60 + et2.getMinutes();
     const isOpeningRush = etTime >= 570 && etTime < 585; // 09:30~09:45 ET
 
-    // ========== SESSION TRANSITION RESET ==========
+    // ========== SESSION TRANSITION RESET (moved after wallet/positions load) ==========
     const currentSession = sessionInfo.session;
-    if (lastSessionType && lastSessionType !== currentSession) {
-      // 세션 전환 감지 → 스캔 리스트 초기화 (보유 종목은 유지)
-      const heldBefore = new Set((openPos || []).map((p: any) => p.symbol));
-      const resetCount = activeUnifiedList.size;
-      activeUnifiedList.clear();
-      // 보유 종목은 계속 유지
-      for (const s of heldBefore) activeUnifiedList.add(s);
-      await addLog('system', 'info', null, `[세션전환] ${lastSessionType} → ${currentSession} | 스캔 리스트 리셋 (${resetCount}개 초기화, 보유 ${heldBefore.size}개 유지) — 새 수급 기반 종목 유입 시작`, {});
-    }
-    lastSessionType = currentSession;
 
     // ========== UNIFIED DYNAMIC UNIVERSE ROTATION (★ 전 종목 확장 스캔) ==========
     const cycleCount = (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles || 0;
