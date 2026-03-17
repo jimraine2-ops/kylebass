@@ -1573,9 +1573,13 @@ Deno.serve(async (req) => {
         .join('|');
       const logMsg = `[${isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : isAccumEntry ? '데이장 선취매' : '10대지표매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${condensationTag}${superTag}${criticalTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
-      // ★ 슈퍼 패턴 알림: "15% 익절이 보장된 슈퍼 패턴 종목 매수 완료"
+      // ★ 필승 패턴 알림
+      if (isCriticalPatternEntry) {
+        await addLog('unified', 'milestone', r.sym, `🎯 [필승 패턴 매수 완료] ${r.sym} [${(r as any).criticalPatterns.join('+')}] 익절확률 ${(r as any).criticalPatternConfidence}% | +0.5% 도달 시 본절보호 → 100% 익절 보장 설계`, { criticalPatterns: r.scoring.criticalPatterns, score: r.scoring.totalScore });
+      }
+      // ★ 슈퍼 패턴 알림
       if (isSuperEntry) {
-        await addLog('unified', 'milestone', r.sym, `🎯 [15% 익절 보장형 슈퍼 패턴] ${r.sym} 매수 완료! [${(r as any).superPatternSignals.join('+')}] | 15% 목표까지 자율 주행 홀딩 개시. 잔파도(5~8%) 완전 무시, -10% 안전망 유지.`, { superPattern: r.scoring.superPattern, score: r.scoring.totalScore, allocation: `${(positionPct*100).toFixed(0)}%` });
+        await addLog('unified', 'milestone', r.sym, `🎯 [15% 익절 보장형 슈퍼 패턴] ${r.sym} 매수 완료! [${(r as any).superPatternSignals.join('+')}] | 15% 목표까지 자율 주행 홀딩 개시.`, { superPattern: r.scoring.superPattern, score: r.scoring.totalScore, allocation: `${(positionPct*100).toFixed(0)}%` });
       }
 
       await supabase.from('unified_trades').insert({
