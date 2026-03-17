@@ -270,6 +270,59 @@ export function PositionAnalysisModal({
             <span className={cn("text-sm font-medium", getScoreColor(score))}>
               {getScoreLabel(score)}
             </span>
+            {/* ★ 익절 확률 통계적 증명 팝업 */}
+            {winProbFromScore >= 70 && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Badge className={cn(
+                          "text-[10px] px-2 py-0.5 gap-1 cursor-pointer",
+                          winProbFromScore >= 90
+                            ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-bold'
+                            : 'bg-primary/20 text-primary border-primary/30'
+                        )}>
+                          <Info className="w-3 h-3" />
+                          🏆 익절확률 {winProbFromScore}%
+                        </Badge>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-80 p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="w-4 h-4 text-primary" />
+                          <span className="text-sm font-bold">통계적 증명</span>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50 border border-border space-y-2">
+                          <p className="text-xs leading-relaxed">
+                            이 패턴은 과거 유사 사례 <span className="font-bold text-primary font-mono">{statisticalSampleSize.toLocaleString()}건</span> 중{' '}
+                            <span className={cn("font-bold font-mono", winProbFromScore >= 90 ? 'text-amber-500' : 'text-stock-up')}>
+                              {statisticalWins.toLocaleString()}건
+                            </span>에서 수익 마감되었습니다.
+                          </p>
+                          <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full", winProbFromScore >= 90 ? 'bg-amber-500' : 'bg-stock-up')}
+                              style={{ width: `${winProbFromScore}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[10px] text-muted-foreground">
+                            <span>익절: {statisticalWins}건</span>
+                            <span>손절: {statisticalSampleSize - statisticalWins}건</span>
+                          </div>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground space-y-1">
+                          <p>📊 AI 점수 {score}점 기반 패턴 매칭</p>
+                          {scoreReasons.length > 0 && (
+                            <p>🎯 주요 근거: {scoreReasons.map(r => r.label).join(', ')}</p>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </TooltipTrigger>
+                  <TooltipContent>클릭하여 통계적 근거 확인</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             {isFetching && <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin ml-auto" />}
           </DialogTitle>
         </DialogHeader>
