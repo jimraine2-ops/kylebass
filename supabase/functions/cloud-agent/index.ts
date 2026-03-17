@@ -1546,8 +1546,8 @@ Deno.serve(async (req) => {
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
     if (!marketBuyHalt && !isOpeningRush && !dailyTargetMax) {
-      for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
-        const batch = SCAN_SYMBOLS.slice(i, i + 5);
+      for (let i = 0; i < SCAN_SYMBOLS.length; i += 10) {
+        const batch = SCAN_SYMBOLS.slice(i, i + 10);
         const results = await Promise.all(batch.map(async (sym) => {
           try {
             if (blacklistSymbols.has(sym)) return null;
