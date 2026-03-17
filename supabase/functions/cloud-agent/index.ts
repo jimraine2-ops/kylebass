@@ -1766,7 +1766,7 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 집중 전략: 승률 90%↑ 상위 3개에 전액 집중 투입
+    // ★ 정예 3선: 승률 90%↑ 상위 3개에 균등 분할 투입
     const topCandidates = probFilteredCandidates.slice(0, 3);
 
     if (topCandidates.length > 0) {
