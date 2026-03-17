@@ -1358,7 +1358,17 @@ Deno.serve(async (req) => {
         }));
 
         for (const r of results) {
-          if (!r || r.scoring.totalScore < adaptedEntryThreshold) continue;
+          if (!r) continue;
+          
+          // ★ 필승 패턴 A/B/C 감지: 점수가 낮아도 패턴 완성 시 즉시 진입 허용
+          const cp = r.scoring.criticalPatterns;
+          const hasCriticalPattern = cp && cp.patterns.length >= 1;
+          const hasMultiPattern = cp && cp.patterns.length >= 2; // 2개 이상 = 초고확신
+
+          // 점수 필터: 일반 진입은 adaptedEntryThreshold, 필승 패턴 시 50점까지 완화
+          if (!hasCriticalPattern && r.scoring.totalScore < adaptedEntryThreshold) continue;
+          if (hasCriticalPattern && r.scoring.totalScore < 50) continue; // 패턴 있어도 최소 50점
+          
           const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
           const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
           if (alreadyHolding && !isPyramiding) continue;
@@ -1369,8 +1379,8 @@ Deno.serve(async (req) => {
           const accumPattern = r.scoring.accumulation;
           const isAccumCandidate = isLowVolumeSession && accumPattern?.isAccumulating;
           
-          // ★ 선취매: 매집 패턴 감지 시 거래대금 필터 해제 (필승 패턴이면 거래량 제한 무시)
-          if (!isAccumCandidate) {
+          // ★ 필승 패턴 또는 매집 패턴 감지 시 거래대금 필터 해제
+          if (!isAccumCandidate && !hasCriticalPattern) {
             if (vlInfo && vlInfo.tradingValue < 10000) continue;
             const sessionAvgTradingValue = volumeLeaders.length > 0 
               ? volumeLeaders.reduce((sum, vl) => sum + vl.tradingValue, 0) / volumeLeaders.length 
@@ -1380,23 +1390,23 @@ Deno.serve(async (req) => {
             }
           }
 
-          // ★ 엔진 개편: 오직 10대 지표 점수 + 충족 수로 진입 판단
+          // ★ 엔진 개편: 10대 지표 점수 + 충족 수 + 필승 패턴으로 진입 판단
           const metCount = r.scoring.metCount || 0;
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
           const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
           const isAccumEntry = isAccumCandidate;
           
-          // 최소 충족 조건: 10개 중 5개 이상 충족 (매집 패턴 시 3개로 완화)
-          const minMet = isAccumEntry ? 3 : 5;
+          // 최소 충족 조건: 필승 패턴 시 3개, 매집 시 3개, 일반 5개
+          const minMet = (hasCriticalPattern || isAccumEntry) ? 3 : 5;
           if (metCount < minMet) continue;
           
-          // ★ RVOL 완화: 1.0 이상이면 진입 (매집 패턴 시 해제)
-          if (!isAccumEntry && rvol < 1.0) continue;
+          // ★ RVOL 완화: 필승 패턴 시 해제
+          if (!isAccumEntry && !hasCriticalPattern && rvol < 1.0) continue;
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          // ★ 체결강도 완화: 80% 이상 (매집 패턴 시 40%)
-          const minAggression = isAccumEntry ? 40 : 80;
+          // ★ 체결강도 완화: 필승 패턴 시 40%
+          const minAggression = (isAccumEntry || hasCriticalPattern) ? 40 : 80;
           if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
@@ -1406,6 +1416,9 @@ Deno.serve(async (req) => {
           (r as any).isAccumulationEntry = isAccumEntry;
           (r as any).accumPattern = accumPattern?.pattern || '';
           (r as any).accumCondensation = accumPattern?.condensation || 0;
+          (r as any).hasCriticalPattern = hasCriticalPattern;
+          (r as any).criticalPatterns = cp?.patterns || [];
+          (r as any).criticalPatternConfidence = cp?.confidence || 0;
           const tradingVal = vlInfo?.tradingValue || 0;
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
