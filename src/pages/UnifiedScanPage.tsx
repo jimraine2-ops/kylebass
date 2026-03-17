@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuantSignals, usePennyStocks, useUnifiedPortfolio } from "@/hooks/useStockData";
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
-import { Target, BarChart3, Shield, Radio, RefreshCw, Cloud, ArrowUpDown, Flame, TrendingUp, Activity, Sparkles } from "lucide-react";
+import { Target, BarChart3, Shield, Radio, RefreshCw, Cloud, ArrowUpDown, Flame, TrendingUp, Activity } from "lucide-react";
 import { RadarChartCard, INDICATOR_LABELS } from "@/components/recommendation/RadarChartCard";
 import { StockCard } from "@/components/recommendation/StockCard";
 import StockCardItem from "@/components/penny/StockCardItem";
@@ -23,8 +23,6 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'rvol', label: '거래량순' },
 ];
 
-const NEW_BADGE_DURATION_MS = 30000; // 30초
-
 export default function UnifiedScanPage() {
   const { data: quantData, isLoading: quantLoading, refetch: quantRefetch, isFetching: quantFetching } = useQuantSignals();
   const { data: pennyData, isLoading: pennyLoading } = usePennyStocks();
@@ -32,10 +30,6 @@ export default function UnifiedScanPage() {
   const [selectedStock, setSelectedStock] = useState<any>(null);
   const [sortKey, setSortKey] = useState<SortKey>('score');
   const [viewMode, setViewMode] = useState<ViewMode>('all');
-
-  // ★ NEW 배지 추적: symbol → 최초 발견 시각
-  const knownSymbolsRef = useRef<Set<string>>(new Set());
-  const [newSymbols, setNewSymbols] = useState<Map<string, number>>(new Map());
 
   const isLoading = quantLoading || pennyLoading;
 
@@ -82,66 +76,14 @@ export default function UnifiedScanPage() {
       }
     });
 
-    return combined.slice(0, 100);
+    return combined.slice(0, 80);
   }, [largeStocks, enrichedSmallStocks, sortKey, viewMode]);
-
-  // ★ NEW 배지 감지: 새로 나타난 종목 추적
-  useEffect(() => {
-    if (allStocks.length === 0) return;
-    const now = Date.now();
-    const currentSymbolsList: string[] = allStocks.map((s: any) => String(s.symbol));
-    const newMap = new Map(newSymbols);
-
-    // 새로운 종목 감지
-    for (const sym of currentSymbolsList) {
-      if (!knownSymbolsRef.current.has(sym)) {
-        newMap.set(sym, now);
-        knownSymbolsRef.current.add(sym);
-      }
-    }
-
-    // 30초 경과한 NEW 배지 제거
-    for (const [sym, ts] of newMap) {
-      if (now - ts > NEW_BADGE_DURATION_MS) {
-        newMap.delete(sym);
-      }
-    }
-
-    if (newMap.size !== newSymbols.size) {
-      setNewSymbols(newMap);
-    }
-  }, [allStocks]);
-
-  // 30초 타이머로 NEW 배지 만료 체크
-  useEffect(() => {
-    if (newSymbols.size === 0) return;
-    const timer = setInterval(() => {
-      const now = Date.now();
-      setNewSymbols(prev => {
-        const next = new Map(prev);
-        for (const [sym, ts] of next) {
-          if (now - ts > NEW_BADGE_DURATION_MS) next.delete(sym);
-        }
-        return next.size !== prev.size ? next : prev;
-      });
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [newSymbols.size]);
 
   const hotStocks = allStocks.filter((s: any) => (s.changePct || s.regularMarketChangePercent || 0) >= 10);
   const surgingStocks = allStocks.filter((s: any) => (s.changePct || s.regularMarketChangePercent || 0) >= 5);
-  const pendingStocks = allStocks.filter((s: any) => (s.totalScore || 0) >= 60 && (s.totalScore || 0) < 65);
-  const newCount = newSymbols.size;
 
   return (
     <div className="space-y-4">
-      <style>{`
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateY(-12px) scale(0.97); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-      `}</style>
-
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <Target className="w-5 h-5 text-primary" />
@@ -150,7 +92,7 @@ export default function UnifiedScanPage() {
         <div className="flex items-center gap-2">
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-xs">
             <Cloud className="w-3.5 h-3.5 mr-1" />
-            Cloud Agent: 전 종목 롤링 스캔 중
+            Cloud Agent: 서버 자율 매매 중
           </Badge>
           <Button variant="outline" size="sm" onClick={() => quantRefetch()} disabled={quantFetching}>
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${quantFetching ? 'animate-spin' : ''}`} />
@@ -163,7 +105,7 @@ export default function UnifiedScanPage() {
 
       {/* Live Status */}
       <div className="rounded-lg p-3 flex items-center justify-between flex-wrap gap-2 border border-stock-up/50 bg-stock-up/5">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-stock-up/20 text-stock-up">
             <div className={`w-2.5 h-2.5 rounded-full ${wsConnected ? 'bg-stock-up animate-pulse' : 'bg-muted-foreground'}`} />
             {wsConnected ? 'LIVE: WebSocket' : 'REST 폴링'}
@@ -175,15 +117,6 @@ export default function UnifiedScanPage() {
           <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
             <TrendingUp className="w-3 h-3 mr-1" />+5% 이상: {surgingStocks.length}개
           </Badge>
-          <Badge variant="outline" className="text-[10px] border-warning/40 text-warning">
-            ⏳ 대기(60~64점): {pendingStocks.length}개
-          </Badge>
-          {newCount > 0 && (
-            <Badge className="text-[10px] bg-primary/20 text-primary border-primary/40 animate-pulse gap-0.5">
-              <Sparkles className="w-3 h-3" />
-              신규 유입: {newCount}개
-            </Badge>
-          )}
         </div>
         <div className="flex items-center gap-2">
           {wsConnected && (
@@ -197,10 +130,9 @@ export default function UnifiedScanPage() {
 
       <Card className="border-primary/20">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📊 전 종목 실시간 롤링 스캐너 — NYSE/NASDAQ/AMEX 무제한 순환 스캔 | 신규 수급 유입 즉시 업데이트</p>
-          <p>✅ 진입: [합산 ≥ 65점] AND [익절확률 ≥ 85%] → 즉시 매수 | 🔥RVOL 3x 상대적 급등주 실시간 포착</p>
-          <p>⚡ 롤링: 1분 주기 전 종목 순환 → 거래대금·점수 급등 신규 종목 즉시 리스트 업데이트 | [NEW] 배지 30초 노출</p>
-          <p>💰 교체: 보유 종목보다 익절확률 95%↑ 신규 종목 감지 시 즉시 교체 매매 검토</p>
+          <p className="font-medium text-foreground">📊 통합 실시간 스캐너 — 대형 30 + 소형 50 = 80종목 실시간 모니터링</p>
+          <p>✅ 진입: [합산 ≥ 55점] AND 3중 조건 충족 시 자동 매수 | 🔥급등 예상 패턴 우선 진입 | ₩4억 통합 잔고에서 점수순 배분</p>
+          <p>🏷️ 대형/소형 자동 태깅 | 전 세션(24h) 거래 활성화 | Cloud Agent 1분 간격 자율 실행</p>
         </CardContent>
       </Card>
 
@@ -248,8 +180,6 @@ export default function UnifiedScanPage() {
                         onTrade={() => {}}
                         isTrading={false}
                         isAutoMode={true}
-                        isNew={newSymbols.has(stock.symbol)}
-                        isReplacementCandidate={stock.totalScore >= 75 && !holdingSymbols.has(stock.symbol)}
                       />
                     ))
                   )}

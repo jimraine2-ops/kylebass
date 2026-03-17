@@ -6,9 +6,9 @@ import { formatStockName } from "@/lib/koreanStockMap";
 import { Radar, TrendingUp, TrendingDown, Sparkles, BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { useMemo, forwardRef } from "react";
+import { useMemo } from "react";
 
-export const SuperScannerPanel = forwardRef<HTMLDivElement>((_, ref) => {
+export function SuperScannerPanel() {
   const { data, isLoading } = useSuperScan();
 
   const top30 = data?.top30 || [];
@@ -158,5 +158,4 @@ export const SuperScannerPanel = forwardRef<HTMLDivElement>((_, ref) => {
       </Card>
     </div>
   );
-});
-SuperScannerPanel.displayName = "SuperScannerPanel";
+}

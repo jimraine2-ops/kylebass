@@ -48,39 +48,23 @@ export function TradeNotificationListener() {
           const name = formatStockName(trade.symbol);
           const priceKRW = Math.round((trade.price || 0) * 1350);
           const score = trade.entry_score ?? "N/A";
-          const confidence = trade.ai_confidence ?? 0;
-          const aiReason = trade.ai_reason || '';
-          const isSuperPattern = aiReason.includes('15%') || aiReason.includes('슈퍼');
-          const is90Prob = confidence >= 90 || aiReason.includes('익절 확률');
-          const targetPriceKRW = Math.round((trade.price || 0) * 1.15 * 1350);
+          const confidence = trade.ai_confidence ?? "N/A";
+          const isSuperPattern = (trade.ai_reason || '').includes('15%') || (trade.ai_reason || '').includes('슈퍼');
+          const targetPriceKRW = isSuperPattern ? Math.round((trade.price || 0) * 1.15 * 1350) : null;
 
-          // ★ 필승 로직 이름 파싱
-          let logicTag = '🚀 매수 완료';
-          if (aiReason.includes('필승패턴 선매수')) logicTag = '🔥 필승패턴 선매수 — 정규장 폭발 대기';
-          else if (aiReason.includes('스나이퍼 매수')) logicTag = '🎯 스나이퍼 매수 — 수급불균형 돌파';
-          else if (aiReason.includes('수급 돌파 매수')) logicTag = '🔫 수급 돌파 매수 — 세력미이탈 눌림목';
-          else if (aiReason.includes('선제적 요격')) logicTag = '🎯 선제적 요격 — 매집선취매';
-          else if (aiReason.includes('확정수익')) logicTag = '🏆 확정수익 매수';
-          else if (isSuperPattern) logicTag = '🎯 슈퍼 패턴 매수! 15% 수익 타겟';
-          else if (is90Prob) logicTag = `🏆 익절확률 ${confidence}% 필승 종목 매수`;
-
-          const message = is90Prob
-            ? `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 🏆익절확률: ${confidence}% | 🎯목표: ₩${targetPriceKRW.toLocaleString("ko-KR")}`
-            : isSuperPattern
-            ? `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 🎯15% 목표가: ₩${targetPriceKRW.toLocaleString("ko-KR")}`
+          const message = isSuperPattern
+            ? `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 🎯15% 목표가: ₩${targetPriceKRW?.toLocaleString("ko-KR")}`
             : `${name} | ₩${priceKRW.toLocaleString("ko-KR")} | 지표: ${score}점 | 신뢰도: ${confidence}%`;
 
-          const title = logicTag;
-
-          const duration = is90Prob ? 15000 : isSuperPattern ? 12000 : 8000;
-          const borderColor = is90Prob ? '#f59e0b' : isSuperPattern ? 'hsl(var(--warning))' : 'hsl(var(--stock-up))';
+          const title = isSuperPattern
+            ? `🎯 슈퍼 패턴 매수! 15% 수익 타겟`
+            : `🚀 매수 완료`;
 
           toast.success(title, {
             description: message,
-            duration,
+            duration: isSuperPattern ? 12000 : 8000,
             style: {
-              borderLeft: `4px solid ${borderColor}`,
-              ...(is90Prob ? { background: 'linear-gradient(135deg, rgba(245,158,11,0.1), transparent)', boxShadow: '0 0 20px rgba(245,158,11,0.15)' } : {}),
+              borderLeft: `4px solid hsl(var(--${isSuperPattern ? 'warning' : 'stock-up'}))`,
             },
           });
 

@@ -1,4 +1,4 @@
-import { BarChart3, TrendingUp, Bot, Target, Calendar } from "lucide-react";
+import { BarChart3, TrendingUp, Bot, Target } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import {
   Sidebar,
@@ -15,7 +15,6 @@ import {
 const menuItems = [
   { title: "대시보드", url: "/", icon: BarChart3 },
   { title: "통합 실시간 거래 현황", url: "/unified-scan", icon: Target },
-  { title: "실적 발표 예정", url: "/earnings-watch", icon: Calendar },
   { title: "통합 KPI (자율 매매)", url: "/ai-trading", icon: Bot },
   { title: "종목 검색", url: "/stock/AAPL", icon: TrendingUp },
 ];

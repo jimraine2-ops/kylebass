@@ -2,7 +2,7 @@ import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Bot, BarChart3, TrendingUp, Sparkles } from "lucide-react";
+import { Bot, BarChart3, TrendingUp } from "lucide-react";
 import { INDICATOR_LABELS } from "./RadarChartCard";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
@@ -35,12 +35,10 @@ interface StockCardProps {
   onTrade: (stock: any) => void;
   isTrading: boolean;
   isAutoMode?: boolean;
-  isNew?: boolean;
-  isReplacementCandidate?: boolean;
 }
 
 export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
-  ({ stock, idx, isSelected, onSelect, onTrade, isTrading, isAutoMode, isNew, isReplacementCandidate }, ref) => {
+  ({ stock, idx, isSelected, onSelect, onTrade, isTrading, isAutoMode }, ref) => {
     const isUp = (stock.changePct || stock.regularMarketChangePercent || 0) >= 0;
     const changePct = stock.changePct || stock.regularMarketChangePercent || 0;
     const price = stock.price || stock.regularMarketPrice || 0;
@@ -56,27 +54,10 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
     const scoreStrong = stock.totalScore >= 55;
     const showHoldingStatus = isPriceDown && scoreStrong;
 
-    // ★ 익절 확률 90%+ 황금색 강조 (점수 75+ ≈ 90%+ 확률)
-    const isGoldenCandidate = stock.totalScore >= 75;
-    // ★ ₩10,000 미만 저가주 확인
-    const priceKRW = price * rate;
-    const isLowPriceTarget = priceKRW < 10000 && priceKRW >= 1000;
-    const isGoldenHighlight = isGoldenCandidate && isLowPriceTarget;
-
     return (
       <Card
         ref={ref}
-        className={`cursor-pointer transition-all duration-300 hover:border-primary/40 ${
-          isSelected ? 'border-primary ring-1 ring-primary/20' : ''
-        } ${
-          isGoldenHighlight 
-            ? 'border-warning/60 ring-2 ring-warning/30 shadow-[0_0_20px_rgba(234,179,8,0.25)] bg-gradient-to-br from-warning/5 to-transparent' 
-            : ''
-        } ${
-          isNew ? 'animate-[slideIn_0.4s_ease-out] border-primary/60 ring-1 ring-primary/30' : ''
-        } ${
-          isReplacementCandidate ? 'border-stock-up/60 ring-2 ring-stock-up/30 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : ''
-        }`}
+        className={`cursor-pointer transition-all hover:border-primary/40 ${isSelected ? 'border-primary ring-1 ring-primary/20' : ''}`}
         onClick={() => onSelect(stock)}
       >
         <CardContent className="p-4">
@@ -93,20 +74,7 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
                     {isUp ? '+' : ''}{changePct?.toFixed(2)}%
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                  {/* NEW 배지 — 30초간 표시 */}
-                  {isNew && (
-                    <Badge className="text-[9px] px-1.5 py-0 bg-gradient-to-r from-primary to-blue-500 text-primary-foreground border-0 animate-pulse font-bold gap-0.5">
-                      <Sparkles className="w-2.5 h-2.5" />
-                      NEW
-                    </Badge>
-                  )}
-                  {/* 교체 후보 배지 */}
-                  {isReplacementCandidate && (
-                    <Badge className="text-[9px] px-1.5 py-0 bg-gradient-to-r from-stock-up to-emerald-400 text-white border-0 font-bold">
-                      🔄 교체 추천 95%↑
-                    </Badge>
-                  )}
+                <div className="flex items-center gap-1.5 mt-0.5">
                   {/* 거래대금 (원화) */}
                   {tradingValueUSD > 0 && (
                     <Badge variant="outline" className="text-[9px] px-1 py-0 gap-0.5 border-primary/30 text-primary">
@@ -126,16 +94,6 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
                       {stock.capType === 'large' ? '대형' : '소형'}
                     </Badge>
                   )}
-                  {isGoldenHighlight && (
-                    <Badge className="text-[9px] px-1.5 py-0 bg-gradient-to-r from-warning to-amber-400 text-warning-foreground border-0 animate-pulse font-bold">
-                      🏆 90%↑
-                    </Badge>
-                  )}
-                  {stock.ai_reason?.includes('선제적요격') || stock.ai_reason?.includes('선취매') ? (
-                    <Badge className="text-[9px] px-1.5 py-0 bg-gradient-to-r from-amber-500 to-yellow-400 text-warning-foreground border-0 font-bold">
-                      🎯 선취매 완료 - 익절확률 {stock.ai_confidence || stock.totalScore}%
-                    </Badge>
-                  ) : null}
                 </div>
                 {stock.reason && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">📌 {stock.reason}</p>

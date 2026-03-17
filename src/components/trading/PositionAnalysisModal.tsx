@@ -1,14 +1,11 @@
-import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { formatStockName } from "@/lib/koreanStockMap";
-import { Activity, BarChart3, TrendingUp, TrendingDown, Zap, Volume2, RefreshCw, Info, DollarSign } from "lucide-react";
+import { Activity, BarChart3, TrendingUp, TrendingDown, Zap, Volume2, RefreshCw } from "lucide-react";
 import { usePositionQuant } from "@/hooks/usePositionQuant";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip as RechartsTooltip,
@@ -142,9 +139,11 @@ export function PositionAnalysisModal({
     open && pos ? pos.symbol : null
   );
 
-  const quantStock = pos ? (fetchedQuant || externalQuantStock) : null;
-  const displayPrice = pos ? (livePrice ?? pos.currentPrice ?? pos.price) : 0;
-  const score = pos ? (liveScore ?? quantStock?.totalScore ?? pos.entry_score ?? 0) : 0;
+  if (!pos) return null;
+
+  const quantStock = fetchedQuant || externalQuantStock;
+  const displayPrice = livePrice ?? pos.currentPrice ?? pos.price;
+  const score = liveScore ?? quantStock?.totalScore ?? pos.entry_score ?? 0;
   const indicators = quantStock?.indicators || {};
   const hasIndicators = Object.keys(indicators).length > 0;
 
@@ -182,40 +181,11 @@ export function PositionAnalysisModal({
   ];
 
   // PnL
-  const investmentKRW = Math.round((pos?.price || 0) * (pos?.quantity || 0) * fxRate);
-  const currentValueKRW = Math.round(displayPrice * (pos?.quantity || 0) * fxRate);
+  const investmentKRW = Math.round(pos.price * pos.quantity * fxRate);
+  const currentValueKRW = Math.round(displayPrice * pos.quantity * fxRate);
   const unrealizedPnl = currentValueKRW - investmentKRW;
   const unrealizedPnlPct = investmentKRW > 0 ? ((currentValueKRW / investmentKRW) - 1) * 100 : 0;
   const isProfit = unrealizedPnl >= 0;
-
-  // ★ 점수 산출 근거 Top 3
-  const scoreReasons = useMemo(() => {
-    const reasons: { label: string; score: number; reason: string }[] = [];
-    const indEntries = Object.entries(indicators);
-    for (const [key, ind] of indEntries) {
-      const meta = INDICATOR_LABELS[key];
-      if (!meta) continue;
-      const s = (ind as any)?.score || 0;
-      const status = getIndicatorStatusLabel(key, s, ind);
-      const detail = (ind as any)?.details || '';
-      reasons.push({
-        label: meta.label,
-        score: s,
-        reason: detail || status.text,
-      });
-    }
-    return reasons.sort((a, b) => b.score - a.score).slice(0, 3);
-  }, [indicators]);
-
-  // ★ 익절 확률 통계적 근거
-  const winProbFromScore = score >= 70 ? 95 : score >= 65 ? 92 : score >= 60 ? 90 : score >= 55 ? 85 : score >= 50 ? 75 : score >= 45 ? 50 : 30;
-  const statisticalSampleSize = 1000;
-  const statisticalWins = Math.round(statisticalSampleSize * winProbFromScore / 100);
-
-  // ★ 실시간 순매수 대금 (Money Flow) 추정
-  const netBuyRatio = (buyPressure - 50) / 50; // -1 ~ +1
-  const netMoneyFlowKRW = turnoverKRW * netBuyRatio;
-  const isNetBuying = netMoneyFlowKRW > 0;
 
   // Indicator detail bars with status labels
   const indicatorBars = Object.entries(INDICATOR_LABELS).map(([key, meta]) => {
@@ -255,8 +225,6 @@ export function PositionAnalysisModal({
     );
   };
 
-  if (!pos) return null;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto border-primary/20 bg-card">
@@ -270,59 +238,6 @@ export function PositionAnalysisModal({
             <span className={cn("text-sm font-medium", getScoreColor(score))}>
               {getScoreLabel(score)}
             </span>
-            {/* ★ 익절 확률 통계적 증명 팝업 */}
-            {winProbFromScore >= 70 && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Badge className={cn(
-                          "text-[10px] px-2 py-0.5 gap-1 cursor-pointer",
-                          winProbFromScore >= 90
-                            ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-bold'
-                            : 'bg-primary/20 text-primary border-primary/30'
-                        )}>
-                          <Info className="w-3 h-3" />
-                          🏆 익절확률 {winProbFromScore}%
-                        </Badge>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-80 p-4 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <BarChart3 className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-bold">통계적 증명</span>
-                        </div>
-                        <div className="p-3 rounded-lg bg-muted/50 border border-border space-y-2">
-                          <p className="text-xs leading-relaxed">
-                            이 패턴은 과거 유사 사례 <span className="font-bold text-primary font-mono">{statisticalSampleSize.toLocaleString()}건</span> 중{' '}
-                            <span className={cn("font-bold font-mono", winProbFromScore >= 90 ? 'text-amber-500' : 'text-stock-up')}>
-                              {statisticalWins.toLocaleString()}건
-                            </span>에서 수익 마감되었습니다.
-                          </p>
-                          <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className={cn("h-full rounded-full", winProbFromScore >= 90 ? 'bg-amber-500' : 'bg-stock-up')}
-                              style={{ width: `${winProbFromScore}%` }}
-                            />
-                          </div>
-                          <div className="flex justify-between text-[10px] text-muted-foreground">
-                            <span>익절: {statisticalWins}건</span>
-                            <span>손절: {statisticalSampleSize - statisticalWins}건</span>
-                          </div>
-                        </div>
-                        <div className="text-[10px] text-muted-foreground space-y-1">
-                          <p>📊 AI 점수 {score}점 기반 패턴 매칭</p>
-                          {scoreReasons.length > 0 && (
-                            <p>🎯 주요 근거: {scoreReasons.map(r => r.label).join(', ')}</p>
-                          )}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </TooltipTrigger>
-                  <TooltipContent>클릭하여 통계적 근거 확인</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
             {isFetching && <RefreshCw className="w-3.5 h-3.5 text-muted-foreground animate-spin ml-auto" />}
           </DialogTitle>
         </DialogHeader>
@@ -394,35 +309,6 @@ export function PositionAnalysisModal({
                   <RechartsTooltip content={<CustomRadarTooltip />} />
                 </RadarChart>
               </ResponsiveContainer>
-            )}
-
-            {/* ★ 점수 산출 근거 Top 3 */}
-            {scoreReasons.length > 0 && (
-              <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border">
-                <p className="text-xs font-bold text-foreground mb-2 flex items-center gap-1.5">
-                  📋 점수 근거 Top 3
-                </p>
-                <div className="space-y-1.5">
-                  {scoreReasons.map((r, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs">
-                      <span className={cn(
-                        "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
-                        i === 0 ? 'bg-amber-500/20 text-amber-500' : i === 1 ? 'bg-primary/20 text-primary' : 'bg-muted-foreground/20 text-muted-foreground'
-                      )}>
-                        {i + 1}
-                      </span>
-                      <span className="font-medium text-foreground">{r.label}</span>
-                      <span className="text-muted-foreground">—</span>
-                      <span className="text-muted-foreground flex-1">{r.reason}</span>
-                      <Badge variant="outline" className={cn("text-[9px] px-1.5 py-0 shrink-0",
-                        r.score >= 8 ? 'border-stock-up/40 text-stock-up' : r.score >= 5 ? 'border-primary/40 text-primary' : 'border-warning/40 text-warning'
-                      )}>
-                        {r.score}/10
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
             )}
           </CardContent>
         </Card>
@@ -532,23 +418,6 @@ export function PositionAnalysisModal({
                 <p className="text-[10px] text-muted-foreground mt-0.5">
                   ${turnoverUSD > 0 ? `${(turnoverUSD / 1000000).toFixed(2)}M` : '-'}
                   {realCurrentVol > 0 && <span className="ml-1">· 거래량 {formatLargeNumber(realCurrentVol)}주</span>}
-                </p>
-              </div>
-
-              {/* ★ 실시간 순매수 대금 (Money Flow) */}
-              <div className={cn(
-                "p-2.5 rounded-lg border text-center",
-                isNetBuying ? 'bg-stock-up/5 border-stock-up/30' : 'bg-stock-down/5 border-stock-down/30'
-              )}>
-                <p className="text-[10px] text-muted-foreground flex items-center justify-center gap-1">
-                  <DollarSign className="w-3 h-3" />
-                  실시간 순매수 대금
-                </p>
-                <p className={cn("text-lg font-bold font-mono", isNetBuying ? 'text-stock-up' : 'text-stock-down')}>
-                  {isNetBuying ? '+' : ''}{formatTurnoverKRW(Math.abs(netMoneyFlowKRW))}
-                </p>
-                <p className={cn("text-[10px] font-medium", isNetBuying ? 'text-stock-up' : 'text-stock-down')}>
-                  {isNetBuying ? '📈 순매수 유입 중' : '📉 순매도 유출 중'}
                 </p>
               </div>
 
