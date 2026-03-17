@@ -1222,19 +1222,19 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ [승률100% 가드] 1.5% 달성 시 → SL을 매수가+0.2%로 즉시 상향 → '절대 손실 불가' 상태
-        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
-          const bs = +(pos.price * 1.002).toFixed(4);
-          await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
-          pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[🛡️승률100%가드] ${sym} +${pnlPct.toFixed(2)}% (≥1.5%) → SL=${fmtKRW(bs)} (매수가+0.2%) 절대손실불가 달성! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
-        }
-        // ★ [무손실 본절가 이동] — 1.0% 달성 시 +0.1% 본절 보호 (1.5% 미달 시 1차 방어)
-        else if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.001) {
+        // ★ [승률100% 가드] 1.5% 달성 시 → SL을 매수가+0.1%로 즉시 상향 → '절대 손실 불가' 상태
+        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.001) {
           const bs = +(pos.price * 1.001).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[무손실본절] ${sym} +${pnlPct.toFixed(2)}% (≥1.0%) → SL=${fmtKRW(bs)} (매수가+0.1%) 리스크제로 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'defense', sym, `[🛡️승률100%가드] ${sym} +${pnlPct.toFixed(2)}% (≥1.5%) → SL=${fmtKRW(bs)} (매수가+0.1%) 절대손실불가 달성! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+        }
+        // ★ [무손실 본절가 이동] — 1.0% 달성 시 본절가 정확히 매수가로 이동
+        else if (pnlPct >= 1.0 && pos.stop_loss < pos.price) {
+          const bs = +(pos.price * 1.0).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
+          pos.stop_loss = bs;
+          await addLog('unified', 'defense', sym, `[무손실본절] ${sym} +${pnlPct.toFixed(2)}% (≥1.0%) → SL=${fmtKRW(bs)} (본절가) 리스크제로 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
         // ★ [3단계 프로세스] 정규장 +8% 돌파 → 무조건 익절 확정 (본절 보호 강화)
@@ -1766,7 +1766,7 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 집중 전략: 승률 90%↑ 상위 3개에 전액 집중 투입
+    // ★ 정예 3선: 승률 90%↑ 상위 3개에 균등 분할 투입
     const topCandidates = probFilteredCandidates.slice(0, 3);
 
     if (topCandidates.length > 0) {
@@ -1788,9 +1788,10 @@ Deno.serve(async (req) => {
       const isSuperEntry = (r as any).isSuperPattern;
       const isScoreSurge = (r as any).isScoreSurge;
       
-      // ★ 복리 매매: 현재 잔고 전액 투입 (100만 원이 130만 원이 되면 130만 원 전체 투입)
-      const positionPct = isPyramiding ? 0.05 : 0; // 모든 진입에 전액 집중
-      const maxKRW = positionPct === 0 ? balance : balance * positionPct; // ★ 복리: 잔고 전액 (상한 제거)
+      // ★ 정예 3선: 100만 원 ÷ 3 = 33만 원씩 집중 투입 (복리 적용: 잔고 ÷ 남은 슬롯)
+      const remainingSlots = MAX_POSITIONS - openCount;
+      const positionPct = isPyramiding ? 0.05 : 0;
+      const maxKRW = positionPct === 0 ? Math.floor(balance / Math.max(remainingSlots, 1)) : balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
       const costKRW = Math.floor(qty * priceKRW);
@@ -1897,7 +1898,7 @@ Deno.serve(async (req) => {
       total_cycles: (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 90% 스나이퍼 + 철갑 홀딩 엔진 완료 — 익절확률90%↑만 진입 | 기계적손절 폐기 | 30~50% 목표 | 풀: ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 슬롯: ${SCAN_SYMBOLS.length}개 | 본절방어:+1.5%→SL+0.2%`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🏆 65점+90%스나이퍼 정예3선 + 철갑홀딩 엔진 완료 — 33만원씩 분할투입 | 기계적손절폐기 | 30~50%목표 | 본절방어:+1.5%→SL+0.1%`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

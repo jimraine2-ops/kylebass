@@ -158,12 +158,12 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
       <Card className="border-primary/20">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📋 90% 익절 확률 스나이퍼 매수 + 철갑 홀딩 전략</p>
-          <p>✅ 진입: [합산 ≥ 65점] AND [익절 확률 ≥ 90%] → 100만 원 집중 투입</p>
-          <p>🛡️ 철갑 홀딩: 지표 50점 이상이면 가격 하락 무관 절대 홀딩 — 기계적 손절 폐기</p>
+          <p className="font-medium text-foreground">📋 10대 지표 65점 & 무조건 익절 전략 — 정예 3선 집중 투자</p>
+          <p>✅ 진입: [합산 ≥ 65점] AND [익절 확률 ≥ 90%] → 상위 3개 종목에 33만 원씩 집중</p>
+          <p>🔒 수량 제한: 한 번에 보유하는 종목 최대 3개 (가용 잔고 ÷ 남은 슬롯)</p>
+          <p>🛡️ 철갑 홀딩: 지표 60점 이상이면 가격 하락 무관 절대 홀딩 — 기계적 손절 폐기</p>
           <p>🚨 매도 기준: 익절 확률 40% 미만(지표 &lt;40점) 또는 추세 완전 붕괴 시에만 매도</p>
-          <p>📈 목표: 30~50% 수익 극대화 — 지표 무결성 유지 시 끝까지 홀딩</p>
-          <p>🔒 안전 잠금: +1.5% 도달 시 SL → 매수가+0.2% (절대 손실 불가)</p>
+          <p>🔒 안전 잠금: +1.5% 도달 시 SL → 매수가+0.1% (절대 손실 불가)</p>
           <p>📊 분할: +15% 시 30% 분할 익절, 나머지 70% 50%까지 추격</p>
           <p className="text-primary font-medium">💰 일일 목표 ₩500,000 — 달성 시 축하 알림 ☁️</p>
         </CardContent>
