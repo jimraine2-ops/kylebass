@@ -1419,7 +1419,6 @@ Deno.serve(async (req) => {
               balance = newBal;
               await addLog('unified', 'exit', sym, `[30%분할익절] ${sym} +${pnlPct.toFixed(1)}% | PnL: ${fmtKRWRaw(partialPnl)} → 나머지 70% 30~50% 추격 홀딩`, {});
             }
-            }
           }
         }
 
