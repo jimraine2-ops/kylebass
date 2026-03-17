@@ -208,9 +208,8 @@ export function TradeLogTable({ closedTrades, openPositions = [] }: TradeLogTabl
                   const isExpanded = expandedId === entry.id;
 
                   return (
-                    <>
+                    <Fragment key={entry.id}>
                       <tr
-                        key={entry.id}
                         className={`border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer ${
                           isOpen ? 'bg-primary/5' : statusInfo.isExit ? 'bg-stock-down/5' : ''
                         }`}
