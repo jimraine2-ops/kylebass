@@ -99,7 +99,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
     }, []);
 
   // ★ 일일 수익 목표 체크
-  const DAILY_TARGET_KRW = 300000;
+  const DAILY_TARGET_KRW = 500000;
   const todayPnl = useMemo(() => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
