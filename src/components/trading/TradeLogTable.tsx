@@ -322,4 +322,4 @@ export function TradeLogTable({ closedTrades, openPositions = [] }: TradeLogTabl
       </CardContent>
     </Card>
   );
-});
+}
