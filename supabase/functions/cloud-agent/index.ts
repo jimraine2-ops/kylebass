@@ -813,22 +813,18 @@ function getCapType(price: number, symbol: string): 'large' | 'small' {
 async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: string; volume: number; changePct: number; tradingValue: number }[]> {
   const leaders: { symbol: string; volume: number; changePct: number; tradingValue: number }[] = [];
   
-  // ★ 전 종목 스캔: 기존 풀 + 동적 발견 종목에서 200개 랜덤 샘플링
+  // ★ 초고속: 샘플 30개로 축소하여 타임아웃 방지 (200→30)
   const allKnown = [...Array.from(LARGE_SET), ...Array.from(SMALL_SET)];
-  const dynamicPool = discoveredSymbols.length > 0 ? discoveredSymbols : [];
-  const allSymbols = [...allKnown, ...dynamicPool];
-  
-  // ★ 확장 샘플: 200개
-  const sampleSize = 200;
-  const cycleOffset = Math.floor(Math.random() * allSymbols.length);
+  const sampleSize = 30;
+  const cycleOffset = Math.floor(Math.random() * allKnown.length);
   const sample: string[] = [];
-  for (let i = 0; i < Math.min(sampleSize, allSymbols.length); i++) {
-    sample.push(allSymbols[(cycleOffset + i) % allSymbols.length]);
+  for (let i = 0; i < Math.min(sampleSize, allKnown.length); i++) {
+    sample.push(allKnown[(cycleOffset + i) % allKnown.length]);
   }
   
-  // Batch fetch quotes (5 at a time)
-  for (let i = 0; i < sample.length; i += 5) {
-    const batch = sample.slice(i, i + 5);
+  // Batch fetch quotes (10 at a time for speed)
+  for (let i = 0; i < sample.length; i += 10) {
+    const batch = sample.slice(i, i + 10);
     const results = await Promise.all(batch.map(sym => finnhubFetch(`/quote?symbol=${sym}`).then(q => q ? { symbol: sym, quote: q } : null)));
     for (const r of results) {
       if (!r || !r.quote || !r.quote.c) continue;
@@ -838,10 +834,8 @@ async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: strin
       const tradingValue = vol * price;
       leaders.push({ symbol: r.symbol, volume: vol, changePct, tradingValue });
     }
-    if (i + 5 < sample.length) await new Promise(r => setTimeout(r, 200));
   }
   
-  // Sort by trading value (거래대금) descending
   leaders.sort((a, b) => b.tradingValue - a.tradingValue);
   return leaders;
 }
@@ -898,16 +892,10 @@ Deno.serve(async (req) => {
     const sessionLabel = sessionInfo.label;
     const spreadMul = sessionInfo.spreadMultiplier;
     const entryRelax = sessionInfo.entryRelax;
-    const sessionRvolMin = 1.5; // ★ 초고속 순환: 상대적 거래량 300%↑ (2.0→1.5 완화)
+    const sessionRvolMin = 1.5;
 
-    // ★ 전 종목 동적 발견: Finnhub에서 미국 상장 전 종목 심볼 갱신
-    try {
-      const discovered = await discoverAllUSStocks();
-      if (discovered.length > 0) {
-        await addLog('system', 'scan', null, `[🌐전종목스캔] Finnhub 전 종목 심볼 ${discovered.length}개 동적 발견`, {});
-      }
-    } catch { /* non-critical */ }
-    const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
+    // ★ 동적 발견 비활성화: 타임아웃 방지 (기존 풀만 사용)
+    const sessionSlippage = sessionInfo.aggressiveSlippage;
 
     // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
     const etStr2 = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
@@ -950,9 +938,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Fill 150 active slots — ★ 확장: 60 대형 + 90 소형 = 150개 슬롯
-    const LARGE_SLOTS = 60;
-    const SMALL_SLOTS = 90;
+    // Step 2: Fill 50 active slots — ★ 초고속: 20 대형 + 30 소형 = 50개 (타임아웃 방지)
+    const LARGE_SLOTS = 20;
+    const SMALL_SLOTS = 30;
 
     const currentLarge: string[] = [];
     const currentSmall: string[] = [];
@@ -1552,8 +1540,8 @@ Deno.serve(async (req) => {
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
     if (!marketBuyHalt && !isOpeningRush && !dailyTargetMax) {
-      for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
-        const batch = SCAN_SYMBOLS.slice(i, i + 5);
+      for (let i = 0; i < SCAN_SYMBOLS.length; i += 10) {
+        const batch = SCAN_SYMBOLS.slice(i, i + 10);
         const results = await Promise.all(batch.map(async (sym) => {
           try {
             if (blacklistSymbols.has(sym)) return null;
@@ -1695,7 +1683,7 @@ Deno.serve(async (req) => {
 
           candidates.push(r);
         }
-        if (i + 5 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 150)); // ★ 초고속: 300ms→150ms
+        if (i + 10 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 50)); // ★ 초고속: 150ms→50ms
       }
     }
 

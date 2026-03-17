@@ -18,9 +18,11 @@ interface OpenPositionCardProps {
 
 function getStrategyTag(aiReason: string | null): { label: string; color: string } {
   if (!aiReason) return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
+  if (aiReason.includes('선취매') || aiReason.includes('필승패턴')) return { label: '🔥선취매', color: 'bg-amber-500/20 text-amber-500 border-amber-500/30' };
+  if (aiReason.includes('스나이퍼')) return { label: '🎯스나이퍼', color: 'bg-stock-up/20 text-stock-up border-stock-up/30' };
+  if (aiReason.includes('수급 돌파')) return { label: '🔫수급돌파', color: 'bg-stock-up/20 text-stock-up border-stock-up/30' };
   if (aiReason.includes('15%') || aiReason.includes('슈퍼')) return { label: '🎯15%', color: 'bg-warning/20 text-warning border-warning/30' };
-  if (aiReason.startsWith('[Quant]')) return { label: 'Quant', color: 'bg-stock-up/20 text-stock-up border-stock-up/30' };
-  if (aiReason.startsWith('[Scalp]')) return { label: 'Scalp', color: 'bg-warning/20 text-warning border-warning/30' };
+  if (aiReason.includes('선제적 요격')) return { label: '🎯선제적요격', color: 'bg-primary/20 text-primary border-primary/30' };
   return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
 }
 
@@ -119,6 +121,9 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
   const targetProgress = targetPct > 0 ? Math.min(100, Math.max(0, (unrealizedPnlPct / targetPct) * 100)) : 0;
   const targetPriceKRW = Math.round(pos.price * (1 + targetPct / 100) * fxRate);
 
+  // ★ 선취매 진입 감지
+  const isPreBuyEntry = (pos.ai_reason || '').includes('선취매') || (pos.ai_reason || '').includes('필승패턴') || (pos.ai_reason || '').includes('선제적 요격');
+
   return (
     <div
       className={cn(
@@ -127,10 +132,22 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         isSelected ? 'border-primary ring-1 ring-primary/20' : 'border-border',
         isDanger && 'animate-pulse border-destructive/60 bg-destructive/5',
         isHoldingRecommended && 'border-stock-up/40 bg-stock-up/5',
-        is90ProbEntry && !isDanger && 'border-amber-500/60 ring-1 ring-amber-500/20 bg-amber-500/5'
+        is90ProbEntry && !isDanger && 'border-amber-500/60 ring-1 ring-amber-500/20 bg-amber-500/5',
+        isPreBuyEntry && !isDanger && 'border-amber-400/60 ring-1 ring-amber-400/20 bg-gradient-to-r from-amber-500/5 to-yellow-400/5'
       )}
       onClick={onSelect}
     >
+      {/* ★ 선취매 전용 배지: 골든 배너 */}
+      {isPreBuyEntry && (
+        <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-gradient-to-r from-amber-500/20 to-yellow-400/10 border border-amber-500/30 mb-1">
+          <span className="text-amber-500 text-[11px] font-bold">🔥 선취매 완료 — 정규장 폭발 대기</span>
+          {winProb && winProb >= 85 && (
+            <Badge className="ml-auto text-[11px] px-2 py-0.5 bg-gradient-to-r from-amber-500 to-yellow-400 text-black font-bold shadow-sm shadow-amber-500/30">
+              익절 확정 확률: {winProb}%
+            </Badge>
+          )}
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${tag.color}`}>
