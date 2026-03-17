@@ -9,6 +9,7 @@ import Dashboard from "@/pages/Dashboard";
 import StockDetail from "@/pages/StockDetail";
 import AITradingPage from "@/pages/AITradingPage";
 import UnifiedScanPage from "@/pages/UnifiedScanPage";
+import EarningsWatchPage from "@/pages/EarningsWatchPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
