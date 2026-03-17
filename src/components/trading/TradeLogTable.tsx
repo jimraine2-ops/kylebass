@@ -322,4 +322,4 @@ export const TradeLogTable = forwardRef<HTMLDivElement, TradeLogTableProps>(func
       </CardContent>
     </Card>
   );
-}
+});
