@@ -63,31 +63,31 @@ function parseWinReasons(aiReason: string | null): string[] {
 function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: string; color: string; winProb: number } | null {
   if (score === null) return null;
   let winProb = 0;
-  if (score >= 70) winProb = 90;
-  else if (score >= 65) winProb = 85;
-  else if (score >= 60) winProb = 80;
-  else if (score >= 55) winProb = 75;
-  else if (score >= 50) winProb = 60;
-  else if (score >= 45) winProb = 45;
-  else if (score >= 40) winProb = 30;
+  if (score >= 70) winProb = 95;
+  else if (score >= 65) winProb = 92;
+  else if (score >= 60) winProb = 90;
+  else if (score >= 55) winProb = 85;
+  else if (score >= 50) winProb = 75;
+  else if (score >= 45) winProb = 50;
+  else if (score >= 40) winProb = 35;
   else winProb = 15;
-  if (pnlPct >= 2) winProb = Math.min(98, winProb + 10);
-  else if (pnlPct >= 1) winProb = Math.min(95, winProb + 5);
+  if (pnlPct >= 5) winProb = Math.min(99, winProb + 5);
+  else if (pnlPct >= 2) winProb = Math.min(98, winProb + 3);
 
   if (pnlPct < 0 && score >= 50) {
-    return { message: `[AI 판단: 홀딩 권장 - 지표 양호] 눌림목 구간, 반등 대기`, color: 'text-stock-up', winProb };
+    return { message: `[익절 확률 ${winProb}% 유지 중 — 철갑 홀딩 권장] 가격 노이즈 무시, 30~50% 대시세 대기`, color: 'text-stock-up', winProb };
   }
   if (pnlPct < 0 && score >= 40 && score < 50) {
-    return { message: `[AI 판단: 주의 관찰 중] 지표 약화, 추세 감시`, color: 'text-warning', winProb };
+    return { message: `[⚠️ 익절 확률 ${winProb}% — 추세 감시 중] 40점 미만 시 자산 보호 매도`, color: 'text-warning', winProb };
   }
   if (pnlPct < 0 && score < 40) {
-    return { message: `[AI 판단: 매도 검토] 추세 이탈 위험`, color: 'text-destructive', winProb };
+    return { message: `[🚨 익절 확률 ${winProb}% 미만 — 추세 붕괴] 자산 보호 매도 검토`, color: 'text-destructive', winProb };
   }
   if (pnlPct >= 0 && score >= 55) {
-    return { message: `[AI 판단: 강력 보유] 추가 상승 기대`, color: 'text-stock-up', winProb };
+    return { message: `[익절 확률 ${winProb}% — 강력 보유] 30~50% 수익 극대화 추격 중`, color: 'text-stock-up', winProb };
   }
   if (pnlPct >= 0 && score >= 45) {
-    return { message: `[AI 판단: 보유 유지] 안정 구간`, color: 'text-primary', winProb };
+    return { message: `[익절 확률 ${winProb}% — 보유 유지] 지표 안정 구간`, color: 'text-primary', winProb };
   }
   return { message: '', color: 'text-muted-foreground', winProb };
 }
