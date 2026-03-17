@@ -1339,8 +1339,8 @@ Deno.serve(async (req) => {
           const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
           const isAccumEntry = isAccumCandidate;
           
-          // 최소 충족 조건: 10개 중 5개 이상 충족 (매집 패턴 시 3개로 완화 — 에너지 응축 포함)
-          const minMet = isAccumEntry ? 3 : 5;
+          // 최소 충족 조건: 10개 중 4개 이상 충족 (매집 패턴 시 3개로 완화)
+          const minMet = isAccumEntry ? 3 : 4;
           if (metCount < minMet) continue;
           
           // ★ 선취매: 매집 패턴 감지 시 RVOL 요건 완전 해제 (필승 패턴 = 거래량 무관)
