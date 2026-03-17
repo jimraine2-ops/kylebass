@@ -1833,9 +1833,10 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // ★ 선취매: 0.3~0.5% 위로 공격적 지정가 (슬리피지 허용 매수로 확실한 물량 확보)
+      // ★ [호가 무시 체결] 유동성 부족 시 0.3~0.5% 위 공격적 지정가 → 확실한 물량 확보
       const isAccumEntry = (r as any).isAccumulationEntry;
-      const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.005) : sessionSlippage; // 최소 0.5% 상단 제시
+      const isSureWin = (r as any).isSureWinEntry;
+      const aggressiveSlip = (isAccumEntry || isSureWin) ? Math.max(sessionSlippage, 0.005) : sessionSlippage; // 필승 패턴/선취매: 최소 0.5% 상단 제시
       const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
       // ★ [초고속 순환] 초기 SL -10% / TP +5% 단기 회전 (지표 강력 시 15%까지 트레일링 확장)
       const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망
