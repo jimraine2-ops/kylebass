@@ -1,4 +1,4 @@
-import { BarChart3, TrendingUp, Bot, Target } from "lucide-react";
+import { BarChart3, TrendingUp, Bot, Target, CalendarDays } from "lucide-react";
 import { useLocation, Link } from "react-router-dom";
 import {
   Sidebar,
