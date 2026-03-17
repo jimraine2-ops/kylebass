@@ -188,7 +188,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-muted-foreground">💰 일일 목표 진행률</span>
               <span className="text-xs font-mono font-bold">
-                ₩{todayPnl.toLocaleString('ko-KR')} / ₩300,000 ({dailyProgress.toFixed(1)}%)
+                ₩{todayPnl.toLocaleString('ko-KR')} / ₩500,000 ({dailyProgress.toFixed(1)}%)
               </span>
             </div>
             <div className="w-full bg-muted rounded-full h-2">
