@@ -1300,7 +1300,9 @@ Deno.serve(async (req) => {
             if (!data) return null;
             const price = data.quote.c;
             const capType = getCapType(price, sym);
-            if (capType === 'small' && price < MIN_PRICE_USD) return null;
+            if (price < MIN_PRICE_USD) return null;
+            // ★ 12,000원 미만 저가주 전용: 가격 상한선 필터
+            if (price > MAX_PRICE_USD) return null;
             const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
             if (!scoring) return null;
             lastScores.set(sym, scoring.totalScore);
