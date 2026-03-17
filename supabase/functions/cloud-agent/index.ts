@@ -1853,44 +1853,10 @@ Deno.serve(async (req) => {
       await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry, winProbability: winProb, winReasons: (r as any).winReasons });
     }
 
-    // ========== AUTO-REPLACEMENT ==========
-    {
-      const refreshedOpenPos = (await supabase.from('unified_trades').select('*').eq('status', 'open')).data || [];
-      for (const pos of refreshedOpenPos) {
-        const data = await getQuoteAndCandles(pos.symbol);
-        if (!data) continue;
-        const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
-        const currentScore = scoring?.totalScore || 0;
-
-        // ★ 승률 강화: 교체매매 점수 차이 10→20점 (잦은 교체 = 잦은 패 → 차단)
-        const betterCandidate = candidates.find(c =>
-          c.scoring.totalScore >= 70 &&
-          c.scoring.totalScore - currentScore >= 20 &&
-          !refreshedOpenPos.some(p => p.symbol === c.sym)
-        );
-
-        if (currentScore >= 50 && !betterCandidate) continue;
-
-        if (betterCandidate || currentScore < 40) {
-          const price = data.quote.c;
-          const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
-          const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
-          const pnlKRW = saleProceeds - buyCost;
-          const targetLabel = betterCandidate ? `→ ${betterCandidate.sym} ${betterCandidate.scoring.totalScore}점으로 교체` : '→ 대기';
-          const closeReason = `[Auto-Replace] ${pos.symbol} 점수 ${currentScore}점 ${targetLabel}`;
-
-          await supabase.from('unified_trades').update({
-            status: 'replaced', close_price: price, pnl: pnlKRW,
-            closed_at: now.toISOString(),
-            ai_reason: `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)}`,
-          }).eq('id', pos.id);
-          balance += saleProceeds;
-          await supabase.from('unified_wallet').update({ balance, updated_at: now.toISOString() }).eq('id', wallet.id);
-          await addLog('unified', 'replace', pos.symbol, closeReason, { oldScore: currentScore, newSymbol: betterCandidate?.sym, newScore: betterCandidate?.scoring.totalScore, pnl: pnlKRW });
-        }
-        await new Promise(r => setTimeout(r, 200));
-      }
-    }
+    // ========== AUTO-REPLACEMENT — 비활성화 ==========
+    // ★ 무조건 익절 보장 전략: 교체매매 폐기 — 진입한 종목은 익절 확률이 붕괴(40% 미만)되기 전까지 절대 교체하지 않음
+    // 교체매매는 불필요한 손실을 유발하므로 철갑 홀딩 원칙에 따라 완전 비활성화
+    await addLog('unified', 'info', null, `[교체매매 OFF] 무조건 익절 보장 전략 — 보유 종목 교체 없이 끝까지 홀딩`, {});
 
     // Update cycle count
     await supabase.from('agent_status').update({
