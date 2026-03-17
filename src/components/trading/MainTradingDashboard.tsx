@@ -116,12 +116,12 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
         </Button>
       </div>
 
-      <Card className="border-primary/20">
+      <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-foreground">📋 대형주 트레이딩 엔진: 10대 지표 퀀트 전략</p>
-          <p>✅ Main 진입: [합산 점수 ≥ 50] AND [현재가 {'>'} VWAP] AND [RVOL {'>'} 1.2]</p>
-          <p>✅ Quant 진입: [합산 점수 ≥ 50] AND [호재 {'>'} 0] AND [RVOL {'>'} 1.5] AND [현재가 {'>'} VWAP] → 15%</p>
-          <p>🏷️ 거래 태그: [Main] 또는 [Quant] 태그로 전략 구분</p>
+          <p className="font-medium text-yellow-400">🏆 70점 돌파 & 90% 확정 익절 전략</p>
+          <p>✅ 진입: [합산 점수 ≥ 70] AND [익절확률 ≥ 90%] → 정예 5종목에만 집중 투입</p>
+          <p>🛡️ 본절 보호: +1.5% → SL=매수가+0.2% | 지표 65점+ 시 철갑 홀딩 (가격 노이즈 무시)</p>
+          <p>🎯 데이/프리마켓: 70점 필승 패턴 감지 시 거래량 무관 선매수 → 정규장 폭발 대기</p>
         </CardContent>
       </Card>
 
