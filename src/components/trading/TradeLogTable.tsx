@@ -29,7 +29,10 @@ function getStatusInfo(status: string): { label: string; variant: 'default' | 'd
     case 'profit_taken': return { label: '익절완료', variant: 'default', isExit: true };
     case 'trailing_stop': return { label: '추격손절', variant: 'default', isExit: true };
     case 'trailing_profit': return { label: '추격익절', variant: 'default', isExit: true };
+    case 'mega_profit': return { label: '🏆대시세익절', variant: 'default', isExit: true };
     case 'stopped': return { label: '손절완료', variant: 'destructive', isExit: true };
+    case 'trend_collapse': return { label: '추세이탈', variant: 'destructive', isExit: true };
+    case 'indicator_exit': return { label: '지표청산', variant: 'destructive', isExit: true };
     case 'score_exit': return { label: '점수청산', variant: 'secondary', isExit: true };
     case 'time_cut': return { label: '타임컷', variant: 'secondary', isExit: true };
     case 'breakeven_exit': return { label: '본절탈출', variant: 'secondary', isExit: true };
