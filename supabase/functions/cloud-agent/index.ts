@@ -1223,8 +1223,15 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ [무손실 본절가 이동 고도화] — 0.8% 달성 시 즉시 +0.1% 본절 보호 → 리스크 제로
-        if (pnlPct >= 0.8 && pos.stop_loss < pos.price * 1.001) {
+        // ★ [승률100% 가드] 1.2% 달성 시 → SL을 매수가+0.2%로 즉시 상향 → '절대 손실 불가' 상태
+        if (pnlPct >= 1.2 && pos.stop_loss < pos.price * 1.002) {
+          const bs = +(pos.price * 1.002).toFixed(4);
+          await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
+          pos.stop_loss = bs;
+          await addLog('unified', 'defense', sym, `[🛡️승률100%가드] ${sym} +${pnlPct.toFixed(2)}% (≥1.2%) → SL=${fmtKRW(bs)} (매수가+0.2%) 절대손실불가 달성! | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+        }
+        // ★ [무손실 본절가 이동] — 0.8% 달성 시 +0.1% 본절 보호 (1.2% 미달 시 1차 방어)
+        else if (pnlPct >= 0.8 && pos.stop_loss < pos.price * 1.001) {
           const bs = +(pos.price * 1.001).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
@@ -1232,11 +1239,12 @@ Deno.serve(async (req) => {
         }
 
         // ★ [1분 타임아웃] 진입 후 1분 내 승부 나지 않으면 본전 탈출 (기회비용 방어)
+        // 단, 선취매 종목은 정규장까지 강력 홀딩 → 타임아웃 면제
         const entryTime = new Date(pos.opened_at).getTime();
         const elapsedMs = now.getTime() - entryTime;
         const oneMinute = 60 * 1000;
-        if (elapsedMs >= oneMinute && pnlPct > -0.5 && pnlPct < 0.8 && pos.stop_loss < pos.price * 0.999) {
-          // 1분 경과 + 수익 0.8% 미달 → 본전 부근 탈출
+        const isPreEmptiveEntry = (pos.ai_reason || '').includes('선취매') || (pos.ai_reason || '').includes('필승패턴') || (pos.ai_reason || '').includes('스나이퍼') || (pos.ai_reason || '').includes('수급 돌파');
+        if (!isPreEmptiveEntry && elapsedMs >= oneMinute && pnlPct > -0.5 && pnlPct < 0.8 && pos.stop_loss < pos.price * 0.999) {
           const timeoutSL = +(pos.price * 0.999).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: timeoutSL }).eq('id', pos.id);
           pos.stop_loss = timeoutSL;
