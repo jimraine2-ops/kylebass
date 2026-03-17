@@ -1424,7 +1424,12 @@ Deno.serve(async (req) => {
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
 
-          // ★ 선취매 알림 로그 (강화)
+          // ★ 필승 패턴 알림 로그
+          if (hasCriticalPattern) {
+            await addLog('unified', 'scan', r.sym, `[🎯필승패턴감지] ${r.sym} [${cp.patterns.join('+')}] 익절확률 ${cp.confidence}% | ${r.scoring.totalScore}점(${metCount}/10) → 패턴 기반 즉시 진입`, { criticalPatterns: cp, score: r.scoring.totalScore });
+          }
+
+          // ★ 선취매 알림 로그
           if (isAccumEntry) {
             await addLog('unified', 'scan', r.sym, `[데이장 선취매] 지표 완벽 확인. 정규장 폭발을 대비해 ${r.sym}을 미리 매수합니다. | 매집패턴: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation });
           }
