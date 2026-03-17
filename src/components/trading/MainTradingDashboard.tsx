@@ -98,7 +98,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🏆 70점 돌파 & 90% 확정 익절 엔진
+            🏆 63점 돌파 & 80% 확정 익절 엔진
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
             📡 Finnhub 실시간 + Twelve Data 교차검증
