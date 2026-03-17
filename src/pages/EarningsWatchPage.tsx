@@ -115,7 +115,7 @@ export default function EarningsWatchPage() {
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground">
             <CalendarDays className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>₩12,000 미만 실적 발표 예정 종목이 없습니다.</p>
+            <p>실적 발표 예정 종목이 없습니다.</p>
           </CardContent>
         </Card>
       ) : (
