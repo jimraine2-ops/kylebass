@@ -138,16 +138,16 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🏆 ₩50K 중소형 | 65점+ & 85% 익절
+            🏆 필승 패턴 A/B/C | 90%+ 익절확률
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
             📡 Finnhub 실시간 + Twelve Data 교차검증
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🎯 정예 5선 집중 | 5/10 충족 | ₩100만 원
+            🎯 정예 5선 집중 | +0.5%→본절보호 | ₩100만 원
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🛡️ +1.0%→본절보호 | 40점↓ 시에만 매도
+            🛡️ 패턴 유지 시 30~50% 끝까지 추격
           </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
@@ -161,11 +161,12 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 ₩50,000 미만 중소형주 | 65점+ & 85% 익절확률 전략</p>
-          <p>✅ 진입: [주당 ≤ ₩50,000] AND [합산 ≥ 65점] AND [익절확률 ≥ 85%] AND [지표 5/10 충족] → 정예 1~5종목 분산 투입</p>
-          <p>🛡️ 본절 보호: +1.0% → SL=매수가+0.1% | 지표 40점↓ 시에만 매도 (30~50% 대시세 추격)</p>
-          <p>🎯 데이/프리마켓: 85% 확률 보장 시 선매수 → 정규장 폭발 대기</p>
-          <p>🚫 상장폐지 위험 종목 자동 배제</p>
+          <p className="font-medium text-yellow-400">🏆 10대 지표 필승 패턴 다이렉트 매매 | 100% 익절 목표</p>
+          <p>🎯 패턴 A (수급 폭발): 가격 횡보 + 거래대금 300%↑ + VWAP 상단 → 즉시 매수</p>
+          <p>🎯 패턴 B (변동성 응축): BB 극도 수축 + RSI 50선 강력 상향 돌파 → 즉시 매수</p>
+          <p>🎯 패턴 C (이평선 정렬): 모든 EMA 수렴 후 부채꼴 확산 → 즉시 매수</p>
+          <p>🛡️ 동적 본절가: +0.5% 도달 → SL=매수가+0.1% (패배 없는 게임) | 패턴 유지 시 30~50% 끝까지 추격</p>
+          <p>🚫 익절확률 90% 미만 신호 자동 차단 | 상장폐지 위험 종목 배제</p>
           <p className="text-yellow-400 font-medium">💰 일일 목표 ₩300,000 — 달성 시 축하 알림 ☁️</p>
         </CardContent>
       </Card>

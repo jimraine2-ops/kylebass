@@ -73,10 +73,10 @@ export default function EarningsWatchPage() {
       {/* Strategy Card */}
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 실적 발표 임박 저가주 — 65점+ & 85% 확정 익절 선취매</p>
+          <p className="font-medium text-yellow-400">🏆 실적 발표 임박 — 필승 패턴 감지 시 즉시 선취매</p>
           <p>✅ 타겟: [실적 발표 48시간 이내] 전 종목 → 실적 기대감 폭발 선점</p>
-          <p>🎯 선취매: 지표 65점↑ AND 익절확률 85%↑ → 거래량 무관 즉시 매수</p>
-          <p>🚨 급등 전조: 실적주 지표 65점 돌파 시 "실적주 폭발 전조 포착" 알림 | ⏰ 1시간 단위 스캔</p>
+          <p>🎯 패턴 A/B/C 감지 + 65점↑ + 익절확률 90%↑ → 거래량 무관 즉시 매수</p>
+          <p>🚨 실적주 필승 패턴 포착 시 "실적주 폭발 전조" 알림 | ⏰ 1시간 단위 스캔</p>
         </CardContent>
       </Card>
 

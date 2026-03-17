@@ -200,6 +200,51 @@ function detectOBVDivergence(closes: number[], volumes: number[]): { obvRising: 
   return { obvRising, priceSideways, score: Math.min(10, score) };
 }
 
+// ===== 필승 패턴 A/B/C 감지 (점수 무관 즉시 진입) =====
+function detectCriticalPatterns(closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[], quote: any): { patternA: boolean; patternB: boolean; patternC: boolean; patterns: string[]; confidence: number } {
+  const n = closes.length - 1;
+  if (n < 20) return { patternA: false, patternB: false, patternC: false, patterns: [], confidence: 0 };
+  const patterns: string[] = [];
+
+  // ★ 패턴 A (수급 돌파): 가격 횡보 중 거래대금 직전 5분 평균 300% 돌파 + VWAP 위
+  const avgVol5 = volumes.slice(-6, -1).reduce((a, b) => a + b, 0) / 5;
+  const currentVol = volumes[n];
+  const volBurst = avgVol5 > 0 ? currentVol / avgVol5 : 1;
+  const recentCloses5 = closes.slice(-6, -1);
+  const priceRange5 = recentCloses5.length > 0 ? (Math.max(...recentCloses5) - Math.min(...recentCloses5)) / Math.min(...recentCloses5) * 100 : 999;
+  const priceSideways = priceRange5 < 3; // 3% 이내 횡보
+  const vwap = calculateVWAP(highs.slice(-20), lows.slice(-20), closes.slice(-20), volumes.slice(-20));
+  const aboveVWAP = closes[n] > vwap;
+  const patternA = priceSideways && volBurst >= 3.0 && aboveVWAP;
+  if (patternA) patterns.push('수급폭발(A)');
+
+  // ★ 패턴 B (변동성 응축): BB 폭 극도 수축 + RSI 50선 강력 상향 돌파
+  const ema20 = calculateEMA(closes, 20);
+  const atr = calculateATR(highs, lows, closes, 14);
+  const bbWidth5 = atr.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  const bbWidth20 = atr.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  const isTightBB = bbWidth20 > 0 && bbWidth5 / bbWidth20 < 0.5; // 밴드 50% 수축
+  const rsi = calculateRSI(closes, 14);
+  const rsiCrossUp50 = rsi[n] > 50 && rsi[n] > rsi[n - 1] && (rsi[n - 1] <= 50 || rsi[n] - rsi[n - 1] >= 5);
+  const patternB = isTightBB && rsiCrossUp50;
+  if (patternB) patterns.push('변동성응축(B)');
+
+  // ★ 패턴 C (이평선 정렬): 모든 EMA가 한 점으로 수렴 후 부채꼴 확산 시작
+  const ema5 = calculateEMA(closes, 5);
+  const ema10 = calculateEMA(closes, 10);
+  const ema_20 = calculateEMA(closes, 20);
+  // 직전 봉의 이평선 밀집도
+  const prevSpread = n > 1 ? Math.abs(ema5[n - 1] - ema_20[n - 1]) / closes[n - 1] * 100 : 999;
+  const currSpread = Math.abs(ema5[n] - ema_20[n]) / closes[n] * 100;
+  const wasConverging = prevSpread < 1.0; // 1% 이내 밀집
+  const nowDiverging = currSpread > prevSpread && ema5[n] > ema10[n] && ema10[n] > ema_20[n]; // 정배열로 확산
+  const patternC = wasConverging && nowDiverging;
+  if (patternC) patterns.push('이평선정렬(C)');
+
+  const confidence = patterns.length >= 3 ? 98 : patterns.length >= 2 ? 94 : patterns.length >= 1 ? 88 : 0;
+  return { patternA, patternB, patternC, patterns, confidence };
+}
+
 // ===== 슈퍼 패턴 감지 (15% 수익 보장형 '대시세 초입' 종목) =====
 function detectSuperPattern(closes: number[], highs: number[], lows: number[], volumes: number[], adx: number): { isSuperPattern: boolean; signals: string[]; confidence: number; resistanceThin: boolean } {
   const n = closes.length - 1;
@@ -211,43 +256,41 @@ function detectSuperPattern(closes: number[], highs: number[], lows: number[], v
   const atr = calculateATR(highs, lows, closes, 14);
   const bbWidth5 = atr.slice(-5).reduce((a,b)=>a+b,0) / 5;
   const bbWidth20 = atr.slice(-20).reduce((a,b)=>a+b,0) / 20;
-  const isSqueeze = bbWidth20 > 0 && bbWidth5 / bbWidth20 < 0.6; // 밴드 40% 이상 수축 (강화)
+  const isSqueeze = bbWidth20 > 0 && bbWidth5 / bbWidth20 < 0.6;
   const bbUpper = ema20[n] + 2 * atr[n];
   const avgVol20 = volumes.slice(-20).reduce((a,b)=>a+b,0) / 20;
   const rvol = avgVol20 > 0 ? volumes[n] / avgVol20 : 1;
   const bbBreakout = closes[n] > bbUpper && rvol >= 1.5;
-  const energyCondensation = isSqueeze && rvol >= 3.0; // 극도 수축 + 거래량 300%↑
+  const energyCondensation = isSqueeze && rvol >= 3.0;
   if (energyCondensation && bbBreakout) signals.push('에너지응축폭발');
   else if (isSqueeze && bbBreakout) signals.push('BB스퀴즈돌파');
   else if (bbBreakout) signals.push('BB상단돌파');
   
-  // 2. ★ 매집 확인: 가격 변동 적으나 체결강도 150%↑ + OBV/MFI 급등
+  // 2. ★ 매집 확인
   const obv = detectOBVDivergence(closes, volumes);
-  // 체결강도 계산 (양봉비율 × 거래량 가속)
   let bullCount = 0;
   for (let i = Math.max(0, n - 9); i <= n; i++) {
     if (closes[i] > (i > 0 ? closes[i-1] : closes[i])) bullCount++;
   }
   const aggressionRatio = (bullCount / Math.min(10, n + 1)) * 100;
-  const isStrongAggression = aggressionRatio >= 60 && rvol >= 1.5; // 체결강도 150%↑ 근사
+  const isStrongAggression = aggressionRatio >= 60 && rvol >= 1.5;
   if (obv.priceSideways && obv.obvRising && isStrongAggression) signals.push('세력매집확인');
   else if (obv.priceSideways && obv.obvRising) signals.push('OBV매집');
   
-  // 3. ADX 추세 강도 (≥ 25)
+  // 3. ADX 추세 강도
   if (adx >= 25) signals.push(`ADX${Math.round(adx)}`);
   
-  // 4. 거래량 폭발 (RVOL ≥ 3 → 300%)
+  // 4. 거래량 폭발
   if (rvol >= 3) signals.push(`RVOL${rvol.toFixed(1)}x`);
   
-  // 5. ★ 상승 여력 분석: 전고점까지 매물대가 얇은지 확인
-  // 최근 20봉 최고점 vs 현재가 → 15% 이상 여유 공간이면 '매물대 얇음'
+  // 5. 상승 여력 분석
   const recentHigh20 = Math.max(...highs.slice(-20));
   const allTimeHigh = Math.max(...highs);
   const distToHigh = allTimeHigh > 0 ? ((allTimeHigh - closes[n]) / closes[n]) * 100 : 0;
-  const resistanceThin = distToHigh >= 15 || closes[n] >= recentHigh20; // 전고점까지 15%+ 여유 or 신고가
+  const resistanceThin = distToHigh >= 15 || closes[n] >= recentHigh20;
   if (resistanceThin) signals.push('매물대얇음');
   
-  // 6. ★ 골든크로스 + RSI 상승 추세
+  // 6. 골든크로스 + RSI
   const ema9 = calculateEMA(closes, 9);
   const ema21 = calculateEMA(closes, 21);
   const rsi = calculateRSI(closes, 14);
@@ -255,7 +298,7 @@ function detectSuperPattern(closes: number[], highs: number[], lows: number[], v
   const rsiMomentum = rsi[n] > 50 && rsi[n] > (rsi[n-1] || 50) && rsi[n] < 75;
   if (goldenCross && rsiMomentum) signals.push('골든크로스+RSI상승');
   
-  const isSuperPattern = signals.length >= 2; // 2개 이상 충족 시 슈퍼 패턴
+  const isSuperPattern = signals.length >= 2;
   const confidence = Math.min(100, signals.length * 20);
   return { isSuperPattern, signals, confidence, resistanceThin };
 }
@@ -434,6 +477,9 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
     const obvData = detectOBVDivergence(closes, volumes);
     const superPattern = detectSuperPattern(closes, highs, lows, volumes, adxValue);
 
+    // ★ 필승 패턴 A/B/C 감지
+    const criticalPatterns = detectCriticalPatterns(closes, highs, lows, opens, volumes, quote);
+
     return {
     totalScore, trailingStop, rvol, changePct, metCount,
     vwap, bbLower, bbUpper,
@@ -441,6 +487,7 @@ function score10Indicators(quote: any, closes: number[], highs: number[], lows: 
     adx: adxValue,
     obv: obvData,
     superPattern,
+    criticalPatterns,
     indicators: {
       sentiment: { score: sentimentScore, details: `변동률 ${changePct.toFixed(2)}%` },
       rvol: { score: rvolScore, rvol, weight: isLowVolumeSession ? '×0.8(선취매)' : '×1.5', details: `RVOL ${rvol.toFixed(1)}x` },
@@ -1017,12 +1064,12 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ 본절 보호: +1.0% 도달 즉시 SL을 매수가+0.1%로 상향 → '패배 없는 게임'
-        if (pnlPct >= 1.0 && pos.stop_loss < pos.price * 1.001) {
+        // ★ 동적 본절가(Dynamic Break-even): 0.5~1.0% 수익 진입 시 SL을 매수가+0.1%로 상향 → 익절 확률 사실상 100%
+        if (pnlPct >= 0.5 && pos.stop_loss < pos.price * 1.001) {
           const bs = +(pos.price * 1.001).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[패배없는게임] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.0% → SL=${fmtKRW(bs)} (매수가+0.1%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'defense', sym, `[패배없는게임] ${sym} +${pnlPct.toFixed(2)}% ≥ 0.5% → SL=${fmtKRW(bs)} (매수가+0.1%) 리스크 0 달성 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         }
 
         // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
@@ -1311,7 +1358,17 @@ Deno.serve(async (req) => {
         }));
 
         for (const r of results) {
-          if (!r || r.scoring.totalScore < adaptedEntryThreshold) continue;
+          if (!r) continue;
+          
+          // ★ 필승 패턴 A/B/C 감지: 점수가 낮아도 패턴 완성 시 즉시 진입 허용
+          const cp = r.scoring.criticalPatterns;
+          const hasCriticalPattern = cp && cp.patterns.length >= 1;
+          const hasMultiPattern = cp && cp.patterns.length >= 2; // 2개 이상 = 초고확신
+
+          // 점수 필터: 일반 진입은 adaptedEntryThreshold, 필승 패턴 시 50점까지 완화
+          if (!hasCriticalPattern && r.scoring.totalScore < adaptedEntryThreshold) continue;
+          if (hasCriticalPattern && r.scoring.totalScore < 50) continue; // 패턴 있어도 최소 50점
+          
           const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
           const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
           if (alreadyHolding && !isPyramiding) continue;
@@ -1322,8 +1379,8 @@ Deno.serve(async (req) => {
           const accumPattern = r.scoring.accumulation;
           const isAccumCandidate = isLowVolumeSession && accumPattern?.isAccumulating;
           
-          // ★ 선취매: 매집 패턴 감지 시 거래대금 필터 해제 (필승 패턴이면 거래량 제한 무시)
-          if (!isAccumCandidate) {
+          // ★ 필승 패턴 또는 매집 패턴 감지 시 거래대금 필터 해제
+          if (!isAccumCandidate && !hasCriticalPattern) {
             if (vlInfo && vlInfo.tradingValue < 10000) continue;
             const sessionAvgTradingValue = volumeLeaders.length > 0 
               ? volumeLeaders.reduce((sum, vl) => sum + vl.tradingValue, 0) / volumeLeaders.length 
@@ -1333,23 +1390,23 @@ Deno.serve(async (req) => {
             }
           }
 
-          // ★ 엔진 개편: 오직 10대 지표 점수 + 충족 수로 진입 판단
+          // ★ 엔진 개편: 10대 지표 점수 + 충족 수 + 필승 패턴으로 진입 판단
           const metCount = r.scoring.metCount || 0;
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
           const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
           const isAccumEntry = isAccumCandidate;
           
-          // 최소 충족 조건: 10개 중 5개 이상 충족 (매집 패턴 시 3개로 완화)
-          const minMet = isAccumEntry ? 3 : 5;
+          // 최소 충족 조건: 필승 패턴 시 3개, 매집 시 3개, 일반 5개
+          const minMet = (hasCriticalPattern || isAccumEntry) ? 3 : 5;
           if (metCount < minMet) continue;
           
-          // ★ RVOL 완화: 1.0 이상이면 진입 (매집 패턴 시 해제)
-          if (!isAccumEntry && rvol < 1.0) continue;
+          // ★ RVOL 완화: 필승 패턴 시 해제
+          if (!isAccumEntry && !hasCriticalPattern && rvol < 1.0) continue;
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          // ★ 체결강도 완화: 80% 이상 (매집 패턴 시 40%)
-          const minAggression = isAccumEntry ? 40 : 80;
+          // ★ 체결강도 완화: 필승 패턴 시 40%
+          const minAggression = (isAccumEntry || hasCriticalPattern) ? 40 : 80;
           if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
@@ -1359,12 +1416,20 @@ Deno.serve(async (req) => {
           (r as any).isAccumulationEntry = isAccumEntry;
           (r as any).accumPattern = accumPattern?.pattern || '';
           (r as any).accumCondensation = accumPattern?.condensation || 0;
+          (r as any).hasCriticalPattern = hasCriticalPattern;
+          (r as any).criticalPatterns = cp?.patterns || [];
+          (r as any).criticalPatternConfidence = cp?.confidence || 0;
           const tradingVal = vlInfo?.tradingValue || 0;
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
 
-          // ★ 선취매 알림 로그 (강화)
+          // ★ 필승 패턴 알림 로그
+          if (hasCriticalPattern) {
+            await addLog('unified', 'scan', r.sym, `[🎯필승패턴감지] ${r.sym} [${cp.patterns.join('+')}] 익절확률 ${cp.confidence}% | ${r.scoring.totalScore}점(${metCount}/10) → 패턴 기반 즉시 진입`, { criticalPatterns: cp, score: r.scoring.totalScore });
+          }
+
+          // ★ 선취매 알림 로그
           if (isAccumEntry) {
             await addLog('unified', 'scan', r.sym, `[데이장 선취매] 지표 완벽 확인. 정규장 폭발을 대비해 ${r.sym}을 미리 매수합니다. | 매집패턴: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation });
           }
@@ -1406,14 +1471,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sort: score surge → super pattern → explosive → volume burst → liquidity → score
+    // Sort: critical pattern → score surge → super pattern → explosive → volume burst → liquidity → score
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
     candidates.sort((a, b) => {
-      // ★ 점수 급상승 종목 1순위
+      // ★ 필승 패턴(A/B/C) 최우선
+      const aCP = (a as any).hasCriticalPattern ? 4 : 0;
+      const bCP = (b as any).hasCriticalPattern ? 4 : 0;
+      if (aCP !== bCP) return bCP - aCP;
+      // ★ 점수 급상승 종목
       const aSurge = (a as any).isScoreSurge ? 3 : 0;
       const bSurge = (b as any).isScoreSurge ? 3 : 0;
       if (aSurge !== bSurge) return bSurge - aSurge;
-      // ★ 슈퍼 패턴(15% 타겟) 최우선
+      // ★ 슈퍼 패턴(15% 타겟)
       const aSP = (a as any).isSuperPattern ? 2 : 0;
       const bSP = (b as any).isSuperPattern ? 2 : 0;
       if (aSP !== bSP) return bSP - aSP;
@@ -1432,10 +1501,17 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 정예 1~5선 집중 투자: 63점+85% 확정 후보만 상위 5개 집중
+    // ★ 정예 1~5선 집중 투자: 필승 패턴 or (65점+90%익절확률) 확정 후보만
     const filteredCandidates = candidates.filter(c => {
       const winProb = getWinProbability(c.scoring.totalScore);
-      return c.scoring.totalScore >= 65 && winProb >= 85; // ★ score 65+ & 85% 이상 → 진입
+      const hasCritical = (c as any).hasCriticalPattern;
+      // 필승 패턴 감지 시: 50점 이상 + 패턴 익절확률 90%+ → 즉시 진입
+      if (hasCritical) {
+        const patternConf = (c as any).criticalPatternConfidence || 0;
+        return patternConf >= 90 || (c.scoring.totalScore >= 65 && winProb >= 90);
+      }
+      // 일반 진입: 65점+ & 90% 이상
+      return c.scoring.totalScore >= 65 && winProb >= 90;
     });
     const topCandidates = filteredCandidates.slice(0, 5);
 
@@ -1445,7 +1521,8 @@ Deno.serve(async (req) => {
         const volTag = volRank <= 20 ? ` Vol#${volRank}` : '';
         const burstTag = (c as any).isVolumeBurst ? '🔥' : '';
         const surgeTag = (c as any).isScoreSurge ? '🚨급상승' : '';
-        return `${i+1}.${burstTag}${surgeTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
+        const cpTag = (c as any).hasCriticalPattern ? `🎯[${(c as any).criticalPatterns.join('+')}]` : '';
+        return `${i+1}.${burstTag}${surgeTag}${cpTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
       }).join(', ');
       await addLog('unified', 'scan', null, `[🌐전종목스캔] [${timeStr}] 매수 후보 ${candidates.length}개 중 TOP ${topCandidates.length}개 집중 투자: ${summary}`, {});
     }
@@ -1456,9 +1533,10 @@ Deno.serve(async (req) => {
       const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
       const isSuperEntry = (r as any).isSuperPattern;
       const isScoreSurge = (r as any).isScoreSurge;
+      const isCriticalPatternEntry = (r as any).hasCriticalPattern;
       
-      // ★ 정예 1~3선 집중 투자: 슈퍼/급상승은 잔고의 50%까지 극한 집중
-      const positionPct = isPyramiding ? 0.05 : (isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
+      // ★ 정예 1~3선 집중 투자: 필승패턴/슈퍼/급상승은 잔고의 35%까지 집중
+      const positionPct = isPyramiding ? 0.05 : (isCriticalPatternEntry || isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
       const maxKRW = balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
@@ -1477,7 +1555,7 @@ Deno.serve(async (req) => {
       const stopLoss = +(adjustedPrice * 0.90).toFixed(4); // -10% 안전망
       // ★ 전 종목 TP +15% 통일 (슈퍼/선취매 구분 없이)
       const takeProfit = +(adjustedPrice * 1.15).toFixed(4);
-      const tier = isPyramiding ? 'PYRAMID' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
+      const tier = isPyramiding ? 'PYRAMID' : isCriticalPatternEntry ? 'CRITICAL-PATTERN' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
       const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 ×${spreadMul}` : '';
@@ -1487,16 +1565,21 @@ Deno.serve(async (req) => {
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
       const condensationTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)})` : '';
       const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟 집중투자(${(positionPct*100).toFixed(0)}%)` : '';
+      const criticalTag = isCriticalPatternEntry ? ` | 🎯필승패턴[${(r as any).criticalPatterns.join('+')}] 익절확률${(r as any).criticalPatternConfidence}%` : '';
       
       // ★ 엔진 개편: 지표 상세 근거 로그
       const indDetails = Object.entries(r.scoring.indicators)
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
-      const logMsg = `[${isSuperEntry ? '🎯15%슈퍼매수' : isAccumEntry ? '데이장 선취매' : '10대지표매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${condensationTag}${superTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const logMsg = `[${isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : isAccumEntry ? '데이장 선취매' : '10대지표매수'}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${condensationTag}${superTag}${criticalTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
-      // ★ 슈퍼 패턴 알림: "15% 익절이 보장된 슈퍼 패턴 종목 매수 완료"
+      // ★ 필승 패턴 알림
+      if (isCriticalPatternEntry) {
+        await addLog('unified', 'milestone', r.sym, `🎯 [필승 패턴 매수 완료] ${r.sym} [${(r as any).criticalPatterns.join('+')}] 익절확률 ${(r as any).criticalPatternConfidence}% | +0.5% 도달 시 본절보호 → 100% 익절 보장 설계`, { criticalPatterns: r.scoring.criticalPatterns, score: r.scoring.totalScore });
+      }
+      // ★ 슈퍼 패턴 알림
       if (isSuperEntry) {
-        await addLog('unified', 'milestone', r.sym, `🎯 [15% 익절 보장형 슈퍼 패턴] ${r.sym} 매수 완료! [${(r as any).superPatternSignals.join('+')}] | 15% 목표까지 자율 주행 홀딩 개시. 잔파도(5~8%) 완전 무시, -10% 안전망 유지.`, { superPattern: r.scoring.superPattern, score: r.scoring.totalScore, allocation: `${(positionPct*100).toFixed(0)}%` });
+        await addLog('unified', 'milestone', r.sym, `🎯 [15% 익절 보장형 슈퍼 패턴] ${r.sym} 매수 완료! [${(r as any).superPatternSignals.join('+')}] | 15% 목표까지 자율 주행 홀딩 개시.`, { superPattern: r.scoring.superPattern, score: r.scoring.totalScore, allocation: `${(positionPct*100).toFixed(0)}%` });
       }
 
       await supabase.from('unified_trades').insert({

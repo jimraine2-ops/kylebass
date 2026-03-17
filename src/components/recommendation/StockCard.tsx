@@ -54,6 +54,11 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
     const scoreStrong = stock.totalScore >= 55;
     const showHoldingStatus = isPriceDown && scoreStrong;
 
+    // ★ 필승 패턴 감지 표시
+    const criticalPatterns = stock.criticalPatterns?.patterns || [];
+    const hasCriticalPattern = criticalPatterns.length > 0;
+    const criticalPatternConfidence = stock.criticalPatterns?.confidence || 0;
+
     return (
       <Card
         ref={ref}
@@ -103,7 +108,12 @@ export const StockCard = React.forwardRef<HTMLDivElement, StockCardProps>(
                 {stock.reason && (
                   <p className="text-[10px] text-muted-foreground mt-0.5">📌 {stock.reason}</p>
                 )}
-                {showHoldingStatus && (
+                {hasCriticalPattern && (
+                  <p className="text-[10px] text-yellow-400 mt-0.5 font-bold">
+                    🎯 필승 패턴 감지: {criticalPatterns.join(' + ')} | 익절확률: {criticalPatternConfidence}%
+                  </p>
+                )}
+                {showHoldingStatus && !hasCriticalPattern && (
                   <p className="text-[10px] text-stock-up mt-0.5 font-medium">
                     🛡️ 지표 양호({stock.totalScore}점) - 홀딩 중
                   </p>

@@ -98,16 +98,16 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🏆 ₩50K 중소형 | 65점+ & 85% 익절
+            🏆 필승 패턴 A/B/C | 90%+ 익절확률
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
             📡 Finnhub 실시간 + Twelve Data 교차검증
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🎯 정예 5선 집중 | 5/10 충족 | ₩100만 원
+            🎯 정예 5선 집중 | +0.5%→본절보호
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🛡️ +1.0%→본절보호 | 40점↓ 시에만 매도
+            🛡️ 패턴 유지 시 30~50% 추격
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
@@ -118,10 +118,9 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 ₩50,000 미만 중소형주 | 65점+ & 85% 익절확률</p>
-          <p>✅ 진입: [주당 ≤ ₩50,000] AND [합산 ≥ 65점] AND [익절확률 ≥ 85%] AND [지표 5/10 충족] → 정예 1~5종목 분산 투입</p>
-          <p>🛡️ 본절 보호: +1.0% → SL=매수가+0.1% | 지표 40점↓ 시에만 매도</p>
-          <p>🎯 대시세 추격: 30~50% 대폭 상승 끝까지 추격 | 🚫 상장폐지 위험 종목 배제</p>
+          <p className="font-medium text-yellow-400">🏆 10대 지표 필승 패턴 다이렉트 매매 | 100% 익절 목표</p>
+          <p>🎯 패턴 A/B/C 감지 → 점수 무관 즉시 매수 | +0.5% 도달 → 본절보호(100% 익절)</p>
+          <p>🛡️ 패턴 유지 시 30~50% 끝까지 추격 | 🚫 90% 미만 자동 차단 | 상장폐지 종목 배제</p>
         </CardContent>
       </Card>
 

@@ -92,7 +92,7 @@ export default function UnifiedScanPage() {
         <div className="flex items-center gap-2">
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-xs">
             <Cloud className="w-3.5 h-3.5 mr-1" />
-            ₩50,000 미만 중소형주 자율매매
+            필승 패턴 A/B/C | 90%+ 익절확률
           </Badge>
           <Button variant="outline" size="sm" onClick={() => quantRefetch()} disabled={quantFetching}>
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${quantFetching ? 'animate-spin' : ''}`} />
@@ -130,11 +130,12 @@ export default function UnifiedScanPage() {
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 ₩50,000 미만 중소형주 | 65점+ 돌파 & 85% 익절확률 엔진</p>
-          <p>✅ 진입: [주당 ≤ ₩50,000] AND [합산 ≥ 65점] AND [익절확률 ≥ 85%] AND [지표 5/10 충족] → 상위 1~5종목에 분산 투입</p>
-          <p>🛡️ 본절 보호: +1.0% 도달 시 SL을 매수가+0.1%로 상향 → '패배 없는 게임' | 지표 40점 미만 시에만 매도</p>
-          <p>🎯 대시세 추격: 저가주 변동성 활용, 지표 40점↑ 유지 시 30~50% 대폭 상승 끝까지 추격</p>
-          <p>🚫 상장폐지 위험 종목 자동 배제 | 데이장 88% 확률 보장 시 선매수</p>
+          <p className="font-medium text-yellow-400">🏆 10대 지표 필승 패턴 다이렉트 매매 | 100% 익절 목표</p>
+          <p>🎯 패턴 A (수급 폭발): 횡보 + 거래대금 300%↑ + VWAP 상단 → 점수 무관 즉시 매수</p>
+          <p>🎯 패턴 B (변동성 응축): BB 극도 수축 + RSI 50선 돌파 → 점수 무관 즉시 매수</p>
+          <p>🎯 패턴 C (이평선 정렬): EMA 수렴 후 부채꼴 확산 → 점수 무관 즉시 매수</p>
+          <p>🛡️ 동적 본절가: +0.5% → SL=매수가+0.1% → 100% 익절 보장 | 패턴 유지 시 30~50% 추격</p>
+          <p>🚫 익절확률 90% 미만 자동 차단 | 상장폐지 위험 종목 배제</p>
         </CardContent>
       </Card>
 
