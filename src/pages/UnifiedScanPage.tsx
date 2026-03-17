@@ -110,7 +110,7 @@ export default function UnifiedScanPage() {
             <div className={`w-2.5 h-2.5 rounded-full ${wsConnected ? 'bg-stock-up animate-pulse' : 'bg-muted-foreground'}`} />
             {wsConnected ? 'LIVE: WebSocket' : 'REST 폴링'}
           </div>
-          <Badge variant="outline" className="text-[10px]">보유: {openPositions.length}/3</Badge>
+          <Badge variant="outline" className="text-[10px]">보유: {openPositions.length}/5</Badge>
           <Badge variant="outline" className="text-[10px] border-destructive/40 text-destructive">
             <Flame className="w-3 h-3 mr-1" />+10% 급등: {hotStocks.length}개
           </Badge>
