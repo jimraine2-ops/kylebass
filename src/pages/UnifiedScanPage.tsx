@@ -89,11 +89,11 @@ export default function UnifiedScanPage() {
   useEffect(() => {
     if (allStocks.length === 0) return;
     const now = Date.now();
-    const currentSymbols = new Set(allStocks.map((s: any) => s.symbol as string));
+    const currentSymbolsList: string[] = allStocks.map((s: any) => String(s.symbol));
     const newMap = new Map(newSymbols);
 
     // 새로운 종목 감지
-    for (const sym of currentSymbols) {
+    for (const sym of currentSymbolsList) {
       if (!knownSymbolsRef.current.has(sym)) {
         newMap.set(sym, now);
         knownSymbolsRef.current.add(sym);
