@@ -150,14 +150,20 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
+          {/* ★ 연승 카운터 */}
+          {winStreak > 0 && (
+            <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-sm font-bold shadow-[0_0_12px_rgba(234,179,8,0.3)]">
+              🔥 현재 연속 익절: {winStreak}회 / 승률: {wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(0) : 0}%
+            </Badge>
+          )}
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🏆 필승 패턴 A/B/C + 에너지 응축 | 90%+ 익절확률
+            🛡️ 철갑 홀딩 | 지표 60점↑ = 절대 매도 금지
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            📡 데이/프리 선취매 | 고래 매집 탐지
+            🔒 +1.5% → 본절보호(패배 0%) | 무제한 추격
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🎯 정예 5선 | +0.5%→본절보호 | 정규장 20~50% 추격
+            🏆 100% 익절 목표 | 수익 전 매도 금지
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
             🐋 저유동성 선취매 | 📦 분할잠입매집
