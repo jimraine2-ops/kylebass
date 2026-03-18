@@ -236,17 +236,34 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         </div>
       )}
 
-      {/* ★ 변동성 구간 홀딩 상태 표시: -1%~-9% 하락 + 지표 50점 이상 */}
-      {!isProfit && unrealizedPnlPct > -10 && unrealizedPnlPct < -1 && score !== null && score >= 50 && (
-        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-primary/10 border border-primary/20">
-          <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="text-primary">[변동성 구간: 지표 기반 홀딩 중] 정상 흔들림 — 대시세 대기</span>
-          <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/30 text-primary ml-auto">
-            손절 기준: -10%
+      {/* ★ 철갑 홀딩 상태: 지표 60점 이상 + 하락 중 → 매도 금지 안내 */}
+      {!isProfit && score !== null && score >= 60 && (
+        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1.5 rounded bg-stock-up/10 border border-stock-up/30">
+          <ShieldCheck className="w-4 h-4 text-stock-up shrink-0" />
+          <span className="text-stock-up">🛡️ [철갑 홀딩 중] 가격 {unrealizedPnlPct.toFixed(1)}% 하락 중이나 지표 {score}점(≥60)으로 견고함 — 수익권 진입까지 절대 매도 금지</span>
+          <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-stock-up/40 text-stock-up ml-auto font-bold">
+            🔒 No-Exit
           </Badge>
         </div>
       )}
-      {/* -9%~-10% 근접 경고 */}
+      {/* ★ 본절보호 완성 안내: SL이 매수가 위 */}
+      {(() => {
+        const slAboveEntry = pos.stop_loss > pos.price;
+        return slAboveEntry ? (
+          <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-stock-up/10 border border-stock-up/20">
+            <ShieldCheck className="w-3.5 h-3.5 text-stock-up shrink-0" />
+            <span className="text-stock-up">🔒 패배 확률 0% — 본절보호 완성 (SL: 매수가+{((pos.stop_loss / pos.price - 1) * 100).toFixed(1)}%)</span>
+          </div>
+        ) : null;
+      })()}
+      {/* ★ 변동성 구간 홀딩 상태 표시: 50~59점 */}
+      {!isProfit && unrealizedPnlPct > -10 && unrealizedPnlPct < -1 && score !== null && score >= 50 && score < 60 && (
+        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-primary/10 border border-primary/20">
+          <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+          <span className="text-primary">[변동성 구간: 지표 기반 홀딩 중] 정상 흔들림 — 대시세 대기</span>
+        </div>
+      )}
+      {/* -10% 근접 경고 */}
       {!isProfit && unrealizedPnlPct <= -10 && score !== null && score >= 50 && (
         <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-warning/10 border border-warning/20">
           <Shield className="w-3.5 h-3.5 text-warning shrink-0" />
