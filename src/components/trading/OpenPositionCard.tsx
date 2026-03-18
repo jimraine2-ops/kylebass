@@ -61,6 +61,10 @@ function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: 
   if (pnlPct >= 2) winProb = Math.min(98, winProb + 10);
   else if (pnlPct >= 1) winProb = Math.min(95, winProb + 5);
 
+  // ★ 철갑 홀딩: 지표 60점 이상이면 하락 중에도 "통계적으로 반드시 이긴다"
+  if (pnlPct < 0 && score >= 60) {
+    return { message: `[🛡️ 철갑 홀딩] 가격 하락 중이나 지표 ${score}점으로 견고함 — 통계적으로 반드시 이긴다. 수익권 진입까지 절대 매도 금지`, color: 'text-stock-up', winProb };
+  }
   if (pnlPct < 0 && score >= 50) {
     return { message: `[AI 판단: 홀딩 권장 - 지표 양호] 눌림목 구간, 반등 대기`, color: 'text-stock-up', winProb };
   }
