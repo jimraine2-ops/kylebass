@@ -110,6 +110,19 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
   const dailyTargetHit = todayPnl >= DAILY_TARGET_KRW;
   const dailyProgress = Math.min(100, (todayPnl / DAILY_TARGET_KRW) * 100);
 
+  // ★ 연승 카운트: 최근 연속 익절 횟수
+  const winStreak = useMemo(() => {
+    const sorted = closedTrades
+      .filter((t: any) => t.closed_at)
+      .sort((a: any, b: any) => new Date(b.closed_at).getTime() - new Date(a.closed_at).getTime());
+    let streak = 0;
+    for (const t of sorted) {
+      if ((t.pnl || 0) > 0) streak++;
+      else break;
+    }
+    return streak;
+  }, [closedTrades]);
+
   const wins = stats.wins || 0;
   const losses = stats.losses || 0;
   const pieData = [
