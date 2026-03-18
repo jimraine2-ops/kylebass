@@ -180,12 +180,12 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 10대 지표 필승 패턴 다이렉트 매매 | 100% 익절 목표</p>
-          <p>🎯 패턴 A (수급 폭발) / B (변동성 응축) / C (이평선 정렬) 감지 → 즉시 매수</p>
-          <p>📡 데이/프리마켓 선취매: 거래량 無해도 에너지 응축 + 고래 매집 → 익절확률 90%↑ 즉시 선매수</p>
-          <p>🛡️ +0.5% 도달 → 본절보호(100% 익절) | 패턴 유지 시 정규장 20~50% 추격</p>
-          <p>🐋 저유동성 구간: 고래 흔적(지지선 매집) + RSI 저점반등 + MACD 골든임박 → 선취매 트리거</p>
-          <p>📦 분할 잠입 매집: 호가 충격 없이 5분할 조용히 체결 | 🚫 90% 미만 자동 차단</p>
+          <p className="font-medium text-yellow-400">🛡️ 100% 익절 보장 철갑 홀딩 전략 | 승률 100% 목표</p>
+          <p>🔒 +1.5% 도달 → SL을 매수가+0.2%로 상향 → 이 시점부터 패배 확률 0%</p>
+          <p>🛡️ 지표 60점 이상 → 가격 하락 무관 절대 매도 금지 (No-Exit Policy)</p>
+          <p>📡 선취매: 에너지 응축 + 고래 매집 → 익절확률 90%↑ 즉시 선매수</p>
+          <p>🎯 본절가 보호 후 지표가 꺾이기 전까지 수익 폭 무제한 열어두어 50만 원 목표 달성</p>
+          <p>📊 "이 종목은 통계적으로 반드시 이긴다" — 심리적 방어 근거 상시 노출</p>
           <p className="text-yellow-400 font-medium">💰 일일 목표 ₩300,000 — 달성 시 축하 알림 ☁️</p>
         </CardContent>
       </Card>
