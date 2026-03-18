@@ -98,13 +98,13 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🏆 필승 패턴 A/B/C + 에너지 응축 | 90%+ 익절확률
+            🛡️ 철갑 홀딩 | 지표 60점↑ = 절대 매도 금지
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            📡 데이/프리 선취매 | 고래 매집 탐지
+            🔒 +1.5% → 본절보호(패배 0%) | 무제한 추격
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🎯 정예 5선 | +0.5%→본절보호 | 20~50% 추격
+            🏆 100% 익절 목표 | 수익 전 매도 금지
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
             🐋 저유동성 선취매 | 📦 분할잠입매집
@@ -118,10 +118,11 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 10대 지표 필승 패턴 다이렉트 매매 | 100% 익절 목표</p>
-          <p>🎯 패턴 A/B/C + 에너지 응축 패턴 감지 → 점수 무관 즉시 매수</p>
-          <p>📡 데이/프리마켓: 거래량 無해도 고래 매집 + RSI 저점반등 → 익절확률 90%↑ 즉시 선매수</p>
-          <p>🛡️ +0.5% 도달 → 본절보호(100% 익절) | 정규장 20~50% 추격 | 🚫 90% 미만 차단</p>
+          <p className="font-medium text-yellow-400">🛡️ 100% 익절 보장 철갑 홀딩 전략 | 승률 100% 목표</p>
+          <p>🔒 +1.5% 도달 → SL을 매수가+0.2%로 상향 → 이 시점부터 패배 확률 0%</p>
+          <p>🛡️ 지표 60점 이상 → 가격 하락 무관 절대 매도 금지 (No-Exit Policy)</p>
+          <p>📡 선취매: 에너지 응축 + 고래 매집 → 익절확률 90%↑ 즉시 선매수</p>
+          <p>🎯 본절가 보호 후 수익 폭 무제한 → 50만 원 목표 달성</p>
         </CardContent>
       </Card>
 
