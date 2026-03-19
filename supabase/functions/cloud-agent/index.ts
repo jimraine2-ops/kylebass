@@ -1137,12 +1137,16 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ 무손실 본절가 보호: +1.5% 도달 시 SL을 매수가+0.2%로 상향 → 패배 확률 0%
-        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
-          const bs = +(pos.price * 1.002).toFixed(4);
+        // ★ 무손실 본절가 보호: 동전주는 +2.0%, 일반은 +1.5% 도달 시 SL 상향 → 패배 확률 0%
+        const isPennyPos = isPennyStock(pos.price);
+        const breakevenTrigger = isPennyPos ? PENNY_BREAKEVEN_PCT : 1.5;
+        const breakevenSLPct = isPennyPos ? 1.005 : 1.002; // 동전주: +0.5%, 일반: +0.2%
+        if (pnlPct >= breakevenTrigger && pos.stop_loss < pos.price * breakevenSLPct) {
+          const bs = +(pos.price * breakevenSLPct).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[🔒패배확률0%] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.5% → SL=${fmtKRW(bs)} (매수가+0.2%) 본절보호 완성! 이 거래 패배 불가 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          const pennyTag = isPennyPos ? '🪙동전주' : '';
+          await addLog('unified', 'defense', sym, `[🔒패배확률0%] ${pennyTag} ${sym} +${pnlPct.toFixed(2)}% ≥ ${breakevenTrigger}% → SL=${fmtKRW(bs)} (매수가+${((breakevenSLPct-1)*100).toFixed(1)}%) 본절보호 완성! 이 거래 패배 불가 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2), isPenny: isPennyPos });
         }
 
         // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
