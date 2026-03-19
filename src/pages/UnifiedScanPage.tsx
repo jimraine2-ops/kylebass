@@ -90,9 +90,9 @@ export default function UnifiedScanPage() {
           통합 실시간 거래 현황
         </h2>
         <div className="flex items-center gap-2">
-          <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-xs">
-            <Cloud className="w-3.5 h-3.5 mr-1" />
-            필승 패턴 A/B/C | 90%+ 익절확률
+          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
+            <Shield className="w-3.5 h-3.5 mr-1" />
+            패배제로 & 필승홀딩 | Zero-Risk Lock
           </Badge>
           <Button variant="outline" size="sm" onClick={() => quantRefetch()} disabled={quantFetching}>
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${quantFetching ? 'animate-spin' : ''}`} />
