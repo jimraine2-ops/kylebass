@@ -1633,24 +1633,9 @@ Deno.serve(async (req) => {
             await addLog('unified', 'scan', r.sym, `[데이장 선취매] 에너지 응축 패턴 확인. 거래량 無해도 지표 발산 직전! ${r.sym} 미리 매수합니다. | 매집패턴: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation });
           }
 
-          // ★ 뉴스 감성 분석: 진입 후보에 대해 Finnhub 뉴스 긍정도 체크
-          let newsSentimentScore = 50;
-          try {
-            const news = await getNewsSentiment(r.sym);
-            newsSentimentScore = news.bullishPct;
-            (r as any).newsSentiment = newsSentimentScore;
-            (r as any).newsCount = news.newsCount;
-            if (news.newsCount > 0) {
-              const sentLabel = newsSentimentScore >= 80 ? '🟢강세' : newsSentimentScore >= 60 ? '🟡긍정' : newsSentimentScore >= 40 ? '⚪중립' : '🔴약세';
-              await addLog('unified', 'scan', r.sym, `[📰뉴스감성] ${r.sym} ${sentLabel} ${newsSentimentScore}% (${news.newsCount}건) | ${news.headline?.slice(0, 50) || ''}`, { sentiment: newsSentimentScore, newsCount: news.newsCount });
-            }
-          } catch { /* non-critical */ }
-
-          // ★ 뉴스+지표 동기화 필터: 뉴스 약세(40% 미만) + 지표 70점 미만 → 차단
-          if (newsSentimentScore < 40 && r.scoring.totalScore < 70 && !(r as any).hasCriticalPattern) {
-            await addLog('unified', 'scan', r.sym, `[🚫뉴스차단] ${r.sym} 뉴스 약세(${newsSentimentScore}%) + 지표 ${r.scoring.totalScore}점 < 70 → 진입 보류`, {});
-            continue;
-          }
+          // ★ 뉴스 감성은 최종 후보 선정 후 분석 (타임아웃 방지)
+          (r as any).newsSentiment = 50;
+          (r as any).newsCount = 0;
 
           candidates.push(r);
         }
