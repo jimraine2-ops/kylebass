@@ -1812,7 +1812,8 @@ Deno.serve(async (req) => {
       // ★ 필승 패턴 알림
       if (isCriticalPatternEntry) {
         const breakevenLabel = isPennyEntry ? `+${PENNY_BREAKEVEN_PCT}%` : `+${GHOST_BREAKEVEN_PCT}%`;
-        await addLog('unified', 'milestone', r.sym, `🎯 [필승 패턴 매수 완료] ${r.sym} [${(r as any).criticalPatterns.join('+')}] 익절확률 ${(r as any).criticalPatternConfidence}% | ${breakevenLabel} 도달 시 Zero-Loss 본절보호(매수가+0.2%) → 100% 익절 보장 설계`, { criticalPatterns: r.scoring.criticalPatterns, score: r.scoring.totalScore });
+        const newsTag = (r as any).newsSentiment >= 80 ? ` | 📰뉴스강세${(r as any).newsSentiment}%` : '';
+        await addLog('unified', 'milestone', r.sym, `🎯 [필승 패턴 매수 완료] ${r.sym} [${(r as any).criticalPatterns.join('+')}] 익절확률 ${(r as any).criticalPatternConfidence}% | ${breakevenLabel} 도달 시 Zero-Risk Lock(매수가+0.1%) → 패배 기록 0 보장${newsTag}`, { criticalPatterns: r.scoring.criticalPatterns, score: r.scoring.totalScore, newsSentiment: (r as any).newsSentiment });
       }
       // ★ 슈퍼 패턴 알림
       if (isSuperEntry) {

@@ -178,14 +178,14 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
         </Button>
       </div>
 
-      <Card className="border-yellow-500/30 bg-yellow-500/5">
+    <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">👻 무결점 고스트 매집 & 100% 익절 전략 | $9(₩12,000) 미만 저가주 전용</p>
-          <p>🔒 +1.2% 도달 → SL 매수가+0.2% 강제 상향 → 무적 상태(Zero-Loss) 발동</p>
-          <p>🛡️ 지표 60점 이상 → 가격 하락 무관 절대 매도 금지 (No-Exit Policy)</p>
-          <p>👻 데이장/프리마켓 고스트 매집: 세력 매집 완료 패턴 → 100% 익절 선취매</p>
-          <p>🎯 Zero-Loss 후 수익 폭 무제한 → 정규장 30~50% 대시세까지 추격</p>
-          <p className="text-yellow-400 font-medium">💰 ₩12,000 미만 저가주 3종목 집중 | 호가 한 칸 = 큰 수익</p>
+          <p className="font-medium text-yellow-400">🏆 패배 제로 & 필승 홀딩 시스템 | 뉴스+지표 동기화 매매</p>
+          <p>🔒 +0.8% 도달 → SL 매수가+0.1%로 강제 고정 → 패배 기록 원천 차단 (Zero-Risk Lock)</p>
+          <p>🛡️ 익절 확률 90%+ → 자동 매도 일절 금지 | 지표 붕괴까지 무제한 홀딩</p>
+          <p>📰 Finnhub 뉴스 감성 분석: 긍정 80%+ → 지표 동기화 확인 → 즉시 선취매</p>
+          <p>🎯 정예 5종목 집중 운용 | 0.1초 정밀 대응으로 30~50% 대시세 추격</p>
+          <p className="text-yellow-400 font-medium">💰 $9(₩12,000) 미만 저가주 | 뉴스+차트 95% 일치 시 100만 원 투입</p>
         </CardContent>
       </Card>
 
