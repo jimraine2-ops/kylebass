@@ -92,7 +92,7 @@ export default function UnifiedScanPage() {
         <div className="flex items-center gap-2">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
             <Shield className="w-3.5 h-3.5 mr-1" />
-            패배제로 & 필승홀딩 | Zero-Risk Lock
+            Finnhub×TwelveData 하이브리드 | Zero-Loss
           </Badge>
           <Button variant="outline" size="sm" onClick={() => quantRefetch()} disabled={quantFetching}>
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${quantFetching ? 'animate-spin' : ''}`} />
@@ -130,20 +130,21 @@ export default function UnifiedScanPage() {
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🏆 월가 1등 딜러의 절대 지시 — 패배 제로 & 필승 홀딩 시스템</p>
-          <p className="italic text-yellow-400/80">"지표와 뉴스가 '필승'을 가리킨다면, 시장의 흔들림은 무시하라."</p>
+          <p className="font-bold text-yellow-400 text-sm">🏆 Finnhub × Twelve Data 하이브리드 필승 전략</p>
+          <p className="italic text-yellow-400/80">"Finnhub로 사냥감을 식별하고, Twelve Data로 심장을 쏜다. 100% 익절이 보장되지 않으면 방아쇠를 당기지 마라."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[No-Loss] 패배 기록 원천 차단</p>
-            <p>🔒 +0.8~1.0% 진입 즉시 → SL 매수가+0.1% 강제 고정 (Zero-Risk Lock) → 패배 0건 유지</p>
-            <p>📰 Finnhub 뉴스 긍정 + 10대 지표 95%↑ 일치 시에만 ₩100만 투입</p>
+            <p className="font-semibold text-foreground">[Dual-Engine] 데이터 소스 역할 분담</p>
+            <p>📰 Finnhub: 뉴스 감성 85%↑ 'Extreme Bullish' + 섹터 모멘텀 주도주 리스트</p>
+            <p>📊 Twelve Data: 10대 지표(RSI·MACD·VWAP·볼린저) 0.1초 쿼리 + 호가·체결 감시</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Iron-Hold] 익절확률 90%+ → 매도 금지</p>
-            <p>🛡️ 지표 붕괴 전까지 무제한 홀딩 | ₩12,000 미만 저가주 30~50% 대시세 추격</p>
+            <p className="font-semibold text-foreground">[Zero-Loss] The Golden Cross 진입</p>
+            <p>🔒 ₩12,000↓ + Extreme Bullish + 수렴→발산 + 익절확률 90%↑ → ₩100만 5종목 집중</p>
+            <p>🔒 +0.8% → SL 매수가+0.1% 강제 고정 (Zero-Risk Lock)</p>
           </div>
           <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Select-5] 정예 5종목 집중 운용</p>
-            <p>🎯 최대 5종목 | ₩20만×5 또는 확실한 2~3종목 화력 집중</p>
+            <p className="font-semibold text-foreground">[Iron-Hold] 무패 & 30~50% 추격</p>
+            <p>🛡️ 익절확률 90%+ → 눌림목 매도 금지 | 점수 45점 미만 붕괴 시까지 무제한 홀딩</p>
           </div>
         </CardContent>
       </Card>
