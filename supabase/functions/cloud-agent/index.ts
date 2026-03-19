@@ -702,6 +702,81 @@ function getWinProbability(score: number): number {
   return 15;
 }
 
+// ===== Finnhub 뉴스 감성 분석 (News Sentiment) =====
+const newsSentimentCache: Map<string, { sentiment: number; bullish: number; count: number; ts: number }> = new Map();
+const NEWS_CACHE_TTL = 300000; // 5분 캐시
+
+async function getNewsSentiment(symbol: string): Promise<{ sentiment: number; bullishPct: number; newsCount: number; headline: string }> {
+  const cached = newsSentimentCache.get(symbol);
+  if (cached && Date.now() - cached.ts < NEWS_CACHE_TTL) {
+    return { sentiment: cached.sentiment, bullishPct: cached.bullish, newsCount: cached.count, headline: '' };
+  }
+  
+  try {
+    const today = new Date();
+    const from = new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const to = today.toISOString().split('T')[0];
+    const data = await finnhubFetch(`/company-news?symbol=${symbol}&from=${from}&to=${to}`);
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return { sentiment: 50, bullishPct: 50, newsCount: 0, headline: '' };
+    }
+    
+    const BULLISH_KEYWORDS = ['surge', 'soar', 'jump', 'rally', 'gain', 'rise', 'bull', 'upgrade', 'beat', 'strong', 'record', 'breakout', 'momentum', 'growth', 'profit', 'positive', 'outperform', 'buy', 'up', 'high', 'boom'];
+    const BEARISH_KEYWORDS = ['crash', 'plunge', 'drop', 'fall', 'decline', 'bear', 'downgrade', 'miss', 'weak', 'loss', 'risk', 'warning', 'sell', 'down', 'low', 'cut', 'negative', 'concern'];
+    
+    let bullishCount = 0;
+    let bearishCount = 0;
+    const recentNews = data.slice(0, 20); // 최근 20개만 분석
+    
+    for (const article of recentNews) {
+      const text = ((article.headline || '') + ' ' + (article.summary || '')).toLowerCase();
+      const bullHits = BULLISH_KEYWORDS.filter(kw => text.includes(kw)).length;
+      const bearHits = BEARISH_KEYWORDS.filter(kw => text.includes(kw)).length;
+      if (bullHits > bearHits) bullishCount++;
+      else if (bearHits > bullHits) bearishCount++;
+    }
+    
+    const totalAnalyzed = bullishCount + bearishCount || 1;
+    const bullishPct = Math.round((bullishCount / totalAnalyzed) * 100);
+    const sentiment = bullishPct; // 0~100: 100=완전강세
+    
+    newsSentimentCache.set(symbol, { sentiment, bullish: bullishPct, count: recentNews.length, ts: Date.now() });
+    return { sentiment, bullishPct, newsCount: recentNews.length, headline: recentNews[0]?.headline || '' };
+  } catch {
+    return { sentiment: 50, bullishPct: 50, newsCount: 0, headline: '' };
+  }
+}
+
+// ===== 시장 전체 뉴스 감성 스캔 (Market-Wide News Pulse) =====
+async function getMarketNewsPulse(): Promise<{ overall: number; topBullish: string[]; topBearish: string[] }> {
+  try {
+    const data = await finnhubFetch(`/news?category=general`);
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return { overall: 50, topBullish: [], topBearish: [] };
+    }
+    
+    const BULLISH = ['surge', 'rally', 'gain', 'bull', 'record', 'growth', 'beat', 'strong', 'boom', 'breakout'];
+    const BEARISH = ['crash', 'plunge', 'bear', 'decline', 'risk', 'warning', 'recession', 'weak', 'sell', 'fear'];
+    
+    let bullCount = 0, bearCount = 0;
+    const recentNews = data.slice(0, 30);
+    
+    for (const article of recentNews) {
+      const text = ((article.headline || '') + ' ' + (article.summary || '')).toLowerCase();
+      const bHits = BULLISH.filter(kw => text.includes(kw)).length;
+      const brHits = BEARISH.filter(kw => text.includes(kw)).length;
+      if (bHits > brHits) bullCount++;
+      else if (brHits > bHits) bearCount++;
+    }
+    
+    const total = bullCount + bearCount || 1;
+    const overall = Math.round((bullCount / total) * 100);
+    return { overall, topBullish: [], topBearish: [] };
+  } catch {
+    return { overall: 50, topBullish: [], topBearish: [] };
+  }
+}
+
 // ===== Score Surge Detection (점수 급상승 감지) =====
 const previousScores: Map<string, number> = new Map();
 function detectScoreSurge(symbol: string, currentScore: number): { isSurge: boolean; prevScore: number; delta: number } {
