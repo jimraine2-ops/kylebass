@@ -14,10 +14,11 @@ const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $9
 const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
 const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
 const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
-const PENNY_BREAKEVEN_PCT = 2.0; // ★ 동전주 본절보호: +2%
+const PENNY_BREAKEVEN_PCT = 1.0; // ★ 동전주 본절보호: +1.0% (강화)
 const PENNY_IRON_HOLD_SCORE = 65; // ★ 동전주 철갑 홀딩: 65점
 const PENNY_MAX_POSITIONS = 3; // ★ 동전주 최대 3종목 집중
-const GHOST_BREAKEVEN_PCT = 1.2; // ★ 고스트 매집: +1.2% 돌파 시 즉시 본절보호 (Zero-Loss)
+const GHOST_BREAKEVEN_PCT = 0.8; // ★ Zero-Risk Lock: +0.8% 돌파 시 즉시 SL→매수가+0.1% (패배 원천 차단)
+const ZERO_RISK_SL_PCT = 1.001; // ★ Zero-Risk Lock SL: 매수가 +0.1% (패배 기록 0 유지)
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
