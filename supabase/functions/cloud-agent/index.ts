@@ -7,10 +7,16 @@ const corsHeaders = {
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
-const MIN_PRICE_KRW = 1000;
+const MIN_PRICE_KRW = 100; // ★ 동전주: 최저 100원까지 허용
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
 const MAX_PRICE_KRW = 50000; // ★ 50,000원 미만 중소형주 포함
 const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $37
+const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
+const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
+const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
+const PENNY_BREAKEVEN_PCT = 2.0; // ★ 동전주 본절보호: +2%
+const PENNY_IRON_HOLD_SCORE = 65; // ★ 동전주 철갑 홀딩: 65점
+const PENNY_MAX_POSITIONS = 3; // ★ 동전주 최대 3종목 집중
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
@@ -676,6 +682,11 @@ async function discoverAllUSStocks(): Promise<string[]> {
 }
 
 // ===== Win Probability Calculator (익절 확률 산출) =====
+// ★ 동전주 여부 판별
+function isPennyStock(price: number): boolean {
+  return price > 0 && price < PENNY_THRESHOLD_USD;
+}
+
 function getWinProbability(score: number): number {
   if (score >= 80) return 98;
   if (score >= 75) return 95;
@@ -1126,12 +1137,16 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ 무손실 본절가 보호: +1.5% 도달 시 SL을 매수가+0.2%로 상향 → 패배 확률 0%
-        if (pnlPct >= 1.5 && pos.stop_loss < pos.price * 1.002) {
-          const bs = +(pos.price * 1.002).toFixed(4);
+        // ★ 무손실 본절가 보호: 동전주는 +2.0%, 일반은 +1.5% 도달 시 SL 상향 → 패배 확률 0%
+        const isPennyPos = isPennyStock(pos.price);
+        const breakevenTrigger = isPennyPos ? PENNY_BREAKEVEN_PCT : 1.5;
+        const breakevenSLPct = isPennyPos ? 1.005 : 1.002; // 동전주: +0.5%, 일반: +0.2%
+        if (pnlPct >= breakevenTrigger && pos.stop_loss < pos.price * breakevenSLPct) {
+          const bs = +(pos.price * breakevenSLPct).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
-          await addLog('unified', 'defense', sym, `[🔒패배확률0%] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.5% → SL=${fmtKRW(bs)} (매수가+0.2%) 본절보호 완성! 이 거래 패배 불가 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          const pennyTag = isPennyPos ? '🪙동전주' : '';
+          await addLog('unified', 'defense', sym, `[🔒패배확률0%] ${pennyTag} ${sym} +${pnlPct.toFixed(2)}% ≥ ${breakevenTrigger}% → SL=${fmtKRW(bs)} (매수가+${((breakevenSLPct-1)*100).toFixed(1)}%) 본절보호 완성! 이 거래 패배 불가 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2), isPenny: isPennyPos });
         }
 
         // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
@@ -1222,16 +1237,17 @@ Deno.serve(async (req) => {
           }
         }
 
-        // 2. ★ [철갑 홀딩] SL 터치 — 지표 60점 이상이면 절대 매도 금지 (No-Exit Policy)
-        const indicatorsIronHold = quantScore >= 60; // ★ 철갑 홀딩 기준: 60점
+        // 2. ★ [철갑 홀딩] SL 터치 — 동전주: 65점, 일반: 60점 이상이면 절대 매도 금지
+        const ironHoldThreshold = isPennyPos ? PENNY_IRON_HOLD_SCORE : 60;
+        const indicatorsIronHold = quantScore >= ironHoldThreshold;
         if (!shouldClose && pos.stop_loss && price <= pos.stop_loss) {
           if (pnlPct >= 0) {
             shouldClose = true;
             closeReason = `[본절방어] [${sessionLabel}] [${timeStr}] [${sym}] 본절가 터치 (${quantScore}점)`;
             newStatus = 'breakeven_exit';
           } else if (indicatorsIronHold) {
-            // ★ 철갑 홀딩: 지표 60점 이상이면 하락폭 무관 절대 홀딩 — "이 종목은 통계적으로 반드시 이긴다"
-            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 하락 중이나 지표 ${quantScore}점(≥60)으로 견고함 — 필승 홀딩 중. 수익권(+3%~50%) 진입까지 절대 매도 금지`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold });
+            const pennyTag = isPennyPos ? '🪙동전주' : '';
+            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩] ${pennyTag} ${sym} -${Math.abs(pnlPct).toFixed(2)}% 하락 중이나 지표 ${quantScore}점(≥${ironHoldThreshold})으로 견고함 — 필승 홀딩 중. 수익권(+3%~50%) 진입까지 절대 매도 금지`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold, isPenny: isPennyPos });
           } else if (pnlPct > -10 && quantScore >= 50) {
             // ★ 50~59점: 일반 홀딩
             await addLog('unified', 'hold', sym, `[변동성 구간: 지표 기반 홀딩] ${sym} -${Math.abs(pnlPct).toFixed(2)}% | 지표 ${quantScore}점(≥50) → 대시세 대기`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold });
@@ -1420,26 +1436,35 @@ Deno.serve(async (req) => {
             if (!data) return null;
             const price = data.quote.c;
             const capType = getCapType(price, sym);
-            if (price < MIN_PRICE_USD) return null;
-            // ★ 12,000원 미만 저가주 전용: 가격 상한선 필터
+            if (price < MIN_PRICE_USD && price > 0) {
+              // ★ 동전주($1 미만)는 최저가 제한 해제 — 0.01 이상이면 스캔
+              if (price < 0.01) return null;
+            } else if (price < MIN_PRICE_USD) return null;
+            // ★ 가격 상한선 필터
             if (price > MAX_PRICE_USD) return null;
+            const isPenny = isPennyStock(price);
             const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
             if (!scoring) return null;
             lastScores.set(sym, scoring.totalScore);
-            return { sym, price, scoring, capType, data };
+            return { sym, price, scoring, capType, data, isPenny: isPennyStock(price) };
           } catch { return null; }
         }));
 
         for (const r of results) {
           if (!r) continue;
+          const isPenny = r.isPenny;
           
           // ★ 필승 패턴 A/B/C 감지: 점수가 낮아도 패턴 완성 시 즉시 진입 허용
           const cp = r.scoring.criticalPatterns;
           const hasCriticalPattern = cp && cp.patterns.length >= 1;
           const hasMultiPattern = cp && cp.patterns.length >= 2; // 2개 이상 = 초고확신
 
-          // 점수 필터: 일반 진입은 adaptedEntryThreshold, 필승 패턴 시 50점까지 완화
-          if (!hasCriticalPattern && r.scoring.totalScore < adaptedEntryThreshold) continue;
+          // ★ 동전주 전용 진입 문턱: 70점 (일반: 65점)
+          const pennyEntryThreshold = PENNY_ENTRY_SCORE;
+          const effectiveThreshold = isPenny ? Math.max(pennyEntryThreshold, adaptedEntryThreshold) : adaptedEntryThreshold;
+          
+          // 점수 필터: 일반 진입은 effectiveThreshold, 필승 패턴 시 50점까지 완화
+          if (!hasCriticalPattern && r.scoring.totalScore < effectiveThreshold) continue;
           if (hasCriticalPattern && r.scoring.totalScore < 50) continue; // 패턴 있어도 최소 50점
           
           const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
@@ -1486,6 +1511,7 @@ Deno.serve(async (req) => {
 
           // 수급 돌파/유동성 점수 계산
           (r as any).isVolumeBurst = rvol >= 2.0;
+          (r as any).isPennyStock = isPenny;
           (r as any).isAccumulationEntry = isAccumEntry;
           (r as any).accumPattern = accumPattern?.pattern || '';
           (r as any).accumCondensation = accumPattern?.condensation || 0;
@@ -1496,6 +1522,12 @@ Deno.serve(async (req) => {
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
+
+          // ★ 동전주 로그
+          if (isPenny && r.scoring.totalScore >= PENNY_ENTRY_SCORE) {
+            const rvolVal = r.scoring.indicators?.rvol?.rvol || 0;
+            await addLog('unified', 'scan', r.sym, `[🪙동전주] ${r.sym} $${r.price.toFixed(4)}(${fmtKRW(r.price)}) | ${r.scoring.totalScore}점(≥${PENNY_ENTRY_SCORE}) RVOL ${rvolVal.toFixed(1)}x → 최우선 진입 대상`, { price: r.price, score: r.scoring.totalScore, rvol: rvolVal });
+          }
 
           // ★ 필승 패턴 알림 로그 (고래/에너지 응축 포함)
           if (hasCriticalPattern) {
@@ -1549,6 +1581,10 @@ Deno.serve(async (req) => {
     // Sort: critical pattern → score surge → super pattern → explosive → volume burst → liquidity → score
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
     candidates.sort((a, b) => {
+      // ★ 동전주($1 미만) 최우선
+      const aPenny = (a as any).isPennyStock ? 5 : 0;
+      const bPenny = (b as any).isPennyStock ? 5 : 0;
+      if (aPenny !== bPenny) return bPenny - aPenny;
       // ★ 필승 패턴(A/B/C) 최우선
       const aCP = (a as any).hasCriticalPattern ? 4 : 0;
       const bCP = (b as any).hasCriticalPattern ? 4 : 0;
@@ -1597,9 +1633,12 @@ Deno.serve(async (req) => {
         const burstTag = (c as any).isVolumeBurst ? '🔥' : '';
         const surgeTag = (c as any).isScoreSurge ? '🚨급상승' : '';
         const cpTag = (c as any).hasCriticalPattern ? `🎯[${(c as any).criticalPatterns.join('+')}]` : '';
-        return `${i+1}.${burstTag}${surgeTag}${cpTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
+        const pennyTag = (c as any).isPennyStock ? '🪙' : '';
+        return `${i+1}.${pennyTag}${burstTag}${surgeTag}${cpTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
       }).join(', ');
-      await addLog('unified', 'scan', null, `[🌐전종목스캔] [${timeStr}] 매수 후보 ${candidates.length}개 중 TOP ${topCandidates.length}개 집중 투자: ${summary}`, {});
+      // ★ 동전주 개수 표시
+      const pennyCount = topCandidates.filter(c => (c as any).isPennyStock).length;
+      await addLog('unified', 'scan', null, `[🌐전종목스캔] [${timeStr}] 매수 후보 ${candidates.length}개 중 TOP ${topCandidates.length}개 집중 투자 (🪙동전주 ${pennyCount}개): ${summary}`, {});
     }
 
     for (const r of topCandidates) {
@@ -1609,9 +1648,11 @@ Deno.serve(async (req) => {
       const isSuperEntry = (r as any).isSuperPattern;
       const isScoreSurge = (r as any).isScoreSurge;
       const isCriticalPatternEntry = (r as any).hasCriticalPattern;
+      const isPennyEntry = (r as any).isPennyStock;
       
-      // ★ 정예 1~3선 집중 투자: 필승패턴/슈퍼/급상승은 잔고의 35%까지 집중
-      const positionPct = isPyramiding ? 0.05 : (isCriticalPatternEntry || isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
+      // ★ 동전주: 잔고의 33% 집중 투입 (최대한 많은 주수 확보)
+      // ★ 필승패턴/슈퍼/급상승: 35%, 일반: 20%
+      const positionPct = isPyramiding ? 0.05 : isPennyEntry ? 0.33 : (isCriticalPatternEntry || isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
       const maxKRW = balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
@@ -1632,7 +1673,7 @@ Deno.serve(async (req) => {
       const tpMultiplier = (isAccumEntry || isCriticalPatternEntry) && isLowVolumeSession ? 1.20 : 1.15;
       const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
       const splitOrderNote = isAccumEntry ? ' | 📦분할잠입매집(5분할 조용히 체결)' : '';
-      const tier = isPyramiding ? 'PYRAMID' : isCriticalPatternEntry ? 'CRITICAL-PATTERN' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
+      const tier = isPyramiding ? 'PYRAMID' : isPennyEntry ? 'PENNY-🪙' : isCriticalPatternEntry ? 'CRITICAL-PATTERN' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
       const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 ×${spreadMul}` : '';
@@ -1640,6 +1681,7 @@ Deno.serve(async (req) => {
       const volRank = (r as any).volumeRank;
       const volRankTag = volRank <= 50 ? ` | Vol#${volRank}` : '';
       const burstTag = (r as any).isVolumeBurst ? ' | 🔥수급돌파' : '';
+      const pennyBuyTag = isPennyEntry ? ` | 🪙동전주($${r.price.toFixed(4)}/${fmtKRW(r.price)})×${qty}주=물량선점` : '';
       const condensationTag = isAccumEntry ? ` | 📡선취매(${(r as any).accumPattern}|응축${((r as any).accumCondensation || 0).toFixed(1)})${splitOrderNote}` : '';
       const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟 집중투자(${(positionPct*100).toFixed(0)}%)` : '';
       const criticalTag = isCriticalPatternEntry ? ` | 🎯필승패턴[${(r as any).criticalPatterns.join('+')}] 익절확률${(r as any).criticalPatternConfidence}%` : '';
@@ -1648,8 +1690,8 @@ Deno.serve(async (req) => {
       const indDetails = Object.entries(r.scoring.indicators)
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
-      const preBuyLabel = isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : '10대지표매수';
-      const logMsg = `[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${condensationTag}${superTag}${criticalTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const preBuyLabel = isPennyEntry ? '🪙동전주매수' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : '10대지표매수';
+      const logMsg = `[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       // ★ 필승 패턴 알림
       if (isCriticalPatternEntry) {
@@ -1658,6 +1700,10 @@ Deno.serve(async (req) => {
       // ★ 슈퍼 패턴 알림
       if (isSuperEntry) {
         await addLog('unified', 'milestone', r.sym, `🎯 [15% 익절 보장형 슈퍼 패턴] ${r.sym} 매수 완료! [${(r as any).superPatternSignals.join('+')}] | 15% 목표까지 자율 주행 홀딩 개시.`, { superPattern: r.scoring.superPattern, score: r.scoring.totalScore, allocation: `${(positionPct*100).toFixed(0)}%` });
+      }
+      // ★ 동전주 매수 알림
+      if (isPennyEntry) {
+        await addLog('unified', 'milestone', r.sym, `🪙 [동전주 물량선점 매수] ${r.sym} $${r.price.toFixed(4)}(${fmtKRW(r.price)}) × ${qty}주 | 호가 한 칸 변동 = 큰 수익! | 본절보호: +${PENNY_BREAKEVEN_PCT}% | 철갑홀딩: ${PENNY_IRON_HOLD_SCORE}점↑`, { price: r.price, qty, isPenny: true, score: r.scoring.totalScore });
       }
 
       await supabase.from('unified_trades').insert({
@@ -1670,7 +1716,7 @@ Deno.serve(async (req) => {
       await supabase.from('unified_wallet').update({ balance: newBuyBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
       balance = newBuyBalance;
       openCount++;
-      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry });
+      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry, isPenny: isPennyEntry });
     }
 
     // ========== AUTO-REPLACEMENT ==========
