@@ -1108,6 +1108,15 @@ Deno.serve(async (req) => {
       await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → QQQ보너스 -${qqqBonus}점, 진입기준 ${baseEntryThreshold}점`, { spyChange, qqqChange, qqqBonus });
     } catch { /* fallback */ }
 
+    // ★ 시장 전체 뉴스 감성 분석 (Market News Pulse)
+    let marketNewsPulse = 50;
+    try {
+      const pulse = await getMarketNewsPulse();
+      marketNewsPulse = pulse.overall;
+      const sentiment = marketNewsPulse >= 70 ? '🟢강세' : marketNewsPulse >= 50 ? '🟡중립' : '🔴약세';
+      await addLog('system', 'info', null, `[📰뉴스펄스] 미국 시장 전체 뉴스 감성: ${sentiment} ${marketNewsPulse}% (긍정률)`, { marketNewsPulse });
+    } catch { /* non-critical */ }
+
     // --- Dynamic win-rate threshold ---
     const { data: recentTrades } = await supabase
       .from('unified_trades')
