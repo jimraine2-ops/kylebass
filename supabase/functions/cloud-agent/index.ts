@@ -928,9 +928,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Fill 150 active slots — ★ 확장: 60 대형 + 90 소형 = 150개 슬롯
-    const LARGE_SLOTS = 60;
-    const SMALL_SLOTS = 90;
+    // Step 2: Fill 100 active slots — ★ 최적화: 40 대형 + 60 소형 = 100개 슬롯 (타임아웃 방지)
+    const LARGE_SLOTS = 40;
+    const SMALL_SLOTS = 60;
 
     const currentLarge: string[] = [];
     const currentSmall: string[] = [];
