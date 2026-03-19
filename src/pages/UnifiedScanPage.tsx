@@ -90,9 +90,9 @@ export default function UnifiedScanPage() {
           통합 실시간 거래 현황
         </h2>
         <div className="flex items-center gap-2">
-          <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-xs">
-            <Cloud className="w-3.5 h-3.5 mr-1" />
-            필승 패턴 A/B/C | 90%+ 익절확률
+          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
+            <Shield className="w-3.5 h-3.5 mr-1" />
+            패배제로 & 필승홀딩 | Zero-Risk Lock
           </Badge>
           <Button variant="outline" size="sm" onClick={() => quantRefetch()} disabled={quantFetching}>
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${quantFetching ? 'animate-spin' : ''}`} />
@@ -129,13 +129,22 @@ export default function UnifiedScanPage() {
       </div>
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
-        <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🪙 초저가주 필승 70점 & 90% 익절 전략 | 동전주 $1 미만 집중</p>
-          <p>🪙 $1.00 미만(₩2,000↓) 동전주 스캔 → 10대 지표 70점↑ + RVOL 500%↑ = 즉시 진입</p>
-          <p>🎯 패턴 A (수급 폭발) + 패턴 B (변동성 응축) + 패턴 C (이평선 정렬) → 점수 무관 즉시 매수</p>
-          <p>🔒 동전주 +2.0% → SL=매수가+0.5% → 급락 원천 차단 | 일반 +1.5% → SL=매수가+0.2%</p>
-          <p>🛡️ 동전주 65점↑ / 일반 60점↑ → 철갑 홀딩 (수익 전 절대 매도 금지)</p>
-          <p>🚫 익절확률 90% 미만 자동 차단 | 상장폐지 위험 종목 배제</p>
+        <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
+          <p className="font-bold text-yellow-400 text-sm">🏆 월가 1등 딜러의 절대 지시 — 패배 제로 & 필승 홀딩 시스템</p>
+          <p className="italic text-yellow-400/80">"지표와 뉴스가 '필승'을 가리킨다면, 시장의 흔들림은 무시하라."</p>
+          <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[No-Loss] 패배 기록 원천 차단</p>
+            <p>🔒 +0.8~1.0% 진입 즉시 → SL 매수가+0.1% 강제 고정 (Zero-Risk Lock) → 패배 0건 유지</p>
+            <p>📰 Finnhub 뉴스 긍정 + 10대 지표 95%↑ 일치 시에만 ₩100만 투입</p>
+          </div>
+          <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[Iron-Hold] 익절확률 90%+ → 매도 금지</p>
+            <p>🛡️ 지표 붕괴 전까지 무제한 홀딩 | ₩12,000 미만 저가주 30~50% 대시세 추격</p>
+          </div>
+          <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[Select-5] 정예 5종목 집중 운용</p>
+            <p>🎯 최대 5종목 | ₩20만×5 또는 확실한 2~3종목 화력 집중</p>
+          </div>
         </CardContent>
       </Card>
 
