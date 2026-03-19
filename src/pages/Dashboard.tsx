@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Radio, Bot, CalendarDays, Wallet, TrendingUp, TrendingDown, Briefcase, Activity, Target, ChevronRight } from "lucide-react";
+import { Radio, Bot, Wallet, TrendingUp, TrendingDown, Briefcase, Activity, Target, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { SessionIndicator } from "@/components/trading/SessionIndicator";
@@ -15,24 +15,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 import { formatStockName } from "@/lib/koreanStockMap";
 
-function useEarningsWatch() {
-  return useQuery({
-    queryKey: ['earnings-watch'],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('earnings-watch');
-      if (error) throw error;
-      return data;
-    },
-    refetchInterval: 5 * 60 * 1000,
-    staleTime: 2 * 60 * 1000,
-  });
-}
+
+
 
 export default function Dashboard() {
   const { data: unifiedData, isLoading: portfolioLoading } = useUnifiedPortfolio();
   const { data: agentStatus } = useAgentStatus();
   const { data: logs = [] } = useAgentLogs(5);
-  const { data: earningsData } = useEarningsWatch();
   const { rate: fxRate, isLive: fxLive } = useExchangeRate();
 
   const allSymbols = useMemo(() => {
@@ -50,8 +39,8 @@ export default function Dashboard() {
   const openPositions = unifiedData?.openPositions || [];
   const stats = unifiedData?.stats || {} as any;
 
-  const earningsStocks = earningsData?.stocks || [];
-  const preBuyCandidates = earningsStocks.filter((s: any) => s.isPreBuy);
+
+
 
   const isAgentRunning = agentStatus?.is_running ?? false;
   const lastLog = logs[0];
@@ -118,24 +107,10 @@ export default function Dashboard() {
             </p>
           </CardContent>
         </Card>
-
-        {/* 실적 임박 */}
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <CalendarDays className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-medium">실적 임박</span>
-            </div>
-            <p className="text-base font-bold font-mono">{earningsStocks.length}종목</p>
-            <p className="text-[11px] text-yellow-400 font-medium">
-              🎯 선취매 {preBuyCandidates.length}개
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Two Column: 보유종목 + 실적임박 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* 보유종목 */}
+      <div className="grid grid-cols-1 gap-4">
         {/* 보유 종목 요약 */}
         <Card>
           <CardContent className="p-3 space-y-2">
@@ -174,48 +149,6 @@ export default function Dashboard() {
                 {openPositions.length > 5 && (
                   <Link to="/ai-trading" className="block text-center text-[10px] text-primary pt-1 hover:underline">
                     +{openPositions.length - 5}개 더보기
-                  </Link>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* 실적 임박 요약 */}
-        <Card>
-          <CardContent className="p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold flex items-center gap-1.5">
-                <CalendarDays className="w-3.5 h-3.5 text-primary" />실적 임박 종목
-              </span>
-              <Link to="/earnings-watch" className="text-[10px] text-primary flex items-center hover:underline">
-                전체보기 <ChevronRight className="w-3 h-3" />
-              </Link>
-            </div>
-            {earningsStocks.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">실적 발표 예정 종목 없음</p>
-            ) : (
-              <div className="space-y-1.5">
-                {earningsStocks.slice(0, 5).map((s: any) => (
-                  <div key={s.symbol} className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-semibold text-xs">{s.symbol}</span>
-                      {s.isPreBuy && (
-                        <Badge className="text-[8px] px-1 py-0 bg-yellow-500/20 text-yellow-400 border-yellow-500/50">선취매</Badge>
-                      )}
-                      <span className="text-[10px] text-muted-foreground">{s.date}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-muted-foreground">${s.price?.toFixed(2)}</span>
-                      <Badge variant="outline" className={`text-[9px] font-mono ${s.winProb >= 88 ? 'border-yellow-500/50 text-yellow-400' : ''}`}>
-                        {s.winProb}%
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-                {earningsStocks.length > 5 && (
-                  <Link to="/earnings-watch" className="block text-center text-[10px] text-primary pt-1 hover:underline">
-                    +{earningsStocks.length - 5}개 더보기
                   </Link>
                 )}
               </div>

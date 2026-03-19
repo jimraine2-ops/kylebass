@@ -241,19 +241,19 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
       {!isProfit && score !== null && score >= 60 && (
         <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1.5 rounded bg-stock-up/10 border border-stock-up/30">
           <ShieldCheck className="w-4 h-4 text-stock-up shrink-0" />
-          <span className="text-stock-up">🛡️ [철갑 홀딩 중] 가격 {unrealizedPnlPct.toFixed(1)}% 하락 중이나 지표 {score}점(≥60)으로 견고함 — 수익권 진입까지 절대 매도 금지</span>
+          <span className="text-stock-up">🛡️ [철갑 홀딩 중] 가격 {unrealizedPnlPct.toFixed(1)}% 하락 중이나 지표 {score}점(≥60)으로 견고 — 통계적 필승, 수익권까지 절대 매도 금지</span>
           <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-stock-up/40 text-stock-up ml-auto font-bold">
             🔒 No-Exit
           </Badge>
         </div>
       )}
-      {/* ★ 본절보호 완성 안내: SL이 매수가 위 */}
+      {/* ★ Zero-Loss 완성 안내: SL이 매수가 위 */}
       {(() => {
         const slAboveEntry = pos.stop_loss > pos.price;
         return slAboveEntry ? (
           <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-stock-up/10 border border-stock-up/20">
             <ShieldCheck className="w-3.5 h-3.5 text-stock-up shrink-0" />
-            <span className="text-stock-up">🔒 패배 확률 0% — 본절보호 완성 (SL: 매수가+{((pos.stop_loss / pos.price - 1) * 100).toFixed(1)}%)</span>
+            <span className="text-stock-up">🔒 Zero-Loss 무적 상태 — SL: 매수가+{((pos.stop_loss / pos.price - 1) * 100).toFixed(1)}% (손실 불가능)</span>
           </div>
         ) : null;
       })()}

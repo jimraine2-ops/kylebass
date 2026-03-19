@@ -160,13 +160,13 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             🛡️ 철갑 홀딩 | 일반 60점↑ / 동전주 65점↑ = 절대 매도 금지
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔒 일반 +1.5% / 동전주 +2.0% → 본절보호(패배 0%)
+            🔒 일반 +1.2% / 동전주 +2.0% → Zero-Loss(매수가+0.2%)
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🪙 동전주 $1미만 × 70점↑ = 최우선 물량선점
+            🪙 $9(₩12,000) 미만 저가주 전용 | 회전율 극대화
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🐋 저유동성 선취매 | 📦 분할잠입매집
+            👻 고스트 매집 | 데이장 선취매 → 정규장 30~50% 폭발
           </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
@@ -180,13 +180,12 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🪙 초저가주 필승 70점 & 90% 익절 전략 | 동전주 $1 미만 집중</p>
-          <p>🪙 $1.00 미만(₩2,000↓) 동전주 → 10대 지표 70점 돌파 시 최우선 물량 선점</p>
-          <p>🔒 동전주 +2.0% 도달 → SL 매수가+0.5% → 급락 리스크 원천 차단</p>
-          <p>🛡️ 동전주 지표 65점↑ → 흔들림 무시, 수익 전까지 무조건 철갑 홀딩</p>
-          <p>📡 데이/프리마켓 세력 매집 횡보 감지 → 익절확률 90%↑ 즉시 선매수</p>
-          <p>🎯 호가 한 칸 변동 = 큰 수익! 최대한 많은 주수 확보로 회전율 극대화</p>
-          <p className="text-yellow-400 font-medium">💰 일일 목표 ₩300,000 — 동전주 3종목 집중 투자</p>
+          <p className="font-medium text-yellow-400">👻 무결점 고스트 매집 & 100% 익절 전략 | $9(₩12,000) 미만 저가주 전용</p>
+          <p>🔒 +1.2% 도달 → SL 매수가+0.2% 강제 상향 → 무적 상태(Zero-Loss) 발동</p>
+          <p>🛡️ 지표 60점 이상 → 가격 하락 무관 절대 매도 금지 (No-Exit Policy)</p>
+          <p>👻 데이장/프리마켓 고스트 매집: 세력 매집 완료 패턴 → 100% 익절 선취매</p>
+          <p>🎯 Zero-Loss 후 수익 폭 무제한 → 정규장 30~50% 대시세까지 추격</p>
+          <p className="text-yellow-400 font-medium">💰 ₩12,000 미만 저가주 3종목 집중 | 호가 한 칸 = 큰 수익</p>
         </CardContent>
       </Card>
 

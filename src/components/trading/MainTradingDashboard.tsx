@@ -101,13 +101,13 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
             🛡️ 철갑 홀딩 | 지표 60점↑ = 절대 매도 금지
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔒 +1.5% → 본절보호(패배 0%) | 무제한 추격
+            🔒 +1.2% → Zero-Loss(매수가+0.2%) | 무적 상태
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🏆 100% 익절 목표 | 수익 전 매도 금지
+            👻 고스트 매집 | $9 미만 전용
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🐋 저유동성 선취매 | 📦 분할잠입매집
+            🎯 100% 익절 | 30~50% 대시세 추격
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
@@ -118,11 +118,11 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🛡️ 100% 익절 보장 철갑 홀딩 전략 | 승률 100% 목표</p>
-          <p>🔒 +1.5% 도달 → SL을 매수가+0.2%로 상향 → 이 시점부터 패배 확률 0%</p>
+          <p className="font-medium text-yellow-400">👻 무결점 고스트 매집 & 100% 익절 전략 | $9(₩12,000) 미만 저가주 전용</p>
+          <p>🔒 +1.2% 도달 → SL 매수가+0.2%로 강제 상향 → 무적 상태(Zero-Loss)</p>
           <p>🛡️ 지표 60점 이상 → 가격 하락 무관 절대 매도 금지 (No-Exit Policy)</p>
-          <p>📡 선취매: 에너지 응축 + 고래 매집 → 익절확률 90%↑ 즉시 선매수</p>
-          <p>🎯 본절가 보호 후 수익 폭 무제한 → 50만 원 목표 달성</p>
+          <p>👻 데이장/프리마켓: 차트 완성도 + 실적 모멘텀 + 익절확률 90% 동시 충족 → 즉시 100만 원 투입</p>
+          <p>🎯 Zero-Loss 후 수익 폭 무제한 → 정규장 30~50% 대시세까지 추격</p>
         </CardContent>
       </Card>
 

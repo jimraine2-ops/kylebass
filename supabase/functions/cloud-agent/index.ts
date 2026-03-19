@@ -9,14 +9,15 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 100; // ★ 동전주: 최저 100원까지 허용
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_KRW = 50000; // ★ 50,000원 미만 중소형주 포함
-const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $37
+const MAX_PRICE_KRW = 12000; // ★ ₩12,000 미만 = $9 미만 저가주 전용 (자산 회전율 극대화)
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $9
 const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
 const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
 const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
 const PENNY_BREAKEVEN_PCT = 2.0; // ★ 동전주 본절보호: +2%
 const PENNY_IRON_HOLD_SCORE = 65; // ★ 동전주 철갑 홀딩: 65점
 const PENNY_MAX_POSITIONS = 3; // ★ 동전주 최대 3종목 집중
+const GHOST_BREAKEVEN_PCT = 1.2; // ★ 고스트 매집: +1.2% 돌파 시 즉시 본절보호 (Zero-Loss)
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
@@ -1137,16 +1138,16 @@ Deno.serve(async (req) => {
         let closeReason = '';
         let newStatus = 'closed';
 
-        // ★ 무손실 본절가 보호: 동전주는 +2.0%, 일반은 +1.5% 도달 시 SL 상향 → 패배 확률 0%
+        // ★ Zero-Loss 가동: 일반 +1.2%, 동전주 +2.0% 도달 시 SL 매수가+0.2% → 무적 상태
         const isPennyPos = isPennyStock(pos.price);
-        const breakevenTrigger = isPennyPos ? PENNY_BREAKEVEN_PCT : 1.5;
-        const breakevenSLPct = isPennyPos ? 1.005 : 1.002; // 동전주: +0.5%, 일반: +0.2%
+        const breakevenTrigger = isPennyPos ? PENNY_BREAKEVEN_PCT : GHOST_BREAKEVEN_PCT;
+        const breakevenSLPct = 1.002; // ★ 공통: 매수가 +0.2% (Zero-Loss 가동)
         if (pnlPct >= breakevenTrigger && pos.stop_loss < pos.price * breakevenSLPct) {
           const bs = +(pos.price * breakevenSLPct).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
           const pennyTag = isPennyPos ? '🪙동전주' : '';
-          await addLog('unified', 'defense', sym, `[🔒패배확률0%] ${pennyTag} ${sym} +${pnlPct.toFixed(2)}% ≥ ${breakevenTrigger}% → SL=${fmtKRW(bs)} (매수가+${((breakevenSLPct-1)*100).toFixed(1)}%) 본절보호 완성! 이 거래 패배 불가 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2), isPenny: isPennyPos });
+          await addLog('unified', 'defense', sym, `[🔒Zero-Loss가동] ${pennyTag} ${sym} +${pnlPct.toFixed(2)}% ≥ ${breakevenTrigger}% → SL=${fmtKRW(bs)} (매수가+0.2%) 무적 상태! 이 거래 손실 불가능 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2), isPenny: isPennyPos });
         }
 
         // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
