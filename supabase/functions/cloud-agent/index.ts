@@ -1354,10 +1354,16 @@ Deno.serve(async (req) => {
         }
 
         // 3. ★ 철갑 홀딩: 지표 60점 이상이면 수익 확정 전까지 절대 매도 금지
+        // ★ [Iron-Hold] 익절확률 90% 이상이면 자동 매도 일절 금지
+        const winProbNow = getWinProbability(quantScore);
         if (!shouldClose) {
+          // ★ 익절확률 90%+ = 무제한 홀딩 (매도 금지 조건)
+          if (winProbNow >= 90 && pnlPct < 0) {
+            await addLog('unified', 'hold', sym, `[🛡️패배제로홀딩] ${sym} 가격 -${Math.abs(pnlPct).toFixed(2)}% 하락 BUT 익절확률 ${winProbNow}%(≥90%) → 자동매도 일절 금지! 지표 붕괴까지 끝까지 홀딩`, { quantScore, winProb: winProbNow, pnlPct: +pnlPct.toFixed(2) });
+          }
           // ★ 철갑 홀딩: 지표 60점 이상 → 가격 하락 무관 "통계적으로 반드시 이긴다"
-          if (indicatorsIronHold && pnlPct < 0) {
-            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩] ${sym} 가격 -${Math.abs(pnlPct).toFixed(2)}% 하락 중이나 지표 ${quantScore}점(≥60)으로 견고함 — 필승 홀딩 중. 일시적 눌림목으로 간주, 수익권(+3%~50%) 진입까지 끝까지 홀딩`, { quantScore, condensation: accumInfo?.condensation, pattern: accumInfo?.pattern, pnlPct: +pnlPct.toFixed(2) });
+          else if (indicatorsIronHold && pnlPct < 0) {
+            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩] ${sym} 가격 -${Math.abs(pnlPct).toFixed(2)}% 하락 중이나 지표 ${quantScore}점(≥60)으로 견고함 — 필승 홀딩 중. 수익권(+3%~50%) 진입까지 끝까지 홀딩`, { quantScore, condensation: accumInfo?.condensation, pattern: accumInfo?.pattern, pnlPct: +pnlPct.toFixed(2) });
           }
           // ★ Iron Hold: 필승 패턴(응축도≥6 + 지표≥50) → 일시적 하락 무시
           else if (isIronHold && pnlPct < 0) {
