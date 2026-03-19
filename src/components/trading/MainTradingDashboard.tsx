@@ -98,16 +98,16 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🛡️ 철갑 홀딩 | 지표 60점↑ = 절대 매도 금지
+            🛡️ 패배제로 홀딩 | 익절확률 90%↑ = 매도 금지
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔒 +1.2% → Zero-Loss(매수가+0.2%) | 무적 상태
+            🔒 +0.8% → Zero-Risk Lock(매수가+0.1%)
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            👻 고스트 매집 | $9 미만 전용
+            📰 Finnhub 뉴스 감성 동기화
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🎯 100% 익절 | 30~50% 대시세 추격
+            🎯 정예 5종목 | 30~50% 추격
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
