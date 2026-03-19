@@ -15,18 +15,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 import { formatStockName } from "@/lib/koreanStockMap";
 
-function useEarningsWatch() {
-  return useQuery({
-    queryKey: ['earnings-watch'],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('earnings-watch');
-      if (error) throw error;
-      return data;
-    },
-    refetchInterval: 5 * 60 * 1000,
-    staleTime: 2 * 60 * 1000,
-  });
-}
+
+
 
 export default function Dashboard() {
   const { data: unifiedData, isLoading: portfolioLoading } = useUnifiedPortfolio();
