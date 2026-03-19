@@ -1237,16 +1237,17 @@ Deno.serve(async (req) => {
           }
         }
 
-        // 2. ★ [철갑 홀딩] SL 터치 — 지표 60점 이상이면 절대 매도 금지 (No-Exit Policy)
-        const indicatorsIronHold = quantScore >= 60; // ★ 철갑 홀딩 기준: 60점
+        // 2. ★ [철갑 홀딩] SL 터치 — 동전주: 65점, 일반: 60점 이상이면 절대 매도 금지
+        const ironHoldThreshold = isPennyPos ? PENNY_IRON_HOLD_SCORE : 60;
+        const indicatorsIronHold = quantScore >= ironHoldThreshold;
         if (!shouldClose && pos.stop_loss && price <= pos.stop_loss) {
           if (pnlPct >= 0) {
             shouldClose = true;
             closeReason = `[본절방어] [${sessionLabel}] [${timeStr}] [${sym}] 본절가 터치 (${quantScore}점)`;
             newStatus = 'breakeven_exit';
           } else if (indicatorsIronHold) {
-            // ★ 철갑 홀딩: 지표 60점 이상이면 하락폭 무관 절대 홀딩 — "이 종목은 통계적으로 반드시 이긴다"
-            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩] ${sym} -${Math.abs(pnlPct).toFixed(2)}% 하락 중이나 지표 ${quantScore}점(≥60)으로 견고함 — 필승 홀딩 중. 수익권(+3%~50%) 진입까지 절대 매도 금지`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold });
+            const pennyTag = isPennyPos ? '🪙동전주' : '';
+            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩] ${pennyTag} ${sym} -${Math.abs(pnlPct).toFixed(2)}% 하락 중이나 지표 ${quantScore}점(≥${ironHoldThreshold})으로 견고함 — 필승 홀딩 중. 수익권(+3%~50%) 진입까지 절대 매도 금지`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold, isPenny: isPennyPos });
           } else if (pnlPct > -10 && quantScore >= 50) {
             // ★ 50~59점: 일반 홀딩
             await addLog('unified', 'hold', sym, `[변동성 구간: 지표 기반 홀딩] ${sym} -${Math.abs(pnlPct).toFixed(2)}% | 지표 ${quantScore}점(≥50) → 대시세 대기`, { quantScore, metCount, pnlPct: +pnlPct.toFixed(2), coreIntact, isIronHold });
