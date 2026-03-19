@@ -809,7 +809,7 @@ async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: strin
   const allSymbols = [...allKnown, ...dynamicPool];
   
   // ★ 확장 샘플: 200개로 증가 (기존 100 → 200)
-  const sampleSize = 200;
+  const sampleSize = 20; // ★ 타임아웃 방지: 최소 샘플링
   const cycleOffset = Math.floor(Math.random() * allSymbols.length);
   const sample: string[] = [];
   for (let i = 0; i < Math.min(sampleSize, allSymbols.length); i++) {
@@ -828,7 +828,7 @@ async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: strin
       const tradingValue = vol * price;
       leaders.push({ symbol: r.symbol, volume: vol, changePct, tradingValue });
     }
-    if (i + 5 < sample.length) await new Promise(r => setTimeout(r, 200));
+    if (i + 5 < sample.length) await new Promise(r => setTimeout(r, 100)); // ★ 200ms→100ms
   }
   
   // Sort by trading value (거래대금) descending
@@ -885,13 +885,11 @@ Deno.serve(async (req) => {
     const entryRelax = sessionInfo.entryRelax;
     const sessionRvolMin = 2.0;
 
-    // ★ 전 종목 동적 발견: Finnhub에서 미국 상장 전 종목 심볼 갱신
-    try {
-      const discovered = await discoverAllUSStocks();
-      if (discovered.length > 0) {
-        await addLog('system', 'scan', null, `[🌐전종목스캔] Finnhub 전 종목 심볼 ${discovered.length}개 동적 발견 (기존 ${LARGE_SET.size}+${SMALL_SET.size} + 신규 ${discovered.length} = ${LARGE_SET.size + SMALL_SET.size + discovered.length}개 전수조사 풀)`, {});
-      }
-    } catch { /* non-critical */ }
+    // ★ 전 종목 동적 발견: 비활성화 (타임아웃 방지 — 기존 풀 443개로 충분)
+    // try {
+    //   const discovered = await discoverAllUSStocks();
+    //   ...
+    // } catch { }
     const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
 
     // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
@@ -928,9 +926,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Fill 150 active slots — ★ 확장: 60 대형 + 90 소형 = 150개 슬롯
-    const LARGE_SLOTS = 60;
-    const SMALL_SLOTS = 90;
+    // Step 2: Fill 30 active slots — ★ 타임아웃 방지: 15 대형 + 15 소형 = 30개 정예 슬롯
+    const LARGE_SLOTS = 15;
+    const SMALL_SLOTS = 15;
 
     const currentLarge: string[] = [];
     const currentSmall: string[] = [];
@@ -961,7 +959,7 @@ Deno.serve(async (req) => {
     // ★ 전 종목 확장: 동적 발견 종목에서도 슬롯 충전
     const dynSymbols = discoveredSymbols.length > 0 ? discoveredSymbols : [];
     const dynStart = (cycleCount * 50) % Math.max(1, dynSymbols.length);
-    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(50, dynSymbols.length); i++) {
+    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(20, dynSymbols.length); i++) {
       const sym = dynSymbols[(dynStart + i) % dynSymbols.length];
       if (!activeUnifiedList.has(sym)) {
         activeUnifiedList.add(sym);
@@ -1460,33 +1458,7 @@ Deno.serve(async (req) => {
       await new Promise(r => setTimeout(r, 200));
     }
 
-    // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
-    if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS) {
-      dipBuyCandidates.sort((a, b) => b.scoring.totalScore - a.scoring.totalScore);
-      for (const dip of dipBuyCandidates.slice(0, 2)) {
-        const maxKRW = balance * 0.05;
-        const priceKRW = toKRW(dip.price);
-        const qty = Math.floor(maxKRW / priceKRW);
-        const costKRW = Math.floor(qty * priceKRW);
-        if (qty <= 0 || costKRW > balance) continue;
-        const ap = applySessionSlippage(dip.price, 'buy', spreadMul, sessionSlippage);
-        const sl = +(ap * 0.90).toFixed(4);
-        const tp = +(ap * 1.15).toFixed(4);
-        const bb = Math.round(balance);
-        const nb = balance - costKRW;
-        const msg = `[역발상추매] [${sessionLabel}] [${timeStr}] ${dip.sym} ${dip.scoring.totalScore}점(${dip.scoring.metCount}/10) 눌림 추매 [${qty}주@${fmtKRW(ap)}|${fmtKRWRaw(costKRW)}] [잔고: ${fmtKRWRaw(bb)}→${fmtKRWRaw(nb)}]`;
-        await supabase.from('unified_trades').insert({
-          symbol: dip.sym, side: 'buy', quantity: qty, price: ap,
-          stop_loss: sl, take_profit: tp, status: 'open',
-          cap_type: dip.capType, entry_score: dip.scoring.totalScore,
-          ai_reason: msg, ai_confidence: dip.scoring.totalScore,
-        });
-        await supabase.from('unified_wallet').update({ balance: nb, updated_at: now.toISOString() }).eq('id', wallet.id);
-        balance = nb;
-        openCount++;
-        await addLog('unified', 'buy', dip.sym, msg, { type: 'dip_buy', score: dip.scoring.totalScore });
-      }
-    }
+    // ★ 역발상 추매: openCount 선언 후 실행 (아래 ENTRY SCAN 이후로 이동)
 
     // ========== 일일 수익 목표 체크 (₩300,000) ==========
     const todayStart = new Date(now);
@@ -1633,28 +1605,13 @@ Deno.serve(async (req) => {
             await addLog('unified', 'scan', r.sym, `[데이장 선취매] 에너지 응축 패턴 확인. 거래량 無해도 지표 발산 직전! ${r.sym} 미리 매수합니다. | 매집패턴: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation });
           }
 
-          // ★ 뉴스 감성 분석: 진입 후보에 대해 Finnhub 뉴스 긍정도 체크
-          let newsSentimentScore = 50;
-          try {
-            const news = await getNewsSentiment(r.sym);
-            newsSentimentScore = news.bullishPct;
-            (r as any).newsSentiment = newsSentimentScore;
-            (r as any).newsCount = news.newsCount;
-            if (news.newsCount > 0) {
-              const sentLabel = newsSentimentScore >= 80 ? '🟢강세' : newsSentimentScore >= 60 ? '🟡긍정' : newsSentimentScore >= 40 ? '⚪중립' : '🔴약세';
-              await addLog('unified', 'scan', r.sym, `[📰뉴스감성] ${r.sym} ${sentLabel} ${newsSentimentScore}% (${news.newsCount}건) | ${news.headline?.slice(0, 50) || ''}`, { sentiment: newsSentimentScore, newsCount: news.newsCount });
-            }
-          } catch { /* non-critical */ }
-
-          // ★ 뉴스+지표 동기화 필터: 뉴스 약세(40% 미만) + 지표 70점 미만 → 차단
-          if (newsSentimentScore < 40 && r.scoring.totalScore < 70 && !(r as any).hasCriticalPattern) {
-            await addLog('unified', 'scan', r.sym, `[🚫뉴스차단] ${r.sym} 뉴스 약세(${newsSentimentScore}%) + 지표 ${r.scoring.totalScore}점 < 70 → 진입 보류`, {});
-            continue;
-          }
+          // ★ 뉴스 감성은 최종 후보 선정 후 분석 (타임아웃 방지)
+          (r as any).newsSentiment = 50;
+          (r as any).newsCount = 0;
 
           candidates.push(r);
         }
-        if (i + 5 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 300));
+        if (i + 5 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 150)); // ★ 300→150ms
       }
     }
 
@@ -1723,8 +1680,30 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
+    // ★ 뉴스 감성 분석: 상위 10개 후보에만 적용 (타임아웃 방지)
+    const preFilteredTop = candidates.slice(0, 10);
+    for (const c of preFilteredTop) {
+      try {
+        const news = await getNewsSentiment(c.sym);
+        (c as any).newsSentiment = news.bullishPct;
+        (c as any).newsCount = news.newsCount;
+        if (news.newsCount > 0) {
+          const sentLabel = news.bullishPct >= 80 ? '🟢강세' : news.bullishPct >= 60 ? '🟡긍정' : news.bullishPct >= 40 ? '⚪중립' : '🔴약세';
+          await addLog('unified', 'scan', c.sym, `[📰뉴스감성] ${c.sym} ${sentLabel} ${news.bullishPct}% (${news.newsCount}건) | ${news.headline?.slice(0, 50) || ''}`, { sentiment: news.bullishPct, newsCount: news.newsCount });
+        }
+      } catch { /* non-critical */ }
+      
+      // ★ 뉴스+지표 동기화 필터: 뉴스 약세(40% 미만) + 지표 70점 미만 → 차단
+      const newsSent = (c as any).newsSentiment || 50;
+      if (newsSent < 40 && c.scoring.totalScore < 70 && !(c as any).hasCriticalPattern) {
+        await addLog('unified', 'scan', c.sym, `[🚫뉴스차단] ${c.sym} 뉴스 약세(${newsSent}%) + 지표 ${c.scoring.totalScore}점 < 70 → 진입 보류`, {});
+        (c as any)._newsBlocked = true;
+      }
+    }
+
     // ★ 정예 1~5선 집중 투자: 필승 패턴 or (65점+90%익절확률+뉴스긍정) 확정 후보만
     const filteredCandidates = candidates.filter(c => {
+      if ((c as any)._newsBlocked) return false;
       const winProb = getWinProbability(c.scoring.totalScore);
       const hasCritical = (c as any).hasCriticalPattern;
       const newsSent = (c as any).newsSentiment || 50;
@@ -1837,7 +1816,35 @@ Deno.serve(async (req) => {
       await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry, isPenny: isPennyEntry });
     }
 
-    // ========== AUTO-REPLACEMENT ==========
+    // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
+    if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS) {
+      dipBuyCandidates.sort((a, b) => b.scoring.totalScore - a.scoring.totalScore);
+      for (const dip of dipBuyCandidates.slice(0, 2)) {
+        const maxKRW = balance * 0.05;
+        const priceKRW = toKRW(dip.price);
+        const qty = Math.floor(maxKRW / priceKRW);
+        const costKRW = Math.floor(qty * priceKRW);
+        if (qty <= 0 || costKRW > balance) continue;
+        const ap = applySessionSlippage(dip.price, 'buy', spreadMul, sessionSlippage);
+        const sl = +(ap * 0.90).toFixed(4);
+        const tp = +(ap * 1.15).toFixed(4);
+        const bb = Math.round(balance);
+        const nb = balance - costKRW;
+        const msg = `[역발상추매] [${sessionLabel}] [${timeStr}] ${dip.sym} ${dip.scoring.totalScore}점(${dip.scoring.metCount}/10) 눌림 추매 [${qty}주@${fmtKRW(ap)}|${fmtKRWRaw(costKRW)}] [잔고: ${fmtKRWRaw(bb)}→${fmtKRWRaw(nb)}]`;
+        await supabase.from('unified_trades').insert({
+          symbol: dip.sym, side: 'buy', quantity: qty, price: ap,
+          stop_loss: sl, take_profit: tp, status: 'open',
+          cap_type: dip.capType, entry_score: dip.scoring.totalScore,
+          ai_reason: msg, ai_confidence: dip.scoring.totalScore,
+        });
+        await supabase.from('unified_wallet').update({ balance: nb, updated_at: now.toISOString() }).eq('id', wallet.id);
+        balance = nb;
+        openCount++;
+        await addLog('unified', 'buy', dip.sym, msg, { type: 'dip_buy', score: dip.scoring.totalScore });
+      }
+    }
+
+
     {
       const refreshedOpenPos = (await supabase.from('unified_trades').select('*').eq('status', 'open')).data || [];
       for (const pos of refreshedOpenPos) {
