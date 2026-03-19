@@ -14,10 +14,11 @@ const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $9
 const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
 const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
 const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
-const PENNY_BREAKEVEN_PCT = 2.0; // ★ 동전주 본절보호: +2%
+const PENNY_BREAKEVEN_PCT = 1.0; // ★ 동전주 본절보호: +1.0% (강화)
 const PENNY_IRON_HOLD_SCORE = 65; // ★ 동전주 철갑 홀딩: 65점
 const PENNY_MAX_POSITIONS = 3; // ★ 동전주 최대 3종목 집중
-const GHOST_BREAKEVEN_PCT = 1.2; // ★ 고스트 매집: +1.2% 돌파 시 즉시 본절보호 (Zero-Loss)
+const GHOST_BREAKEVEN_PCT = 0.8; // ★ Zero-Risk Lock: +0.8% 돌파 시 즉시 SL→매수가+0.1% (패배 원천 차단)
+const ZERO_RISK_SL_PCT = 1.001; // ★ Zero-Risk Lock SL: 매수가 +0.1% (패배 기록 0 유지)
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
@@ -701,6 +702,81 @@ function getWinProbability(score: number): number {
   return 15;
 }
 
+// ===== Finnhub 뉴스 감성 분석 (News Sentiment) =====
+const newsSentimentCache: Map<string, { sentiment: number; bullish: number; count: number; ts: number }> = new Map();
+const NEWS_CACHE_TTL = 300000; // 5분 캐시
+
+async function getNewsSentiment(symbol: string): Promise<{ sentiment: number; bullishPct: number; newsCount: number; headline: string }> {
+  const cached = newsSentimentCache.get(symbol);
+  if (cached && Date.now() - cached.ts < NEWS_CACHE_TTL) {
+    return { sentiment: cached.sentiment, bullishPct: cached.bullish, newsCount: cached.count, headline: '' };
+  }
+  
+  try {
+    const today = new Date();
+    const from = new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const to = today.toISOString().split('T')[0];
+    const data = await finnhubFetch(`/company-news?symbol=${symbol}&from=${from}&to=${to}`);
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return { sentiment: 50, bullishPct: 50, newsCount: 0, headline: '' };
+    }
+    
+    const BULLISH_KEYWORDS = ['surge', 'soar', 'jump', 'rally', 'gain', 'rise', 'bull', 'upgrade', 'beat', 'strong', 'record', 'breakout', 'momentum', 'growth', 'profit', 'positive', 'outperform', 'buy', 'up', 'high', 'boom'];
+    const BEARISH_KEYWORDS = ['crash', 'plunge', 'drop', 'fall', 'decline', 'bear', 'downgrade', 'miss', 'weak', 'loss', 'risk', 'warning', 'sell', 'down', 'low', 'cut', 'negative', 'concern'];
+    
+    let bullishCount = 0;
+    let bearishCount = 0;
+    const recentNews = data.slice(0, 20); // 최근 20개만 분석
+    
+    for (const article of recentNews) {
+      const text = ((article.headline || '') + ' ' + (article.summary || '')).toLowerCase();
+      const bullHits = BULLISH_KEYWORDS.filter(kw => text.includes(kw)).length;
+      const bearHits = BEARISH_KEYWORDS.filter(kw => text.includes(kw)).length;
+      if (bullHits > bearHits) bullishCount++;
+      else if (bearHits > bullHits) bearishCount++;
+    }
+    
+    const totalAnalyzed = bullishCount + bearishCount || 1;
+    const bullishPct = Math.round((bullishCount / totalAnalyzed) * 100);
+    const sentiment = bullishPct; // 0~100: 100=완전강세
+    
+    newsSentimentCache.set(symbol, { sentiment, bullish: bullishPct, count: recentNews.length, ts: Date.now() });
+    return { sentiment, bullishPct, newsCount: recentNews.length, headline: recentNews[0]?.headline || '' };
+  } catch {
+    return { sentiment: 50, bullishPct: 50, newsCount: 0, headline: '' };
+  }
+}
+
+// ===== 시장 전체 뉴스 감성 스캔 (Market-Wide News Pulse) =====
+async function getMarketNewsPulse(): Promise<{ overall: number; topBullish: string[]; topBearish: string[] }> {
+  try {
+    const data = await finnhubFetch(`/news?category=general`);
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return { overall: 50, topBullish: [], topBearish: [] };
+    }
+    
+    const BULLISH = ['surge', 'rally', 'gain', 'bull', 'record', 'growth', 'beat', 'strong', 'boom', 'breakout'];
+    const BEARISH = ['crash', 'plunge', 'bear', 'decline', 'risk', 'warning', 'recession', 'weak', 'sell', 'fear'];
+    
+    let bullCount = 0, bearCount = 0;
+    const recentNews = data.slice(0, 30);
+    
+    for (const article of recentNews) {
+      const text = ((article.headline || '') + ' ' + (article.summary || '')).toLowerCase();
+      const bHits = BULLISH.filter(kw => text.includes(kw)).length;
+      const brHits = BEARISH.filter(kw => text.includes(kw)).length;
+      if (bHits > brHits) bullCount++;
+      else if (brHits > bHits) bearCount++;
+    }
+    
+    const total = bullCount + bearCount || 1;
+    const overall = Math.round((bullCount / total) * 100);
+    return { overall, topBullish: [], topBearish: [] };
+  } catch {
+    return { overall: 50, topBullish: [], topBearish: [] };
+  }
+}
+
 // ===== Score Surge Detection (점수 급상승 감지) =====
 const previousScores: Map<string, number> = new Map();
 function detectScoreSurge(symbol: string, currentScore: number): { isSurge: boolean; prevScore: number; delta: number } {
@@ -1032,6 +1108,15 @@ Deno.serve(async (req) => {
       await addLog('system', 'info', null, `[시장동기화] SPY ${spyChange.toFixed(2)}% / QQQ ${qqqChange.toFixed(2)}% → QQQ보너스 -${qqqBonus}점, 진입기준 ${baseEntryThreshold}점`, { spyChange, qqqChange, qqqBonus });
     } catch { /* fallback */ }
 
+    // ★ 시장 전체 뉴스 감성 분석 (Market News Pulse)
+    let marketNewsPulse = 50;
+    try {
+      const pulse = await getMarketNewsPulse();
+      marketNewsPulse = pulse.overall;
+      const sentiment = marketNewsPulse >= 70 ? '🟢강세' : marketNewsPulse >= 50 ? '🟡중립' : '🔴약세';
+      await addLog('system', 'info', null, `[📰뉴스펄스] 미국 시장 전체 뉴스 감성: ${sentiment} ${marketNewsPulse}% (긍정률)`, { marketNewsPulse });
+    } catch { /* non-critical */ }
+
     // --- Dynamic win-rate threshold ---
     const { data: recentTrades } = await supabase
       .from('unified_trades')
@@ -1141,13 +1226,13 @@ Deno.serve(async (req) => {
         // ★ Zero-Loss 가동: 일반 +1.2%, 동전주 +2.0% 도달 시 SL 매수가+0.2% → 무적 상태
         const isPennyPos = isPennyStock(pos.price);
         const breakevenTrigger = isPennyPos ? PENNY_BREAKEVEN_PCT : GHOST_BREAKEVEN_PCT;
-        const breakevenSLPct = 1.002; // ★ 공통: 매수가 +0.2% (Zero-Loss 가동)
+        const breakevenSLPct = ZERO_RISK_SL_PCT; // ★ Zero-Risk Lock: 매수가 +0.1% (패배 기록 원천 차단)
         if (pnlPct >= breakevenTrigger && pos.stop_loss < pos.price * breakevenSLPct) {
           const bs = +(pos.price * breakevenSLPct).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: bs }).eq('id', pos.id);
           pos.stop_loss = bs;
           const pennyTag = isPennyPos ? '🪙동전주' : '';
-          await addLog('unified', 'defense', sym, `[🔒Zero-Loss가동] ${pennyTag} ${sym} +${pnlPct.toFixed(2)}% ≥ ${breakevenTrigger}% → SL=${fmtKRW(bs)} (매수가+0.2%) 무적 상태! 이 거래 손실 불가능 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2), isPenny: isPennyPos });
+          await addLog('unified', 'defense', sym, `[🔒Zero-Risk Lock] ${pennyTag} ${sym} +${pnlPct.toFixed(2)}% ≥ ${breakevenTrigger}% → SL=${fmtKRW(bs)} (매수가+0.1%) 패배 불가능! 이 거래 절대 손실 없음 | ${quantScore}점`, { quantScore, pnlPct: +pnlPct.toFixed(2), isPenny: isPennyPos });
         }
 
         // 1. 익절 로직 — ★ 전 종목 TP +15%, 지표 강력 시 30~50% 대시세까지 트레일링 추격
@@ -1269,10 +1354,16 @@ Deno.serve(async (req) => {
         }
 
         // 3. ★ 철갑 홀딩: 지표 60점 이상이면 수익 확정 전까지 절대 매도 금지
+        // ★ [Iron-Hold] 익절확률 90% 이상이면 자동 매도 일절 금지
+        const winProbNow = getWinProbability(quantScore);
         if (!shouldClose) {
+          // ★ 익절확률 90%+ = 무제한 홀딩 (매도 금지 조건)
+          if (winProbNow >= 90 && pnlPct < 0) {
+            await addLog('unified', 'hold', sym, `[🛡️패배제로홀딩] ${sym} 가격 -${Math.abs(pnlPct).toFixed(2)}% 하락 BUT 익절확률 ${winProbNow}%(≥90%) → 자동매도 일절 금지! 지표 붕괴까지 끝까지 홀딩`, { quantScore, winProb: winProbNow, pnlPct: +pnlPct.toFixed(2) });
+          }
           // ★ 철갑 홀딩: 지표 60점 이상 → 가격 하락 무관 "통계적으로 반드시 이긴다"
-          if (indicatorsIronHold && pnlPct < 0) {
-            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩] ${sym} 가격 -${Math.abs(pnlPct).toFixed(2)}% 하락 중이나 지표 ${quantScore}점(≥60)으로 견고함 — 필승 홀딩 중. 일시적 눌림목으로 간주, 수익권(+3%~50%) 진입까지 끝까지 홀딩`, { quantScore, condensation: accumInfo?.condensation, pattern: accumInfo?.pattern, pnlPct: +pnlPct.toFixed(2) });
+          else if (indicatorsIronHold && pnlPct < 0) {
+            await addLog('unified', 'hold', sym, `[🛡️철갑홀딩] ${sym} 가격 -${Math.abs(pnlPct).toFixed(2)}% 하락 중이나 지표 ${quantScore}점(≥60)으로 견고함 — 필승 홀딩 중. 수익권(+3%~50%) 진입까지 끝까지 홀딩`, { quantScore, condensation: accumInfo?.condensation, pattern: accumInfo?.pattern, pnlPct: +pnlPct.toFixed(2) });
           }
           // ★ Iron Hold: 필승 패턴(응축도≥6 + 지표≥50) → 일시적 하락 무시
           else if (isIronHold && pnlPct < 0) {
@@ -1542,6 +1633,25 @@ Deno.serve(async (req) => {
             await addLog('unified', 'scan', r.sym, `[데이장 선취매] 에너지 응축 패턴 확인. 거래량 無해도 지표 발산 직전! ${r.sym} 미리 매수합니다. | 매집패턴: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation });
           }
 
+          // ★ 뉴스 감성 분석: 진입 후보에 대해 Finnhub 뉴스 긍정도 체크
+          let newsSentimentScore = 50;
+          try {
+            const news = await getNewsSentiment(r.sym);
+            newsSentimentScore = news.bullishPct;
+            (r as any).newsSentiment = newsSentimentScore;
+            (r as any).newsCount = news.newsCount;
+            if (news.newsCount > 0) {
+              const sentLabel = newsSentimentScore >= 80 ? '🟢강세' : newsSentimentScore >= 60 ? '🟡긍정' : newsSentimentScore >= 40 ? '⚪중립' : '🔴약세';
+              await addLog('unified', 'scan', r.sym, `[📰뉴스감성] ${r.sym} ${sentLabel} ${newsSentimentScore}% (${news.newsCount}건) | ${news.headline?.slice(0, 50) || ''}`, { sentiment: newsSentimentScore, newsCount: news.newsCount });
+            }
+          } catch { /* non-critical */ }
+
+          // ★ 뉴스+지표 동기화 필터: 뉴스 약세(40% 미만) + 지표 70점 미만 → 차단
+          if (newsSentimentScore < 40 && r.scoring.totalScore < 70 && !(r as any).hasCriticalPattern) {
+            await addLog('unified', 'scan', r.sym, `[🚫뉴스차단] ${r.sym} 뉴스 약세(${newsSentimentScore}%) + 지표 ${r.scoring.totalScore}점 < 70 → 진입 보류`, {});
+            continue;
+          }
+
           candidates.push(r);
         }
         if (i + 5 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 300));
@@ -1613,15 +1723,20 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 정예 1~5선 집중 투자: 필승 패턴 or (65점+90%익절확률) 확정 후보만
+    // ★ 정예 1~5선 집중 투자: 필승 패턴 or (65점+90%익절확률+뉴스긍정) 확정 후보만
     const filteredCandidates = candidates.filter(c => {
       const winProb = getWinProbability(c.scoring.totalScore);
       const hasCritical = (c as any).hasCriticalPattern;
+      const newsSent = (c as any).newsSentiment || 50;
+      // ★ 뉴스+지표 95% 일치 시 최우선 진입
+      const newsBoost = newsSent >= 80 && winProb >= 90;
       // 필승 패턴 감지 시: 50점 이상 + 패턴 익절확률 90%+ → 즉시 진입
       if (hasCritical) {
         const patternConf = (c as any).criticalPatternConfidence || 0;
         return patternConf >= 90 || (c.scoring.totalScore >= 65 && winProb >= 90);
       }
+      // ★ 뉴스 강세(80%+) + 지표 65점+ = 확정적 익절 → 즉시 투입
+      if (newsBoost) return true;
       // 일반 진입: 65점+ & 90% 이상
       return c.scoring.totalScore >= 65 && winProb >= 90;
     });
@@ -1697,7 +1812,8 @@ Deno.serve(async (req) => {
       // ★ 필승 패턴 알림
       if (isCriticalPatternEntry) {
         const breakevenLabel = isPennyEntry ? `+${PENNY_BREAKEVEN_PCT}%` : `+${GHOST_BREAKEVEN_PCT}%`;
-        await addLog('unified', 'milestone', r.sym, `🎯 [필승 패턴 매수 완료] ${r.sym} [${(r as any).criticalPatterns.join('+')}] 익절확률 ${(r as any).criticalPatternConfidence}% | ${breakevenLabel} 도달 시 Zero-Loss 본절보호(매수가+0.2%) → 100% 익절 보장 설계`, { criticalPatterns: r.scoring.criticalPatterns, score: r.scoring.totalScore });
+        const newsTag = (r as any).newsSentiment >= 80 ? ` | 📰뉴스강세${(r as any).newsSentiment}%` : '';
+        await addLog('unified', 'milestone', r.sym, `🎯 [필승 패턴 매수 완료] ${r.sym} [${(r as any).criticalPatterns.join('+')}] 익절확률 ${(r as any).criticalPatternConfidence}% | ${breakevenLabel} 도달 시 Zero-Risk Lock(매수가+0.1%) → 패배 기록 0 보장${newsTag}`, { criticalPatterns: r.scoring.criticalPatterns, score: r.scoring.totalScore, newsSentiment: (r as any).newsSentiment });
       }
       // ★ 슈퍼 패턴 알림
       if (isSuperEntry) {

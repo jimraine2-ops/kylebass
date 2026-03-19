@@ -98,16 +98,16 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🛡️ 철갑 홀딩 | 지표 60점↑ = 절대 매도 금지
+            🛡️ 패배제로 홀딩 | 익절확률 90%↑ = 매도 금지
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔒 +1.2% → Zero-Loss(매수가+0.2%) | 무적 상태
+            🔒 +0.8% → Zero-Risk Lock(매수가+0.1%)
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            👻 고스트 매집 | $9 미만 전용
+            📰 Finnhub 뉴스 감성 동기화
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🎯 100% 익절 | 30~50% 대시세 추격
+            🎯 정예 5종목 | 30~50% 추격
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
@@ -118,11 +118,11 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">👻 무결점 고스트 매집 & 100% 익절 전략 | $9(₩12,000) 미만 저가주 전용</p>
-          <p>🔒 +1.2% 도달 → SL 매수가+0.2%로 강제 상향 → 무적 상태(Zero-Loss)</p>
-          <p>🛡️ 지표 60점 이상 → 가격 하락 무관 절대 매도 금지 (No-Exit Policy)</p>
-          <p>👻 데이장/프리마켓: 차트 완성도 + 실적 모멘텀 + 익절확률 90% 동시 충족 → 즉시 100만 원 투입</p>
-          <p>🎯 Zero-Loss 후 수익 폭 무제한 → 정규장 30~50% 대시세까지 추격</p>
+          <p className="font-medium text-yellow-400">🏆 패배 제로 & 필승 홀딩 시스템 | 뉴스+지표 동기화 매매</p>
+          <p>🔒 +0.8% 도달 → SL 매수가+0.1% 강제 고정 → 패배 기록 원천 차단 (Zero-Risk Lock)</p>
+          <p>🛡️ 익절 확률 90%+ → 자동 매도 일절 금지 | 지표 붕괴까지 무제한 홀딩</p>
+          <p>📰 Finnhub 뉴스 감성 분석: 긍정 80%+ 확인 → 즉시 선취매</p>
+          <p>🎯 정예 5종목 집중 운용 | 30~50% 대시세까지 추격</p>
         </CardContent>
       </Card>
 
