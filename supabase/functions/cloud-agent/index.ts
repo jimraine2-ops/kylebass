@@ -1717,15 +1717,20 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 정예 1~5선 집중 투자: 필승 패턴 or (65점+90%익절확률) 확정 후보만
+    // ★ 정예 1~5선 집중 투자: 필승 패턴 or (65점+90%익절확률+뉴스긍정) 확정 후보만
     const filteredCandidates = candidates.filter(c => {
       const winProb = getWinProbability(c.scoring.totalScore);
       const hasCritical = (c as any).hasCriticalPattern;
+      const newsSent = (c as any).newsSentiment || 50;
+      // ★ 뉴스+지표 95% 일치 시 최우선 진입
+      const newsBoost = newsSent >= 80 && winProb >= 90;
       // 필승 패턴 감지 시: 50점 이상 + 패턴 익절확률 90%+ → 즉시 진입
       if (hasCritical) {
         const patternConf = (c as any).criticalPatternConfidence || 0;
         return patternConf >= 90 || (c.scoring.totalScore >= 65 && winProb >= 90);
       }
+      // ★ 뉴스 강세(80%+) + 지표 65점+ = 확정적 익절 → 즉시 투입
+      if (newsBoost) return true;
       // 일반 진입: 65점+ & 90% 이상
       return c.scoring.totalScore >= 65 && winProb >= 90;
     });
