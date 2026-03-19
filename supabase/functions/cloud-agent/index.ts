@@ -1458,8 +1458,8 @@ Deno.serve(async (req) => {
       await new Promise(r => setTimeout(r, 200));
     }
 
-    // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
-    if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS) {
+    // ★ 역발상 추매 실행 (Dip-Buy Pyramiding) — openCount는 아래 ENTRY SCAN 후 실행
+    // (moved after openCount declaration)
       dipBuyCandidates.sort((a, b) => b.scoring.totalScore - a.scoring.totalScore);
       for (const dip of dipBuyCandidates.slice(0, 2)) {
         const maxKRW = balance * 0.05;
