@@ -157,16 +157,16 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             </Badge>
           )}
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🛡️ 패배제로 홀딩 | 익절확률 90%↑ = 자동매도 금지
+            🛡️ Zero-Loss | 0.8% → 매수가+0.1% 고정
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔒 +0.8% → Zero-Risk Lock(매수가+0.1%) | 패배 기록 0
+            🔒 Iron-Hold | 익절확률 90%↑ = 매도 금지
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            📰 Finnhub 뉴스 감성 분석 | 긍정 80%↑ 동기화 진입
+            📰 Finnhub 뉴스 85%↑ + Twelve Data 지표 수렴
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🎯 정예 5종목 집중 | 30~50% 대시세 추격
+            🎯 ₩12,000↓ 저가주 5종목 | 30~50% 추격
           </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
