@@ -1701,6 +1701,10 @@ Deno.serve(async (req) => {
       if (isSuperEntry) {
         await addLog('unified', 'milestone', r.sym, `🎯 [15% 익절 보장형 슈퍼 패턴] ${r.sym} 매수 완료! [${(r as any).superPatternSignals.join('+')}] | 15% 목표까지 자율 주행 홀딩 개시.`, { superPattern: r.scoring.superPattern, score: r.scoring.totalScore, allocation: `${(positionPct*100).toFixed(0)}%` });
       }
+      // ★ 동전주 매수 알림
+      if (isPennyEntry) {
+        await addLog('unified', 'milestone', r.sym, `🪙 [동전주 물량선점 매수] ${r.sym} $${r.price.toFixed(4)}(${fmtKRW(r.price)}) × ${qty}주 | 호가 한 칸 변동 = 큰 수익! | 본절보호: +${PENNY_BREAKEVEN_PCT}% | 철갑홀딩: ${PENNY_IRON_HOLD_SCORE}점↑`, { price: r.price, qty, isPenny: true, score: r.scoring.totalScore });
+      }
 
       await supabase.from('unified_trades').insert({
         symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,
@@ -1712,7 +1716,7 @@ Deno.serve(async (req) => {
       await supabase.from('unified_wallet').update({ balance: newBuyBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
       balance = newBuyBalance;
       openCount++;
-      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry });
+      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry, isPenny: isPennyEntry });
     }
 
     // ========== AUTO-REPLACEMENT ==========
