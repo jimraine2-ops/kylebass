@@ -1816,7 +1816,35 @@ Deno.serve(async (req) => {
       await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry, isPenny: isPennyEntry });
     }
 
-    // ========== AUTO-REPLACEMENT ==========
+    // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
+    if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS) {
+      dipBuyCandidates.sort((a, b) => b.scoring.totalScore - a.scoring.totalScore);
+      for (const dip of dipBuyCandidates.slice(0, 2)) {
+        const maxKRW = balance * 0.05;
+        const priceKRW = toKRW(dip.price);
+        const qty = Math.floor(maxKRW / priceKRW);
+        const costKRW = Math.floor(qty * priceKRW);
+        if (qty <= 0 || costKRW > balance) continue;
+        const ap = applySessionSlippage(dip.price, 'buy', spreadMul, sessionSlippage);
+        const sl = +(ap * 0.90).toFixed(4);
+        const tp = +(ap * 1.15).toFixed(4);
+        const bb = Math.round(balance);
+        const nb = balance - costKRW;
+        const msg = `[역발상추매] [${sessionLabel}] [${timeStr}] ${dip.sym} ${dip.scoring.totalScore}점(${dip.scoring.metCount}/10) 눌림 추매 [${qty}주@${fmtKRW(ap)}|${fmtKRWRaw(costKRW)}] [잔고: ${fmtKRWRaw(bb)}→${fmtKRWRaw(nb)}]`;
+        await supabase.from('unified_trades').insert({
+          symbol: dip.sym, side: 'buy', quantity: qty, price: ap,
+          stop_loss: sl, take_profit: tp, status: 'open',
+          cap_type: dip.capType, entry_score: dip.scoring.totalScore,
+          ai_reason: msg, ai_confidence: dip.scoring.totalScore,
+        });
+        await supabase.from('unified_wallet').update({ balance: nb, updated_at: now.toISOString() }).eq('id', wallet.id);
+        balance = nb;
+        openCount++;
+        await addLog('unified', 'buy', dip.sym, msg, { type: 'dip_buy', score: dip.scoring.totalScore });
+      }
+    }
+
+
     {
       const refreshedOpenPos = (await supabase.from('unified_trades').select('*').eq('status', 'open')).data || [];
       for (const pos of refreshedOpenPos) {
