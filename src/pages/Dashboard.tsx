@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Radio, Bot, CalendarDays, Wallet, TrendingUp, TrendingDown, Briefcase, Activity, Target, ChevronRight } from "lucide-react";
+import { Radio, Bot, Wallet, TrendingUp, TrendingDown, Briefcase, Activity, Target, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { SessionIndicator } from "@/components/trading/SessionIndicator";
