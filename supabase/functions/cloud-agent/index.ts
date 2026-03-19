@@ -961,7 +961,7 @@ Deno.serve(async (req) => {
     // ★ 전 종목 확장: 동적 발견 종목에서도 슬롯 충전
     const dynSymbols = discoveredSymbols.length > 0 ? discoveredSymbols : [];
     const dynStart = (cycleCount * 50) % Math.max(1, dynSymbols.length);
-    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(50, dynSymbols.length); i++) {
+    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(20, dynSymbols.length); i++) {
       const sym = dynSymbols[(dynStart + i) % dynSymbols.length];
       if (!activeUnifiedList.has(sym)) {
         activeUnifiedList.add(sym);
