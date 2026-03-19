@@ -22,7 +22,6 @@ export default function Dashboard() {
   const { data: unifiedData, isLoading: portfolioLoading } = useUnifiedPortfolio();
   const { data: agentStatus } = useAgentStatus();
   const { data: logs = [] } = useAgentLogs(5);
-  const { data: earningsData } = useEarningsWatch();
   const { rate: fxRate, isLive: fxLive } = useExchangeRate();
 
   const allSymbols = useMemo(() => {
