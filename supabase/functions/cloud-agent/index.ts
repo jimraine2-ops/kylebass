@@ -1458,33 +1458,7 @@ Deno.serve(async (req) => {
       await new Promise(r => setTimeout(r, 200));
     }
 
-    // ★ 역발상 추매 실행 (Dip-Buy Pyramiding) — openCount는 아래 ENTRY SCAN 후 실행
-    // (moved after openCount declaration)
-      dipBuyCandidates.sort((a, b) => b.scoring.totalScore - a.scoring.totalScore);
-      for (const dip of dipBuyCandidates.slice(0, 2)) {
-        const maxKRW = balance * 0.05;
-        const priceKRW = toKRW(dip.price);
-        const qty = Math.floor(maxKRW / priceKRW);
-        const costKRW = Math.floor(qty * priceKRW);
-        if (qty <= 0 || costKRW > balance) continue;
-        const ap = applySessionSlippage(dip.price, 'buy', spreadMul, sessionSlippage);
-        const sl = +(ap * 0.90).toFixed(4);
-        const tp = +(ap * 1.15).toFixed(4);
-        const bb = Math.round(balance);
-        const nb = balance - costKRW;
-        const msg = `[역발상추매] [${sessionLabel}] [${timeStr}] ${dip.sym} ${dip.scoring.totalScore}점(${dip.scoring.metCount}/10) 눌림 추매 [${qty}주@${fmtKRW(ap)}|${fmtKRWRaw(costKRW)}] [잔고: ${fmtKRWRaw(bb)}→${fmtKRWRaw(nb)}]`;
-        await supabase.from('unified_trades').insert({
-          symbol: dip.sym, side: 'buy', quantity: qty, price: ap,
-          stop_loss: sl, take_profit: tp, status: 'open',
-          cap_type: dip.capType, entry_score: dip.scoring.totalScore,
-          ai_reason: msg, ai_confidence: dip.scoring.totalScore,
-        });
-        await supabase.from('unified_wallet').update({ balance: nb, updated_at: now.toISOString() }).eq('id', wallet.id);
-        balance = nb;
-        openCount++;
-        await addLog('unified', 'buy', dip.sym, msg, { type: 'dip_buy', score: dip.scoring.totalScore });
-      }
-    }
+    // ★ 역발상 추매: openCount 선언 후 실행 (아래 ENTRY SCAN 이후로 이동)
 
     // ========== 일일 수익 목표 체크 (₩300,000) ==========
     const todayStart = new Date(now);
