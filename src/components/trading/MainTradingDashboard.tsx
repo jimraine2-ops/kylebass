@@ -98,16 +98,19 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🛡️ 패배제로 홀딩 | 익절확률 90%↑ = 매도 금지
+            🛡️ No-Loss | 패배 기록 원천 차단
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔒 +0.8% → Zero-Risk Lock(매수가+0.1%)
+            🔒 +0.8~1.0% → Zero-Risk Lock (매수가+0.1%)
+          </Badge>
+          <Badge className="bg-destructive/20 text-destructive border-destructive/30 text-[10px]">
+            🛡️ Iron-Hold | 익절확률 90%↑ = 매도 금지
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            📰 Finnhub 뉴스 감성 동기화
+            📰 Finnhub 뉴스+지표 95%↑ 일치 시만 진입
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🎯 정예 5종목 | 30~50% 추격
+            🎯 정예 5종목 | ₩12,000 미만 | 30~50% 추격
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
@@ -117,12 +120,23 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       </div>
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
-        <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 패배 제로 & 필승 홀딩 시스템 | 뉴스+지표 동기화 매매</p>
-          <p>🔒 +0.8% 도달 → SL 매수가+0.1% 강제 고정 → 패배 기록 원천 차단 (Zero-Risk Lock)</p>
-          <p>🛡️ 익절 확률 90%+ → 자동 매도 일절 금지 | 지표 붕괴까지 무제한 홀딩</p>
-          <p>📰 Finnhub 뉴스 감성 분석: 긍정 80%+ 확인 → 즉시 선취매</p>
-          <p>🎯 정예 5종목 집중 운용 | 30~50% 대시세까지 추격</p>
+        <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
+          <p className="font-bold text-yellow-400 text-sm">🏆 월가 1등 딜러의 절대 지시 — 패배 제로 & 필승 홀딩 시스템</p>
+          <p className="italic text-yellow-400/80">"데이터는 거짓말을 하지 않는다. 지표와 뉴스가 '필승'을 가리킨다면, 시장의 흔들림은 무시하라."</p>
+          <div className="border-l-2 border-yellow-500/40 pl-2 space-y-1 mt-1">
+            <p className="font-semibold text-foreground">[No-Loss] 패배 기록 원천 차단</p>
+            <p>🔒 매수 후 +0.8~1.0% 진입 즉시 → SL을 매수가+0.1%로 강제 고정 (Zero-Risk Lock)</p>
+            <p>📰 Finnhub 뉴스 긍정 지수 + 10대 지표 패턴 95% 이상 일치 시에만 ₩100만 투입</p>
+          </div>
+          <div className="border-l-2 border-stock-up/40 pl-2 space-y-1">
+            <p className="font-semibold text-foreground">[Iron-Hold] 익절 확률 기반 무제한 홀딩</p>
+            <p>🛡️ 익절 확률 90%+ → 자동 매도 일절 금지 | 지표 완전 붕괴까지 홀딩</p>
+            <p>🚀 ₩12,000 미만 저가주: 5~10%에 만족 않고 30~50% 대시세까지 끝까지 추격</p>
+          </div>
+          <div className="border-l-2 border-primary/40 pl-2 space-y-1">
+            <p className="font-semibold text-foreground">[Select-5] 정예 종목 집중 운용</p>
+            <p>🎯 최대 5종목 제한 | ₩20만×5 또는 확실한 2~3종목에 화력 집중</p>
+          </div>
         </CardContent>
       </Card>
 
