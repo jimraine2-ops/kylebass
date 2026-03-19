@@ -107,20 +107,6 @@ export default function Dashboard() {
             </p>
           </CardContent>
         </Card>
-
-        {/* 실적 임박 */}
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <CalendarDays className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-medium">실적 임박</span>
-            </div>
-            <p className="text-base font-bold font-mono">{earningsStocks.length}종목</p>
-            <p className="text-[11px] text-yellow-400 font-medium">
-              🎯 선취매 {preBuyCandidates.length}개
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Two Column: 보유종목 + 실적임박 */}
