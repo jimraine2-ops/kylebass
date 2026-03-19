@@ -157,13 +157,13 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             </Badge>
           )}
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🛡️ 철갑 홀딩 | 지표 60점↑ = 절대 매도 금지
+            🛡️ 철갑 홀딩 | 일반 60점↑ / 동전주 65점↑ = 절대 매도 금지
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔒 +1.5% → 본절보호(패배 0%) | 무제한 추격
+            🔒 일반 +1.5% / 동전주 +2.0% → 본절보호(패배 0%)
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🏆 100% 익절 목표 | 수익 전 매도 금지
+            🪙 동전주 $1미만 × 70점↑ = 최우선 물량선점
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
             🐋 저유동성 선취매 | 📦 분할잠입매집
