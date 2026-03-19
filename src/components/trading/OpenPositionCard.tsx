@@ -253,7 +253,7 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
         return slAboveEntry ? (
           <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-stock-up/10 border border-stock-up/20">
             <ShieldCheck className="w-3.5 h-3.5 text-stock-up shrink-0" />
-            <span className="text-stock-up">🔒 패배 확률 0% — 본절보호 완성 (SL: 매수가+{((pos.stop_loss / pos.price - 1) * 100).toFixed(1)}%)</span>
+            <span className="text-stock-up">🔒 Zero-Loss 무적 상태 — SL: 매수가+{((pos.stop_loss / pos.price - 1) * 100).toFixed(1)}% (손실 불가능)</span>
           </div>
         ) : null;
       })()}
