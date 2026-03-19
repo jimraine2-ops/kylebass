@@ -160,13 +160,13 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             🛡️ 철갑 홀딩 | 일반 60점↑ / 동전주 65점↑ = 절대 매도 금지
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔒 일반 +1.5% / 동전주 +2.0% → 본절보호(패배 0%)
+            🔒 일반 +1.2% / 동전주 +2.0% → Zero-Loss(매수가+0.2%)
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🪙 동전주 $1미만 × 70점↑ = 최우선 물량선점
+            🪙 $9(₩12,000) 미만 저가주 전용 | 회전율 극대화
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🐋 저유동성 선취매 | 📦 분할잠입매집
+            👻 고스트 매집 | 데이장 선취매 → 정규장 30~50% 폭발
           </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
