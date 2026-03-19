@@ -109,8 +109,8 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Two Column: 보유종목 + 실적임박 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* 보유종목 */}
+      <div className="grid grid-cols-1 gap-4">
         {/* 보유 종목 요약 */}
         <Card>
           <CardContent className="p-3 space-y-2">
