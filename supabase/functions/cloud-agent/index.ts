@@ -1506,6 +1506,7 @@ Deno.serve(async (req) => {
 
           // 수급 돌파/유동성 점수 계산
           (r as any).isVolumeBurst = rvol >= 2.0;
+          (r as any).isPennyStock = isPenny;
           (r as any).isAccumulationEntry = isAccumEntry;
           (r as any).accumPattern = accumPattern?.pattern || '';
           (r as any).accumCondensation = accumPattern?.condensation || 0;
@@ -1516,6 +1517,12 @@ Deno.serve(async (req) => {
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
+
+          // ★ 동전주 로그
+          if (isPenny && r.scoring.totalScore >= PENNY_ENTRY_SCORE) {
+            const rvolVal = r.scoring.indicators?.rvol?.rvol || 0;
+            await addLog('unified', 'scan', r.sym, `[🪙동전주] ${r.sym} $${r.price.toFixed(4)}(${fmtKRW(r.price)}) | ${r.scoring.totalScore}점(≥${PENNY_ENTRY_SCORE}) RVOL ${rvolVal.toFixed(1)}x → 최우선 진입 대상`, { price: r.price, score: r.scoring.totalScore, rvol: rvolVal });
+          }
 
           // ★ 필승 패턴 알림 로그 (고래/에너지 응축 포함)
           if (hasCriticalPattern) {
