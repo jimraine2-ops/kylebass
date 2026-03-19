@@ -92,7 +92,7 @@ export default function UnifiedScanPage() {
         <div className="flex items-center gap-2">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
             <Shield className="w-3.5 h-3.5 mr-1" />
-            패배제로 & 필승홀딩 | Zero-Risk Lock
+            Finnhub×TwelveData 하이브리드 | Zero-Loss
           </Badge>
           <Button variant="outline" size="sm" onClick={() => quantRefetch()} disabled={quantFetching}>
             <RefreshCw className={`w-3.5 h-3.5 mr-1 ${quantFetching ? 'animate-spin' : ''}`} />

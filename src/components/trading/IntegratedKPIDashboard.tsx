@@ -179,13 +179,24 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
       </div>
 
     <Card className="border-yellow-500/30 bg-yellow-500/5">
-        <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 패배 제로 & 필승 홀딩 시스템 | 뉴스+지표 동기화 매매</p>
-          <p>🔒 +0.8% 도달 → SL 매수가+0.1%로 강제 고정 → 패배 기록 원천 차단 (Zero-Risk Lock)</p>
-          <p>🛡️ 익절 확률 90%+ → 자동 매도 일절 금지 | 지표 붕괴까지 무제한 홀딩</p>
-          <p>📰 Finnhub 뉴스 감성 분석: 긍정 80%+ → 지표 동기화 확인 → 즉시 선취매</p>
-          <p>🎯 정예 5종목 집중 운용 | 0.1초 정밀 대응으로 30~50% 대시세 추격</p>
-          <p className="text-yellow-400 font-medium">💰 $9(₩12,000) 미만 저가주 | 뉴스+차트 95% 일치 시 100만 원 투입</p>
+        <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
+          <p className="font-bold text-yellow-400 text-sm">🏆 Finnhub × Twelve Data 하이브리드 필승 전략</p>
+          <p className="italic text-yellow-400/80">"데이터의 지연은 죽음이다. Finnhub로 사냥감을 식별하고, Twelve Data로 심장을 쏜다."</p>
+          <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[Dual-Engine] 데이터 소스 역할 분담</p>
+            <p>📰 Finnhub: 뉴스 감성 85%↑ 'Extreme Bullish' 종목 선별 + 섹터 모멘텀(AI/반도체) 주도주</p>
+            <p>📊 Twelve Data: RSI·MACD·VWAP·볼린저 등 10대 지표 0.1초 쿼리 + ₩12,000↓ 호가·체결 감시</p>
+          </div>
+          <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[Zero-Loss] 100% 익절 진입 — The Golden Cross</p>
+            <p>🔒 ₩12,000↓ + 뉴스 Extreme Bullish + 지표 '수렴→발산' + 익절확률 90%↑ = ₩100만 투입</p>
+            <p>🔒 +0.8% 도달 → SL 매수가+0.1% 강제 고정 (Zero-Risk Lock) → 패배 기록 원천 차단</p>
+          </div>
+          <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[Iron-Hold] 무패 기록 유지 & 수익 극대화</p>
+            <p>🛡️ 익절확률 90%+ 유지 시 눌림목 매도 금지 | 점수 45점 미만 붕괴 전까지 30~50% 추격</p>
+            <p>🎯 정예 5종목 집중 | 데이장/프리마켓 선취매 단행</p>
+          </div>
         </CardContent>
       </Card>
 
