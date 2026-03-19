@@ -809,7 +809,7 @@ async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: strin
   const allSymbols = [...allKnown, ...dynamicPool];
   
   // ★ 확장 샘플: 200개로 증가 (기존 100 → 200)
-  const sampleSize = 60; // ★ 타임아웃 방지: 200→60 (배치×API 호출 시간 단축)
+  const sampleSize = 20; // ★ 타임아웃 방지: 최소 샘플링
   const cycleOffset = Math.floor(Math.random() * allSymbols.length);
   const sample: string[] = [];
   for (let i = 0; i < Math.min(sampleSize, allSymbols.length); i++) {
