@@ -39,8 +39,8 @@ export default function Dashboard() {
   const openPositions = unifiedData?.openPositions || [];
   const stats = unifiedData?.stats || {} as any;
 
-  const earningsStocks = earningsData?.stocks || [];
-  const preBuyCandidates = earningsStocks.filter((s: any) => s.isPreBuy);
+
+
 
   const isAgentRunning = agentStatus?.is_running ?? false;
   const lastLog = logs[0];
