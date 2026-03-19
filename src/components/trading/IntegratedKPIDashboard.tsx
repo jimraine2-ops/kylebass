@@ -180,13 +180,13 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🛡️ 100% 익절 보장 철갑 홀딩 전략 | 승률 100% 목표</p>
-          <p>🔒 +1.5% 도달 → SL을 매수가+0.2%로 상향 → 이 시점부터 패배 확률 0%</p>
-          <p>🛡️ 지표 60점 이상 → 가격 하락 무관 절대 매도 금지 (No-Exit Policy)</p>
-          <p>📡 선취매: 에너지 응축 + 고래 매집 → 익절확률 90%↑ 즉시 선매수</p>
-          <p>🎯 본절가 보호 후 지표가 꺾이기 전까지 수익 폭 무제한 열어두어 50만 원 목표 달성</p>
-          <p>📊 "이 종목은 통계적으로 반드시 이긴다" — 심리적 방어 근거 상시 노출</p>
-          <p className="text-yellow-400 font-medium">💰 일일 목표 ₩300,000 — 달성 시 축하 알림 ☁️</p>
+          <p className="font-medium text-yellow-400">🪙 초저가주 필승 70점 & 90% 익절 전략 | 동전주 $1 미만 집중</p>
+          <p>🪙 $1.00 미만(₩2,000↓) 동전주 → 10대 지표 70점 돌파 시 최우선 물량 선점</p>
+          <p>🔒 동전주 +2.0% 도달 → SL 매수가+0.5% → 급락 리스크 원천 차단</p>
+          <p>🛡️ 동전주 지표 65점↑ → 흔들림 무시, 수익 전까지 무조건 철갑 홀딩</p>
+          <p>📡 데이/프리마켓 세력 매집 횡보 감지 → 익절확률 90%↑ 즉시 선매수</p>
+          <p>🎯 호가 한 칸 변동 = 큰 수익! 최대한 많은 주수 확보로 회전율 극대화</p>
+          <p className="text-yellow-400 font-medium">💰 일일 목표 ₩300,000 — 동전주 3종목 집중 투자</p>
         </CardContent>
       </Card>
 

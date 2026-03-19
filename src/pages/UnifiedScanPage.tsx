@@ -130,11 +130,11 @@ export default function UnifiedScanPage() {
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium text-yellow-400">🏆 10대 지표 필승 패턴 다이렉트 매매 | 100% 익절 목표</p>
-          <p>🎯 패턴 A (수급 폭발): 횡보 + 거래대금 300%↑ + VWAP 상단 → 점수 무관 즉시 매수</p>
-          <p>🎯 패턴 B (변동성 응축): BB 극도 수축 + RSI 50선 돌파 → 점수 무관 즉시 매수</p>
-          <p>🎯 패턴 C (이평선 정렬): EMA 수렴 후 부채꼴 확산 → 점수 무관 즉시 매수</p>
-          <p>🛡️ 동적 본절가: +0.5% → SL=매수가+0.1% → 100% 익절 보장 | 패턴 유지 시 30~50% 추격</p>
+          <p className="font-medium text-yellow-400">🪙 초저가주 필승 70점 & 90% 익절 전략 | 동전주 $1 미만 집중</p>
+          <p>🪙 $1.00 미만(₩2,000↓) 동전주 스캔 → 10대 지표 70점↑ + RVOL 500%↑ = 즉시 진입</p>
+          <p>🎯 패턴 A (수급 폭발) + 패턴 B (변동성 응축) + 패턴 C (이평선 정렬) → 점수 무관 즉시 매수</p>
+          <p>🔒 동전주 +2.0% → SL=매수가+0.5% → 급락 원천 차단 | 일반 +1.5% → SL=매수가+0.2%</p>
+          <p>🛡️ 동전주 65점↑ / 일반 60점↑ → 철갑 홀딩 (수익 전 절대 매도 금지)</p>
           <p>🚫 익절확률 90% 미만 자동 차단 | 상장폐지 위험 종목 배제</p>
         </CardContent>
       </Card>
