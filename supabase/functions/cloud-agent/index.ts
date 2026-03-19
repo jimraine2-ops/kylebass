@@ -1708,8 +1708,30 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
+    // ★ 뉴스 감성 분석: 상위 10개 후보에만 적용 (타임아웃 방지)
+    const preFilteredTop = candidates.slice(0, 10);
+    for (const c of preFilteredTop) {
+      try {
+        const news = await getNewsSentiment(c.sym);
+        (c as any).newsSentiment = news.bullishPct;
+        (c as any).newsCount = news.newsCount;
+        if (news.newsCount > 0) {
+          const sentLabel = news.bullishPct >= 80 ? '🟢강세' : news.bullishPct >= 60 ? '🟡긍정' : news.bullishPct >= 40 ? '⚪중립' : '🔴약세';
+          await addLog('unified', 'scan', c.sym, `[📰뉴스감성] ${c.sym} ${sentLabel} ${news.bullishPct}% (${news.newsCount}건) | ${news.headline?.slice(0, 50) || ''}`, { sentiment: news.bullishPct, newsCount: news.newsCount });
+        }
+      } catch { /* non-critical */ }
+      
+      // ★ 뉴스+지표 동기화 필터: 뉴스 약세(40% 미만) + 지표 70점 미만 → 차단
+      const newsSent = (c as any).newsSentiment || 50;
+      if (newsSent < 40 && c.scoring.totalScore < 70 && !(c as any).hasCriticalPattern) {
+        await addLog('unified', 'scan', c.sym, `[🚫뉴스차단] ${c.sym} 뉴스 약세(${newsSent}%) + 지표 ${c.scoring.totalScore}점 < 70 → 진입 보류`, {});
+        (c as any)._newsBlocked = true;
+      }
+    }
+
     // ★ 정예 1~5선 집중 투자: 필승 패턴 or (65점+90%익절확률+뉴스긍정) 확정 후보만
     const filteredCandidates = candidates.filter(c => {
+      if ((c as any)._newsBlocked) return false;
       const winProb = getWinProbability(c.scoring.totalScore);
       const hasCritical = (c as any).hasCriticalPattern;
       const newsSent = (c as any).newsSentiment || 50;
