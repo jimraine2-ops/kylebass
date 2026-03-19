@@ -1441,20 +1441,25 @@ Deno.serve(async (req) => {
             const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
             if (!scoring) return null;
             lastScores.set(sym, scoring.totalScore);
-            return { sym, price, scoring, capType, data };
+            return { sym, price, scoring, capType, data, isPenny: isPennyStock(price) };
           } catch { return null; }
         }));
 
         for (const r of results) {
           if (!r) continue;
+          const isPenny = r.isPenny;
           
           // ★ 필승 패턴 A/B/C 감지: 점수가 낮아도 패턴 완성 시 즉시 진입 허용
           const cp = r.scoring.criticalPatterns;
           const hasCriticalPattern = cp && cp.patterns.length >= 1;
           const hasMultiPattern = cp && cp.patterns.length >= 2; // 2개 이상 = 초고확신
 
-          // 점수 필터: 일반 진입은 adaptedEntryThreshold, 필승 패턴 시 50점까지 완화
-          if (!hasCriticalPattern && r.scoring.totalScore < adaptedEntryThreshold) continue;
+          // ★ 동전주 전용 진입 문턱: 70점 (일반: 65점)
+          const pennyEntryThreshold = PENNY_ENTRY_SCORE;
+          const effectiveThreshold = isPenny ? Math.max(pennyEntryThreshold, adaptedEntryThreshold) : adaptedEntryThreshold;
+          
+          // 점수 필터: 일반 진입은 effectiveThreshold, 필승 패턴 시 50점까지 완화
+          if (!hasCriticalPattern && r.scoring.totalScore < effectiveThreshold) continue;
           if (hasCriticalPattern && r.scoring.totalScore < 50) continue; // 패턴 있어도 최소 50점
           
           const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
