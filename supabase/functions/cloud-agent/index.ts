@@ -1633,9 +1633,12 @@ Deno.serve(async (req) => {
         const burstTag = (c as any).isVolumeBurst ? '🔥' : '';
         const surgeTag = (c as any).isScoreSurge ? '🚨급상승' : '';
         const cpTag = (c as any).hasCriticalPattern ? `🎯[${(c as any).criticalPatterns.join('+')}]` : '';
-        return `${i+1}.${burstTag}${surgeTag}${cpTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
+        const pennyTag = (c as any).isPennyStock ? '🪙' : '';
+        return `${i+1}.${pennyTag}${burstTag}${surgeTag}${cpTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
       }).join(', ');
-      await addLog('unified', 'scan', null, `[🌐전종목스캔] [${timeStr}] 매수 후보 ${candidates.length}개 중 TOP ${topCandidates.length}개 집중 투자: ${summary}`, {});
+      // ★ 동전주 개수 표시
+      const pennyCount = topCandidates.filter(c => (c as any).isPennyStock).length;
+      await addLog('unified', 'scan', null, `[🌐전종목스캔] [${timeStr}] 매수 후보 ${candidates.length}개 중 TOP ${topCandidates.length}개 집중 투자 (🪙동전주 ${pennyCount}개): ${summary}`, {});
     }
 
     for (const r of topCandidates) {
@@ -1645,9 +1648,11 @@ Deno.serve(async (req) => {
       const isSuperEntry = (r as any).isSuperPattern;
       const isScoreSurge = (r as any).isScoreSurge;
       const isCriticalPatternEntry = (r as any).hasCriticalPattern;
+      const isPennyEntry = (r as any).isPennyStock;
       
-      // ★ 정예 1~3선 집중 투자: 필승패턴/슈퍼/급상승은 잔고의 35%까지 집중
-      const positionPct = isPyramiding ? 0.05 : (isCriticalPatternEntry || isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
+      // ★ 동전주: 잔고의 33% 집중 투입 (최대한 많은 주수 확보)
+      // ★ 필승패턴/슈퍼/급상승: 35%, 일반: 20%
+      const positionPct = isPyramiding ? 0.05 : isPennyEntry ? 0.33 : (isCriticalPatternEntry || isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
       const maxKRW = balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
