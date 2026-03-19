@@ -828,7 +828,7 @@ async function fetchVolumeLeaders(session: SessionType): Promise<{ symbol: strin
       const tradingValue = vol * price;
       leaders.push({ symbol: r.symbol, volume: vol, changePct, tradingValue });
     }
-    if (i + 5 < sample.length) await new Promise(r => setTimeout(r, 200));
+    if (i + 5 < sample.length) await new Promise(r => setTimeout(r, 100)); // ★ 200ms→100ms
   }
   
   // Sort by trading value (거래대금) descending
