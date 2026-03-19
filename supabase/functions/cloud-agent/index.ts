@@ -682,6 +682,11 @@ async function discoverAllUSStocks(): Promise<string[]> {
 }
 
 // ===== Win Probability Calculator (익절 확률 산출) =====
+// ★ 동전주 여부 판별
+function isPennyStock(price: number): boolean {
+  return price > 0 && price < PENNY_THRESHOLD_USD;
+}
+
 function getWinProbability(score: number): number {
   if (score >= 80) return 98;
   if (score >= 75) return 95;
