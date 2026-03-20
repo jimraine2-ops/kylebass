@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
     if (action === 'reset-unified-wallet') {
       await supabase.from('unified_trades').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('unified_wallet').update({
-        balance: 1000000, initial_balance: 1000000, updated_at: new Date().toISOString()
+        balance: 5000000, initial_balance: 5000000, updated_at: new Date().toISOString()
       }).not('id', 'is', null);
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
 
     if (action === 'reset-wallet' || action === 'reset-scalping-wallet') {
       await supabase.from('unified_trades').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('unified_wallet').update({ balance: 1000000, initial_balance: 1000000, updated_at: new Date().toISOString() }).not('id', 'is', null);
+      await supabase.from('unified_wallet').update({ balance: 5000000, initial_balance: 5000000, updated_at: new Date().toISOString() }).not('id', 'is', null);
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
