@@ -70,6 +70,30 @@ function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultipl
   return +(price * (1 - slippage)).toFixed(4);
 }
 
+// ★ [Anti-Latency] Passive Fill: 시장가 대신 매수 1호가 알박기 (슬리피지 0)
+function applyPassiveFill(price: number, tickSize: number = 0.01): number {
+  // 현재가에서 PASSIVE_FILL_TICKS만큼 아래에 지정가 배치
+  return +(price - tickSize * PASSIVE_FILL_TICKS).toFixed(4);
+}
+
+// ★ [Anti-Latency] Timestamp Guard: 지연 감지 시 2~3호가 아래 매수 대기
+function applyTimestampGuard(price: number, dataAgeMs: number, tickSize: number = 0.01): { adjustedPrice: number; isGuarded: boolean } {
+  const dataAgeSec = dataAgeMs / 1000;
+  if (dataAgeSec > LATENCY_GUARD_SEC) {
+    const ticksBelow = Math.ceil(dataAgeSec); // 지연 1초당 1호가 아래 (최대 3)
+    const guardTicks = Math.min(ticksBelow + 1, 3);
+    return { adjustedPrice: +(price - tickSize * guardTicks).toFixed(4), isGuarded: true };
+  }
+  return { adjustedPrice: price, isGuarded: false };
+}
+
+// ★ [Liquidity Guard] 매수잔량 검증: 진입금액의 10배 이상 유동성 확인
+function checkLiquidityGuard(tradingValueUSD: number, entryAmountKRW: number): { passed: boolean; ratio: number } {
+  const entryAmountUSD = entryAmountKRW / KRW_RATE;
+  const ratio = tradingValueUSD > 0 ? tradingValueUSD / entryAmountUSD : 0;
+  return { passed: ratio >= LIQUIDITY_MULTIPLIER, ratio };
+}
+
 async function finnhubFetch(path: string) {
   const token = getToken();
   if (!token) return null;
