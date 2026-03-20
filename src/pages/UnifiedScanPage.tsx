@@ -146,6 +146,12 @@ export default function UnifiedScanPage() {
             <p className="font-semibold text-foreground">[Iron-Hold] 무패 & 30~50% 추격</p>
             <p>🛡️ 익절확률 90%+ → 눌림목 매도 금지 | 점수 45점 미만 붕괴 시까지 무제한 홀딩</p>
           </div>
+          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[Anti-Latency] 데이터 시차 역이용 + 호가 장악</p>
+            <p>🔮 예측형 선취매: 뉴스 전 지표 60점 돌파 시 2~3호가 아래 지정가 대기</p>
+            <p>⏱️ Timestamp Guard: 1초↑ 지연 시 추격매수 차단 → Limit Order 자동 전환</p>
+            <p>💧 Liquidity Guard: 진입금액 10배↑ 매수잔량 확인 → Passive Fill(호가 알박기)</p>
+          </div>
         </CardContent>
       </Card>
 
