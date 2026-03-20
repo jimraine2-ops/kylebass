@@ -1805,17 +1805,44 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // ★ 선취매: 분할 잠입 매집 시뮬레이션 — 큰 주문 대신 5분할 조용히 체결
+      // ★ [Passive Fill + Timestamp Guard] 시장가 금지, 호가 장악 매수
       const isAccumEntry = (r as any).isAccumulationEntry;
-      const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.005) : sessionSlippage;
-      const adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
+      const isPredictive = (r as any).isPredictiveEntry;
+      const tickSize = r.price < 1.0 ? 0.0001 : r.price < 10.0 ? 0.01 : 0.05;
+      
+      // ★ Timestamp Guard: 데이터 시차 감지 (캔들 타임스탬프 vs 현재)
+      const dataAge = r.data?.quote?.t ? (Date.now() / 1000 - r.data.quote.t) : 0;
+      const tsGuard = applyTimestampGuard(r.price, dataAge * 1000, tickSize);
+      
+      // ★ Passive Fill: 매수 1호가 알박기 (슬리피지 0)
+      const passivePrice = applyPassiveFill(tsGuard.adjustedPrice, tickSize);
+      
+      // ★ 최종 매수가: 예측형/선취매 → Passive Fill, 일반 → Session Slippage
+      let adjustedPrice: number;
+      let orderType = 'MARKET';
+      if (isPredictive || isAccumEntry) {
+        adjustedPrice = passivePrice; // 호가 알박기
+        orderType = 'LIMIT(Passive)';
+      } else if (tsGuard.isGuarded) {
+        adjustedPrice = tsGuard.adjustedPrice; // Timestamp Guard 적용
+        orderType = 'LIMIT(Guard)';
+      } else {
+        const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.005) : sessionSlippage;
+        adjustedPrice = applySessionSlippage(r.price, 'buy', spreadMul, aggressiveSlip);
+        orderType = 'LIMIT(Aggressive)';
+      }
+
       // ★ [전략 동기화] 초기 SL -10% / TP +15% 통일
       const stopLoss = +(adjustedPrice * 0.90).toFixed(4);
-      // ★ 선취매: TP +20% (정규장 폭발 대비 여유 확보), 일반: +15%
-      const tpMultiplier = (isAccumEntry || isCriticalPatternEntry) && isLowVolumeSession ? 1.20 : 1.15;
+      // ★ 선취매/예측형: TP +20% (정규장 폭발 대비), 일반: +15%
+      const tpMultiplier = (isAccumEntry || isCriticalPatternEntry || isPredictive) && isLowVolumeSession ? 1.20 : 1.15;
       const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
       const splitOrderNote = isAccumEntry ? ' | 📦분할잠입매집(5분할 조용히 체결)' : '';
-      const tier = isPyramiding ? 'PYRAMID' : isPennyEntry ? 'PENNY-🪙' : isCriticalPatternEntry ? 'CRITICAL-PATTERN' : isSuperEntry ? 'SUPER-15%' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
+      const tsGuardTag = tsGuard.isGuarded ? ` | ⏱️Timestamp Guard(${dataAge.toFixed(1)}s→${PASSIVE_FILL_TICKS}호가↓)` : '';
+      const passiveTag = (isPredictive || isAccumEntry) ? ` | 🎯Passive Fill(호가알박기)` : '';
+      const predictiveTag = isPredictive ? ` | 🔮예측형선취매(뉴스전 지표수렴)` : '';
+      const liqRatioTag = (r as any).liquidityRatio ? ` | 💧유동성×${((r as any).liquidityRatio).toFixed(1)}` : '';
+      const tier = isPyramiding ? 'PYRAMID' : isPennyEntry ? 'PENNY-🪙' : isCriticalPatternEntry ? 'CRITICAL-PATTERN' : isSuperEntry ? 'SUPER-15%' : isPredictive ? 'PREDICTIVE' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
       const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 ×${spreadMul}` : '';
@@ -1832,8 +1859,8 @@ Deno.serve(async (req) => {
       const indDetails = Object.entries(r.scoring.indicators)
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
-      const preBuyLabel = isPennyEntry ? '🪙동전주매수' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : '10대지표매수';
-      const logMsg = `[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const preBuyLabel = isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : '10대지표매수';
+      const logMsg = `[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       // ★ 필승 패턴 알림
       if (isCriticalPatternEntry) {
