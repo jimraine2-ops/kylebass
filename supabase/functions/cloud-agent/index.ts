@@ -1295,7 +1295,7 @@ Deno.serve(async (req) => {
           } else if (drop >= TRAILING_DROP_PCT && indicatorsStrong) {
             await addLog('unified', 'hold', sym, `[Iron Hold] ${sym} +${pnlPct.toFixed(2)}% 고점-${drop.toFixed(2)}% BUT 지표 ${quantScore}점(≥55) → 30% 추격 중`, { quantScore, drop, isIronHold });
           } else {
-            await addLog('unified', 'hold', sym, `[🛡️철벽홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 추격 중 | 지표 ${quantScore}점 → 고점-${TRAILING_DROP_PCT}% 트레일링, 30% 목표 추격!`, { quantScore, pnlPct: +pnlPct.toFixed(2), drop });
+            await addLog('unified', 'hold', sym, `[🛡️철벽홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 추격 중 | 지표 ${quantScore}점 → 고점-${TRAILING_DROP_PCT}% 트레일링, 30% 목표 추격!`, { quantScore, pnlPct: +pnlPct.toFixed(2), drop, confidence: pos.ai_confidence, costKRW: Math.floor(pos.price * pos.quantity * KRW_RATE), holdMin: Math.floor((now.getTime() - new Date(pos.opened_at).getTime()) / 60000) });
           }
         } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER) {
           // ★ 1~3% 구간: 절대 매도 금지! 3% 돌파까지 인내
