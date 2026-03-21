@@ -1241,6 +1241,9 @@ Deno.serve(async (req) => {
         }
 
         // ===== [핵심] 익절 로직 — 3.0% 전까지 절대 매도 금지, 그 이후 고점-2.0% 트레일링만 =====
+        let shouldClose = false;
+        let closeReason = '';
+        let newStatus = 'closed';
         const accumInfo = scoring?.accumulation;
         const isIronHold = accumInfo && accumInfo.condensation >= 6 && quantScore >= 50;
         const emaAligned = scoring?.indicators?.emaAlign?.aligned === true;
