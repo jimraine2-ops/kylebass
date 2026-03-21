@@ -1236,9 +1236,8 @@ Deno.serve(async (req) => {
           await addLog('unified', 'defense', sym, `[5%방어] ${sym} +${pnlPct.toFixed(2)}% → SL +2.5%`, { quantScore });
         }
 
-        const peakPrice2 = Math.max(pos.peak_price || pos.price, price);
         if (price > (pos.peak_price || pos.price)) {
-          await supabase.from('unified_trades').update({ peak_price: peakPrice2 }).eq('id', pos.id);
+          await supabase.from('unified_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
         }
 
         // ===== [핵심] 익절 로직 — 3.0% 전까지 절대 매도 금지, 그 이후 고점-2.0% 트레일링만 =====
