@@ -1469,12 +1469,11 @@ Deno.serve(async (req) => {
       .not('status', 'eq', 'open')
       .gte('closed_at', todayStart.toISOString());
     const dailyPnl = (todayClosedTrades || []).reduce((sum, t) => sum + (t.pnl || 0), 0);
-    const DAILY_TARGET_KRW = 300000;
-    const dailyTargetHit = dailyPnl >= DAILY_TARGET_KRW;
+    const dailyTargetHit = dailyPnl >= DAILY_TARGET_KRW_CONST;
     if (dailyTargetHit) {
-      await addLog('unified', 'milestone', null, `🎉🏆 [일일 목표 달성!] 오늘 실현 수익 ${fmtKRWRaw(dailyPnl)} ≥ ₩300,000 — 목표 초과 달성!`, { dailyPnl });
+      await addLog('unified', 'milestone', null, `🎉🏆 [일일 목표 달성!] 오늘 실현 수익 ${fmtKRWRaw(dailyPnl)} ≥ ₩500,000 — 일당 50만 원 탈취 성공!`, { dailyPnl });
     } else {
-      await addLog('system', 'info', null, `[일일목표] 오늘 실현 PnL: ${fmtKRWRaw(dailyPnl)} / 목표 ₩300,000 (${(dailyPnl/DAILY_TARGET_KRW*100).toFixed(1)}%)`, { dailyPnl });
+      await addLog('system', 'info', null, `[일일목표] 오늘 실현 PnL: ${fmtKRWRaw(dailyPnl)} / 목표 ₩500,000 (${(dailyPnl/DAILY_TARGET_KRW_CONST*100).toFixed(1)}%)`, { dailyPnl });
     }
 
     // ========== UNIFIED ENTRY SCAN ==========
