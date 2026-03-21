@@ -1204,6 +1204,7 @@ Deno.serve(async (req) => {
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
         const capType = getCapType(price, sym);
+        const isPennyPos = price < 5 || pos.cap_type === 'small';
 
         // ===== [수익 무한 확장] 고수익 익절 지시서 — 3% 전까지 매도 금지, 고점-2% 트레일링 =====
         const indicatorsOver60 = quantScore >= 60;
