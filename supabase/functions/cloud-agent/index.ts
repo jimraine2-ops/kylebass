@@ -1215,7 +1215,7 @@ Deno.serve(async (req) => {
           const chaseSL = +(pos.price * PROFIT_CHASE_SL_PCT).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: chaseSL }).eq('id', pos.id);
           pos.stop_loss = chaseSL;
-          await addLog('unified', 'defense', sym, `[🚀수익추격모드] ${sym} +${pnlPct.toFixed(2)}% ≥ ${PROFIT_CHASE_TRIGGER}% → SL=${fmtKRW(chaseSL)}(매수가+1.5%) 수익 추격 개시! 고점-${TRAILING_DROP_PCT}% 트레일링`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'defense', sym, `[🚀수익추격모드] ${sym} +${pnlPct.toFixed(2)}% ≥ ${PROFIT_CHASE_TRIGGER}% → SL=${fmtKRW(chaseSL)}(매수가+1.5%) 수익 추격 개시! 고점-${TRAILING_DROP_PCT}% 트레일링`, { quantScore, pnlPct: +pnlPct.toFixed(2), confidence: pos.ai_confidence, costKRW: Math.floor(pos.price * pos.quantity * KRW_RATE), slKRW: Math.floor(chaseSL * KRW_RATE), holdMin: Math.floor((now.getTime() - new Date(pos.opened_at).getTime()) / 60000) });
         }
 
         // ★ 추가 수익 구간 SL 상향: 고점 대비 SL을 계속 끌어올림
