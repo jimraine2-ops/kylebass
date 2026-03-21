@@ -1207,6 +1207,7 @@ Deno.serve(async (req) => {
 
         // ===== [수익 무한 확장] 고수익 익절 지시서 — 3% 전까지 매도 금지, 고점-2% 트레일링 =====
         const indicatorsOver60 = quantScore >= 60;
+        const peakPrice = Math.max(pos.peak_price || pos.price, price);
         const drop = peakPrice > 0 ? ((peakPrice - price) / peakPrice) * 100 : 0;
 
         // ★ 수익 추격 모드: 3.0% 돌파 시 SL→매수가+1.5%
