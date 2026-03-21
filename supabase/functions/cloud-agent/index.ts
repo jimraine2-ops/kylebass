@@ -1274,7 +1274,7 @@ Deno.serve(async (req) => {
               closeReason = `[🏆15%+트레일링] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% (지표 ${quantScore}점) → 수익 극대화 확정`;
               newStatus = 'trailing_profit';
             } else {
-              await addLog('unified', 'hold', sym, `[🎯30%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥60) → 고점-${TRAILING_DROP_PCT}% 트레일링으로 30~50% 추격`, { quantScore, pnlPct: +pnlPct.toFixed(2), peakPrice: peakPrice2, drop });
+              await addLog('unified', 'hold', sym, `[🎯30%추격] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점(≥60) → 고점-${TRAILING_DROP_PCT}% 트레일링으로 30~50% 추격`, { quantScore, pnlPct: +pnlPct.toFixed(2), peakPrice, drop });
             }
           } else {
             // 15%+ 지표 60 미만 → 고점-2% 트레일링
