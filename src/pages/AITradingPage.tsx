@@ -50,22 +50,23 @@ export default function AITradingPage() {
       {/* Strategy Card */}
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">⚔️ 복병 타파 & 100% 익절 집행서</p>
-          <p className="italic text-yellow-400/80">"데이터가 늦다면 예측으로 앞서가고, 슬리피지가 두렵다면 호가를 장악하라. 어떤 악조건에서도 '패배'는 선택지에 없다."</p>
+          <p className="font-bold text-yellow-400 text-sm">💰 수익 무한 확장 — 일당 50만 원 탈취 집행서</p>
+          <p className="italic text-yellow-400/80">"1% 수익에 만족하는 자는 절대 월가의 승리자가 될 수 없다. 본절가 보호는 유지하되, 상단은 열어두어 주가가 하늘을 뚫을 때까지 추격하라."</p>
           <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Anti-Latency] 데이터 시차 역이용</p>
-            <p>🔮 예측형 매수: 가격 선행 → 뉴스 후행 구간 포착 → 지표 60점 돌파 시 선취매</p>
-            <p>⏱️ Timestamp Guard: 1초↑ 지연 → 2~3호가 아래 Limit Order (추격매수 차단)</p>
+            <p className="font-semibold text-foreground">[Trailing Stop] 수익 추격형 자동 매도</p>
+            <p>🚫 +3.0% 전까지 절대 매도 금지 (기존 0.8%→3.0% 대폭 상향)</p>
+            <p>🚀 +3.0% 돌파 → SL 매수가+1.5% 잠금 → '수익 추격 모드' 발동</p>
+            <p>📈 고점 대비 -2.0% 하락 시에만 전량 매도 (10%, 20%... 끝없이 추격)</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Liquidity Guard] 호가 장악 & 슬리피지 정복</p>
-            <p>💧 진입금액 10배↑ 매수잔량 확인 → 내가 던져도 받아줄 물량이 있는 종목만 진입</p>
-            <p>🎯 Passive Fill: 시장가 금지 → 매수 1호가 알박기 → 슬리피지 = 0</p>
+            <p className="font-semibold text-foreground">[Volatility Hunt] 저가주 변동성 활용</p>
+            <p>🎯 ₩12,000 미만 종목: 일일 목표 수익 30% (한 종목에서 뽑아내기)</p>
+            <p>💰 1순위 종목에 50%+ 비중 집중 → 수익금 단숨에 불리기</p>
           </div>
           <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Select-5] 정예 종목 집중 운용</p>
-            <p>🔒 전 종목 스캔 → 5개 정예 종목 ₩100만 배분 → 30~50% 목표 무조건 홀딩</p>
-            <p>🛡️ Zero-Risk Lock + Iron-Hold → 어떤 파동에도 패배 기록 0 유지</p>
+            <p className="font-semibold text-foreground">[100% 익절 보장] 패배 없는 공격</p>
+            <p>🔒 +1.0% 도달 → 어떤 경우에도 본절가(+0.1%) 아래 금지</p>
+            <p>📰 WS 실시간 가격 + Finnhub 뉴스 일치 = '필승 확정 구간' 최대 비중</p>
           </div>
         </CardContent>
       </Card>
