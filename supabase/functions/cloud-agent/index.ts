@@ -1204,6 +1204,7 @@ Deno.serve(async (req) => {
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
         const capType = getCapType(price, sym);
+        const isPennyPos = price < 5 || pos.cap_type === 'small';
 
         // ===== [수익 무한 확장] 고수익 익절 지시서 — 3% 전까지 매도 금지, 고점-2% 트레일링 =====
         const indicatorsOver60 = quantScore >= 60;
@@ -1241,11 +1242,15 @@ Deno.serve(async (req) => {
         }
 
         // ===== [핵심] 익절 로직 — 3.0% 전까지 절대 매도 금지, 그 이후 고점-2.0% 트레일링만 =====
+        let shouldClose = false;
+        let closeReason = '';
+        let newStatus = 'closed';
         const accumInfo = scoring?.accumulation;
         const isIronHold = accumInfo && accumInfo.condensation >= 6 && quantScore >= 50;
         const emaAligned = scoring?.indicators?.emaAlign?.aligned === true;
         const indicatorsStrong = quantScore >= 55;
         const technicalSafe = (scoring?.indicators?.candle?.vwapCross ?? false) || (price > (scoring?.bbLower || 0));
+        const coreIntact = emaAligned && technicalSafe;
 
         // ★ 30%+ 대시세: 지표 60점 이상이면 계속 추격, 아니면 고점-2% 트레일링
         if (pnlPct >= 30.0) {
