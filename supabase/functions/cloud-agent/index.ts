@@ -1215,7 +1215,7 @@ Deno.serve(async (req) => {
           const chaseSL = +(pos.price * PROFIT_CHASE_SL_PCT).toFixed(4);
           await supabase.from('unified_trades').update({ stop_loss: chaseSL }).eq('id', pos.id);
           pos.stop_loss = chaseSL;
-          await addLog('unified', 'defense', sym, `[🚀수익추격모드] ${sym} +${pnlPct.toFixed(2)}% ≥ ${PROFIT_CHASE_TRIGGER}% → SL=${fmtKRW(chaseSL)}(매수가+1.5%) 수익 추격 개시! 고점-${TRAILING_DROP_PCT}% 트레일링`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'defense', sym, `[🚀수익추격모드] ${sym} +${pnlPct.toFixed(2)}% ≥ ${PROFIT_CHASE_TRIGGER}% → SL=${fmtKRW(chaseSL)}(매수가+1.5%) 수익 추격 개시! 고점-${TRAILING_DROP_PCT}% 트레일링`, { quantScore, pnlPct: +pnlPct.toFixed(2), confidence: pos.ai_confidence, costKRW: Math.floor(pos.price * pos.quantity * KRW_RATE), slKRW: Math.floor(chaseSL * KRW_RATE), holdMin: Math.floor((now.getTime() - new Date(pos.opened_at).getTime()) / 60000) });
         }
 
         // ★ 추가 수익 구간 SL 상향: 고점 대비 SL을 계속 끌어올림
@@ -1295,15 +1295,15 @@ Deno.serve(async (req) => {
           } else if (drop >= TRAILING_DROP_PCT && indicatorsStrong) {
             await addLog('unified', 'hold', sym, `[Iron Hold] ${sym} +${pnlPct.toFixed(2)}% 고점-${drop.toFixed(2)}% BUT 지표 ${quantScore}점(≥55) → 30% 추격 중`, { quantScore, drop, isIronHold });
           } else {
-            await addLog('unified', 'hold', sym, `[🛡️철벽홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 추격 중 | 지표 ${quantScore}점 → 고점-${TRAILING_DROP_PCT}% 트레일링, 30% 목표 추격!`, { quantScore, pnlPct: +pnlPct.toFixed(2), drop });
+            await addLog('unified', 'hold', sym, `[🛡️철벽홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 추격 중 | 지표 ${quantScore}점 → 고점-${TRAILING_DROP_PCT}% 트레일링, 30% 목표 추격!`, { quantScore, pnlPct: +pnlPct.toFixed(2), drop, confidence: pos.ai_confidence, costKRW: Math.floor(pos.price * pos.quantity * KRW_RATE), holdMin: Math.floor((now.getTime() - new Date(pos.opened_at).getTime()) / 60000) });
           }
         } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER) {
           // ★ 1~3% 구간: 절대 매도 금지! 3% 돌파까지 인내
-          await addLog('unified', 'hold', sym, `[🎯3%돌파대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 3.0% 돌파 시 수익 추격 모드 발동 예정 (현재 매도 금지!)`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'hold', sym, `[🎯3%돌파대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 3.0% 돌파 시 수익 추격 모드 발동 예정 (현재 매도 금지!)`, { quantScore, pnlPct: +pnlPct.toFixed(2), confidence: pos.ai_confidence, costKRW: Math.floor(pos.price * pos.quantity * KRW_RATE), slKRW: pos.stop_loss ? Math.floor(pos.stop_loss * KRW_RATE) : null, tpKRW: pos.take_profit ? Math.floor(pos.take_profit * KRW_RATE) : null, holdMin: Math.floor((now.getTime() - new Date(pos.opened_at).getTime()) / 60000) });
         } else if (pnlPct >= 0 && pnlPct < 1.0) {
           // ★ 0~1% 구간: 본절가 보호 발동 전 — 홀딩
           if (quantScore >= 50) {
-            await addLog('unified', 'hold', sym, `[홀딩] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 본절가 보호(+1.0%) 대기 중`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+            await addLog('unified', 'hold', sym, `[홀딩] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 본절가 보호(+1.0%) 대기 중`, { quantScore, pnlPct: +pnlPct.toFixed(2), confidence: pos.ai_confidence, costKRW: Math.floor(pos.price * pos.quantity * KRW_RATE), holdMin: Math.floor((now.getTime() - new Date(pos.opened_at).getTime()) / 60000) });
           }
         } else if (pos.take_profit && price >= pos.take_profit) {
           // TP 도달 → 상향 또는 트레일링 전환 (매도 금지)
