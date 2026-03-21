@@ -1299,7 +1299,7 @@ Deno.serve(async (req) => {
           }
         } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER) {
           // ★ 1~3% 구간: 절대 매도 금지! 3% 돌파까지 인내
-          await addLog('unified', 'hold', sym, `[🎯3%돌파대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 3.0% 돌파 시 수익 추격 모드 발동 예정 (현재 매도 금지!)`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          await addLog('unified', 'hold', sym, `[🎯3%돌파대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 3.0% 돌파 시 수익 추격 모드 발동 예정 (현재 매도 금지!)`, { quantScore, pnlPct: +pnlPct.toFixed(2), confidence: pos.ai_confidence, costKRW: Math.floor(pos.price * pos.quantity * KRW_RATE), slKRW: pos.stop_loss ? Math.floor(pos.stop_loss * KRW_RATE) : null, tpKRW: pos.take_profit ? Math.floor(pos.take_profit * KRW_RATE) : null, holdMin: Math.floor((now.getTime() - new Date(pos.opened_at).getTime()) / 60000) });
         } else if (pnlPct >= 0 && pnlPct < 1.0) {
           // ★ 0~1% 구간: 본절가 보호 발동 전 — 홀딩
           if (quantScore >= 50) {
