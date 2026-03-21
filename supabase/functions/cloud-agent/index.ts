@@ -1322,7 +1322,6 @@ Deno.serve(async (req) => {
         }
 
         // 2. ★ [철갑 홀딩] SL 터치 — 동전주: 65점, 일반: 60점 이상이면 절대 매도 금지
-        const isPennyPos = price < PENNY_THRESHOLD_USD || toKRW(price) <= PENNY_THRESHOLD_KRW;
         const ironHoldThreshold = isPennyPos ? PENNY_IRON_HOLD_SCORE : 60;
         const indicatorsIronHold = quantScore >= ironHoldThreshold;
         if (!shouldClose && pos.stop_loss && price <= pos.stop_loss) {
