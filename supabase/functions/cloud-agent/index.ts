@@ -1303,7 +1303,7 @@ Deno.serve(async (req) => {
         } else if (pnlPct >= 0 && pnlPct < 1.0) {
           // ★ 0~1% 구간: 본절가 보호 발동 전 — 홀딩
           if (quantScore >= 50) {
-            await addLog('unified', 'hold', sym, `[홀딩] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 본절가 보호(+1.0%) 대기 중`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+            await addLog('unified', 'hold', sym, `[홀딩] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 본절가 보호(+1.0%) 대기 중`, { quantScore, pnlPct: +pnlPct.toFixed(2), confidence: pos.ai_confidence, costKRW: Math.floor(pos.price * pos.quantity * KRW_RATE), holdMin: Math.floor((now.getTime() - new Date(pos.opened_at).getTime()) / 60000) });
           }
         } else if (pos.take_profit && price >= pos.take_profit) {
           // TP 도달 → 상향 또는 트레일링 전환 (매도 금지)
