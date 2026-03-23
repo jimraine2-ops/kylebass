@@ -1251,6 +1251,7 @@ Deno.serve(async (req) => {
         const indicatorsStrong = quantScore >= 55;
         const technicalSafe = (scoring?.indicators?.candle?.vwapCross ?? false) || (price > (scoring?.bbLower || 0));
         const coreIntact = emaAligned && technicalSafe;
+        const isPreMarketEntry = pos.ai_reason?.includes('선취매') || pos.ai_reason?.includes('PRE') || pos.ai_reason?.includes('DAY');
 
         // ★ 30%+ 대시세: 지표 60점 이상이면 계속 추격, 아니면 고점-2% 트레일링
         if (pnlPct >= 30.0) {
