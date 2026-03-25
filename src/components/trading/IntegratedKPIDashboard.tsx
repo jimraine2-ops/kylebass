@@ -98,8 +98,39 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
       return acc;
     }, []);
 
-  // ★ 일일 수익 목표 체크
-  const DAILY_TARGET_KRW = 300000;
+  // ★ 일일 수익 목표 체크 + 라운드 추적
+  const DAILY_TARGET_KRW = 500000;
+  const ROUND_RESET_BASE_KRW = 1000000;
+
+  // ★ 라운드 감지: agent_logs에서 Round 완료 로그 카운트
+  const [currentRound, setCurrentRound] = useState(1);
+  const [cumulativeProfit, setCumulativeProfit] = useState(0);
+
+  useEffect(() => {
+    async function detectRound() {
+      try {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const { data: roundLogs } = await supabase
+          .from('agent_logs')
+          .select('details')
+          .eq('action', 'milestone')
+          .like('message', '%Round%완료%')
+          .gte('created_at', todayStart.toISOString())
+          .order('created_at', { ascending: false });
+
+        if (roundLogs && roundLogs.length > 0) {
+          const latestDetails = roundLogs[0]?.details as any;
+          setCurrentRound(latestDetails?.newRound || roundLogs.length + 1);
+          setCumulativeProfit(latestDetails?.cumulativeProfit || 0);
+        }
+      } catch { /* fallback */ }
+    }
+    detectRound();
+    const interval = setInterval(detectRound, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const todayPnl = useMemo(() => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -107,8 +138,12 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
       .filter((t: any) => t.closed_at && new Date(t.closed_at) >= todayStart)
       .reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
   }, [closedTrades]);
-  const dailyTargetHit = todayPnl >= DAILY_TARGET_KRW;
-  const dailyProgress = Math.min(100, (todayPnl / DAILY_TARGET_KRW) * 100);
+
+  // 현재 라운드 수익 = 오늘 총 수익 - 이전 라운드 누적 수익
+  const currentRoundPnl = todayPnl - cumulativeProfit;
+  const dailyTargetHit = currentRoundPnl >= DAILY_TARGET_KRW;
+  const dailyProgress = Math.min(100, (currentRoundPnl / DAILY_TARGET_KRW) * 100);
+  const totalDayProfit = todayPnl; // 전체 일일 수익 (모든 라운드 합산)
 
   // ★ 연승 카운트: 최근 연속 익절 횟수
   const winStreak = useMemo(() => {
