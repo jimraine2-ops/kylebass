@@ -206,6 +206,11 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
           </Badge>
+          {currentRound > 1 && (
+            <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px] font-bold">
+              🔄 Round {currentRound} 진행 중 | 누적 수익: ₩{cumulativeProfit.toLocaleString('ko-KR')}
+            </Badge>
+          )}
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
