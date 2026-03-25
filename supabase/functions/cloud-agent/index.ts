@@ -1101,6 +1101,72 @@ Deno.serve(async (req) => {
       await addLog('unified', 'warning', null, `[자금경고] ⚠️ 통합 자금 운용률 ${utilization.toFixed(1)}%`, { utilization });
     }
 
+    // ========== [INFINITE LOOP] 수익 목표 달성 시 자동 리셋 & 재공략 ==========
+    {
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+      const { data: todayClosedTrades } = await supabase
+        .from('unified_trades')
+        .select('pnl, closed_at')
+        .not('status', 'eq', 'open')
+        .gte('closed_at', todayStart.toISOString());
+      
+      const todayRealizedPnl = (todayClosedTrades || []).reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
+      // 현재 라운드 수익 = 오늘 총 실현 수익 - 이전 라운드 누적 수익 (안전 자산)
+      const currentRoundPnl = todayRealizedPnl - cumulativeTotalProfitKRW;
+      const currentOpenCount = (openPos || []).filter((p: any) => p.status === 'open').length;
+      
+      if (currentRoundPnl >= DAILY_TARGET_KRW_CONST && currentOpenCount === 0) {
+        // ★ 목표 달성 + 모든 포지션 청산 완료 → 무한 루프 리셋!
+        cumulativeTotalProfitKRW = todayRealizedPnl; // 누적 수익을 안전 자산으로 분리
+        const profitSaved = currentRoundPnl;
+        const completedRound = currentRound;
+        currentRound++;
+        roundResetTimestamps.push(now.toISOString());
+        
+        // 잔고를 원금 ₩1,000,000으로 리셋 (수익금은 안전 자산으로 분리)
+        const resetBalance = ROUND_RESET_BASE_KRW;
+        await supabase.from('unified_wallet').update({ 
+          balance: resetBalance, 
+          updated_at: now.toISOString() 
+        }).eq('id', wallet.id);
+        balance = resetBalance;
+        
+        await addLog('system', 'milestone', null, 
+          `🏆🔄 [Round ${completedRound} 완료 → Round ${currentRound} 시작!] 수익 목표 ₩${DAILY_TARGET_KRW_CONST.toLocaleString()} 달성! | ` +
+          `Round ${completedRound} 수익: ${fmtKRWRaw(profitSaved)} → 안전 자산으로 분리 | ` +
+          `누적 총 수익: ${fmtKRWRaw(cumulativeTotalProfitKRW)} | ` +
+          `원금 ${fmtKRWRaw(resetBalance)}으로 재부팅 → 12,000원 미만 필승주 재스캔 개시!`,
+          { 
+            completedRound, 
+            newRound: currentRound, 
+            roundProfit: profitSaved, 
+            cumulativeProfit: cumulativeTotalProfitKRW,
+            resetBalance,
+            roundResetTimestamps 
+          }
+        );
+        
+        // 스캔 리스트 초기화 → 새 사냥 시작
+        activeUnifiedList.clear();
+        lastScores.clear();
+        
+        await addLog('unified', 'info', null, 
+          `[Round ${currentRound}] 🎯 새 라운드 스캔 엔진 재부팅 완료 — ` +
+          `Finnhub × Twelve Data 교차 조회로 익절 확률 90%↑ 신규 5개 정예 종목 탐색 중... | ` +
+          `잔고: ${fmtKRWRaw(resetBalance)} | 이전 라운드 종목도 필승 구간 재진입 시 Re-entry 허용`,
+          { round: currentRound, balance: resetBalance }
+        );
+      } else if (currentRoundPnl >= DAILY_TARGET_KRW_CONST && currentOpenCount > 0) {
+        // 목표 달성했지만 아직 열린 포지션 존재 → 대기 로그
+        await addLog('system', 'info', null, 
+          `[Round ${currentRound}] 💰 수익 목표 ${fmtKRWRaw(DAILY_TARGET_KRW_CONST)} 달성! (현 라운드 수익: ${fmtKRWRaw(currentRoundPnl)}) | ` +
+          `잔여 포지션 ${currentOpenCount}개 청산 대기 중 → 전량 청산 후 Round ${currentRound + 1} 자동 시작`,
+          { currentRoundPnl, openCount: currentOpenCount, round: currentRound }
+        );
+      }
+    }
+
     // --- SELF-LEARNING: Blacklist (시한부: 2일 이내 연속 5패 이상만 블랙리스트) ---
     const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString();
     const { data: recentLosses } = await supabase
