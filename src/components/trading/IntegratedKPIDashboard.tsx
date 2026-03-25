@@ -100,7 +100,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
   // ★ 일일 수익 목표 체크 + 라운드 추적
   const DAILY_TARGET_KRW = 500000;
-  const ROUND_RESET_BASE_KRW = 1000000;
+  const ROUND_RESET_BASE_KRW = 5000000;
 
   // ★ 라운드 감지: agent_logs에서 Round 완료 로그 카운트
   const [currentRound, setCurrentRound] = useState(1);
