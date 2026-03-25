@@ -98,8 +98,39 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
       return acc;
     }, []);
 
-  // ★ 일일 수익 목표 체크
-  const DAILY_TARGET_KRW = 300000;
+  // ★ 일일 수익 목표 체크 + 라운드 추적
+  const DAILY_TARGET_KRW = 500000;
+  const ROUND_RESET_BASE_KRW = 1000000;
+
+  // ★ 라운드 감지: agent_logs에서 Round 완료 로그 카운트
+  const [currentRound, setCurrentRound] = useState(1);
+  const [cumulativeProfit, setCumulativeProfit] = useState(0);
+
+  useEffect(() => {
+    async function detectRound() {
+      try {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const { data: roundLogs } = await supabase
+          .from('agent_logs')
+          .select('details')
+          .eq('action', 'milestone')
+          .like('message', '%Round%완료%')
+          .gte('created_at', todayStart.toISOString())
+          .order('created_at', { ascending: false });
+
+        if (roundLogs && roundLogs.length > 0) {
+          const latestDetails = roundLogs[0]?.details as any;
+          setCurrentRound(latestDetails?.newRound || roundLogs.length + 1);
+          setCumulativeProfit(latestDetails?.cumulativeProfit || 0);
+        }
+      } catch { /* fallback */ }
+    }
+    detectRound();
+    const interval = setInterval(detectRound, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const todayPnl = useMemo(() => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -107,8 +138,12 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
       .filter((t: any) => t.closed_at && new Date(t.closed_at) >= todayStart)
       .reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
   }, [closedTrades]);
-  const dailyTargetHit = todayPnl >= DAILY_TARGET_KRW;
-  const dailyProgress = Math.min(100, (todayPnl / DAILY_TARGET_KRW) * 100);
+
+  // 현재 라운드 수익 = 오늘 총 수익 - 이전 라운드 누적 수익
+  const currentRoundPnl = todayPnl - cumulativeProfit;
+  const dailyTargetHit = currentRoundPnl >= DAILY_TARGET_KRW;
+  const dailyProgress = Math.min(100, (currentRoundPnl / DAILY_TARGET_KRW) * 100);
+  const totalDayProfit = todayPnl; // 전체 일일 수익 (모든 라운드 합산)
 
   // ★ 연승 카운트: 최근 연속 익절 횟수
   const winStreak = useMemo(() => {
@@ -171,6 +206,11 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
           </Badge>
+          {currentRound > 1 && (
+            <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px] font-bold">
+              🔄 Round {currentRound} 진행 중 | 누적 수익: ₩{cumulativeProfit.toLocaleString('ko-KR')}
+            </Badge>
+          )}
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
@@ -200,16 +240,21 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
         </CardContent>
       </Card>
 
-      {/* ★ 일일 목표 달성 축하 배너 */}
+      {/* ★ 일일 목표 달성 축하 배너 + 라운드 정보 */}
       {dailyTargetHit ? (
         <Card className="border-stock-up/50 bg-stock-up/10">
           <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-3xl">🏆🎉</span>
+            <span className="text-3xl">🏆🔄</span>
             <div>
-              <p className="text-lg font-bold text-stock-up">오늘의 목표 달성! 🎊</p>
+              <p className="text-lg font-bold text-stock-up">Round {currentRound > 1 ? currentRound - 1 : 1} 목표 달성! → Round {currentRound} 재공략 중 🎯</p>
               <p className="text-sm text-muted-foreground">
-                오늘 실현 수익: <span className="font-bold font-mono text-stock-up">₩{todayPnl.toLocaleString('ko-KR')}</span> / 목표 ₩300,000
+                현재 라운드 수익: <span className="font-bold font-mono text-stock-up">₩{currentRoundPnl.toLocaleString('ko-KR')}</span> / 목표 ₩{DAILY_TARGET_KRW.toLocaleString('ko-KR')}
               </p>
+              {cumulativeProfit > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  🏦 오늘 총 누적 수익 (안전 자산): <span className="font-bold font-mono text-stock-up">₩{totalDayProfit.toLocaleString('ko-KR')}</span>
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -217,9 +262,11 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
         <Card className="border-primary/20">
           <CardContent className="p-3">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-muted-foreground">💰 일일 목표 진행률</span>
+              <span className="text-xs text-muted-foreground">
+                💰 {currentRound > 1 ? `[Round ${currentRound}]` : ''} 수익 목표 진행률
+              </span>
               <span className="text-xs font-mono font-bold">
-                ₩{todayPnl.toLocaleString('ko-KR')} / ₩300,000 ({dailyProgress.toFixed(1)}%)
+                ₩{currentRoundPnl.toLocaleString('ko-KR')} / ₩{DAILY_TARGET_KRW.toLocaleString('ko-KR')} ({dailyProgress.toFixed(1)}%)
               </span>
             </div>
             <div className="w-full bg-muted rounded-full h-2">
@@ -228,6 +275,11 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
                 style={{ width: `${dailyProgress}%` }}
               />
             </div>
+            {cumulativeProfit > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-1">
+                🏦 이전 라운드 누적 수익 (안전 자산): ₩{cumulativeProfit.toLocaleString('ko-KR')} | 오늘 총: ₩{totalDayProfit.toLocaleString('ko-KR')}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
