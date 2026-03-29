@@ -5,13 +5,13 @@ import { Link } from "react-router-dom";
 import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { SessionIndicator } from "@/components/trading/SessionIndicator";
 import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
+import { ProfitScoreboard } from "@/components/dashboard/ProfitScoreboard";
 
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useUnifiedPortfolio } from "@/hooks/useStockData";
 import { useAgentStatus, useAgentLogs } from "@/hooks/useAgentStatus";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useTodayProfit } from "@/hooks/useTodayProfit";
 import { useMemo } from "react";
 import { formatStockName } from "@/lib/koreanStockMap";
 
@@ -23,6 +23,7 @@ export default function Dashboard() {
   const { data: agentStatus } = useAgentStatus();
   const { data: logs = [] } = useAgentLogs(5);
   const { rate: fxRate, isLive: fxLive } = useExchangeRate();
+  const { data: profitData, isLoading: profitLoading } = useTodayProfit(fxRate);
 
   const allSymbols = useMemo(() => {
     const syms = new Set<string>();
@@ -60,6 +61,17 @@ export default function Dashboard() {
       </div>
 
       <ServerStatusBanner />
+
+      {/* 수익 현황판 */}
+      <ProfitScoreboard
+        totalProfitKRW={profitData?.totalProfitKRW ?? 0}
+        roundNumber={profitData?.roundNumber ?? 1}
+        bestTicker={profitData?.bestTicker ?? null}
+        bestPnlPct={profitData?.bestPnlPct ?? 0}
+        winRate={profitData?.winRate ?? 100}
+        totalTrades={profitData?.totalTrades ?? 0}
+        isLoading={profitLoading}
+      />
 
       {/* KPI Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
