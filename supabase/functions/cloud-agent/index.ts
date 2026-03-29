@@ -2009,7 +2009,9 @@ Deno.serve(async (req) => {
           }).eq('id', pos.id);
           balance += saleProceeds;
           await supabase.from('unified_wallet').update({ balance, updated_at: now.toISOString() }).eq('id', wallet.id);
-          await addLog('unified', 'replace', pos.symbol, closeReason, { oldScore: currentScore, newSymbol: betterCandidate?.sym, newScore: betterCandidate?.scoring.totalScore, pnl: pnlKRW });
+          const { data: allClosedToday2 } = await supabase.from('unified_trades').select('pnl').neq('status', 'open').gte('closed_at', todayStart.toISOString());
+          const cumulPnl2 = (allClosedToday2 || []).reduce((s: number, t: any) => s + (t.pnl || 0), 0);
+          await addLog('unified', 'replace', pos.symbol, `[Round ${currentRound}] ${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 오늘의 총 누적 수익: ${fmtKRWRaw(cumulPnl2)}`, { oldScore: currentScore, newSymbol: betterCandidate?.sym, newScore: betterCandidate?.scoring.totalScore, pnl: pnlKRW, cumulativePnl: cumulPnl2, round: currentRound });
         }
         await new Promise(r => setTimeout(r, 200));
       }
