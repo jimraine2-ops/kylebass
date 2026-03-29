@@ -1273,6 +1273,7 @@ Deno.serve(async (req) => {
       const vwapCross = scoring?.indicators?.candle?.vwapCross ?? (price > vwap);
       const aboveBB = price > bbLower;
 
+      const todayStart2 = new Date(now); todayStart2.setHours(0, 0, 0, 0);
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
         const capType = getCapType(price, sym);
