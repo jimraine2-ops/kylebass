@@ -62,6 +62,17 @@ export default function Dashboard() {
 
       <ServerStatusBanner />
 
+      {/* 수익 현황판 */}
+      <ProfitScoreboard
+        totalProfitKRW={profitData?.totalProfitKRW ?? 0}
+        roundNumber={profitData?.roundNumber ?? 1}
+        bestTicker={profitData?.bestTicker ?? null}
+        bestPnlPct={profitData?.bestPnlPct ?? 0}
+        winRate={profitData?.winRate ?? 100}
+        totalTrades={profitData?.totalTrades ?? 0}
+        isLoading={profitLoading}
+      />
+
       {/* KPI Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* 총 잔고 */}
