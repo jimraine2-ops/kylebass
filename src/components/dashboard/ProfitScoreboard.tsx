@@ -14,7 +14,7 @@ interface ProfitScoreboardProps {
   isLoading: boolean;
 }
 
-function AnimatedNumber({ value, prefix = "", suffix = "" }: { value: number; prefix?: string; suffix?: string }) {
+const AnimatedNumber = ({ value, prefix = "", suffix = "" }: { value: number; prefix?: string; suffix?: string }) => {
   const [display, setDisplay] = useState(value);
   const prevRef = useRef(value);
 
@@ -47,7 +47,7 @@ function AnimatedNumber({ value, prefix = "", suffix = "" }: { value: number; pr
       {prefix}{display.toLocaleString('ko-KR')}{suffix}
     </span>
   );
-}
+};
 
 export function ProfitScoreboard({
   totalProfitKRW,
