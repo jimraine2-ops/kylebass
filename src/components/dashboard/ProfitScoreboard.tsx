@@ -2,7 +2,7 @@ import { Trophy, Flame, Target, Shield, RotateCcw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatStockName } from "@/lib/koreanStockMap";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, forwardRef } from "react";
 
 interface ProfitScoreboardProps {
   totalProfitKRW: number;
@@ -14,40 +14,43 @@ interface ProfitScoreboardProps {
   isLoading: boolean;
 }
 
-const AnimatedNumber = ({ value, prefix = "", suffix = "" }: { value: number; prefix?: string; suffix?: string }) => {
-  const [display, setDisplay] = useState(value);
-  const prevRef = useRef(value);
+const AnimatedNumber = forwardRef<HTMLSpanElement, { value: number; prefix?: string; suffix?: string }>(
+  ({ value, prefix = "", suffix = "" }, ref) => {
+    const [display, setDisplay] = useState(value);
+    const prevRef = useRef(value);
 
-  useEffect(() => {
-    const prev = prevRef.current;
-    if (prev === value) return;
-    prevRef.current = value;
+    useEffect(() => {
+      const prev = prevRef.current;
+      if (prev === value) return;
+      prevRef.current = value;
 
-    const diff = value - prev;
-    const steps = 20;
-    const stepVal = diff / steps;
-    let current = prev;
-    let step = 0;
+      const diff = value - prev;
+      const steps = 20;
+      const stepVal = diff / steps;
+      let current = prev;
+      let step = 0;
 
-    const timer = setInterval(() => {
-      step++;
-      current += stepVal;
-      if (step >= steps) {
-        current = value;
-        clearInterval(timer);
-      }
-      setDisplay(Math.round(current));
-    }, 30);
+      const timer = setInterval(() => {
+        step++;
+        current += stepVal;
+        if (step >= steps) {
+          current = value;
+          clearInterval(timer);
+        }
+        setDisplay(Math.round(current));
+      }, 30);
 
-    return () => clearInterval(timer);
-  }, [value]);
+      return () => clearInterval(timer);
+    }, [value]);
 
-  return (
-    <span>
-      {prefix}{display.toLocaleString('ko-KR')}{suffix}
-    </span>
-  );
-};
+    return (
+      <span ref={ref}>
+        {prefix}{display.toLocaleString('ko-KR')}{suffix}
+      </span>
+    );
+  }
+);
+AnimatedNumber.displayName = "AnimatedNumber";
 
 export function ProfitScoreboard({
   totalProfitKRW,
