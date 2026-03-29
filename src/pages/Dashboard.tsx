@@ -23,6 +23,7 @@ export default function Dashboard() {
   const { data: agentStatus } = useAgentStatus();
   const { data: logs = [] } = useAgentLogs(5);
   const { rate: fxRate, isLive: fxLive } = useExchangeRate();
+  const { data: profitData, isLoading: profitLoading } = useTodayProfit(fxRate);
 
   const allSymbols = useMemo(() => {
     const syms = new Set<string>();
