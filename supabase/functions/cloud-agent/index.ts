@@ -1273,6 +1273,7 @@ Deno.serve(async (req) => {
       const vwapCross = scoring?.indicators?.candle?.vwapCross ?? (price > vwap);
       const aboveBB = price > bbLower;
 
+      const todayStart2 = new Date(now); todayStart2.setHours(0, 0, 0, 0);
       for (const pos of (openPos || []).filter((p: any) => p.symbol === sym && p.status === 'open')) {
         const pnlPct = ((price - pos.price) / pos.price) * 100;
         const capType = getCapType(price, sym);
@@ -1530,7 +1531,14 @@ Deno.serve(async (req) => {
           }).eq('id', pos.id);
           await supabase.from('unified_wallet').update({ balance: newBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
           balance = newBalance;
-          await addLog('unified', 'exit', sym, `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`, { pnl: pnlKRW, pnlPct: +pnlPct.toFixed(2) });
+          // ★ 누적 수익 계산
+          const { data: allClosedToday } = await supabase
+            .from('unified_trades')
+            .select('pnl')
+            .neq('status', 'open')
+            .gte('closed_at', todayStart2.toISOString());
+          const cumulPnl = (allClosedToday || []).reduce((s, t) => s + (t.pnl || 0), 0);
+          await addLog('unified', 'exit', sym, `[Round ${currentRound}] ${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 오늘의 총 누적 수익: ${fmtKRWRaw(cumulPnl)} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`, { pnl: pnlKRW, pnlPct: +pnlPct.toFixed(2), cumulativePnl: cumulPnl, round: currentRound });
         }
       }
       await new Promise(r => setTimeout(r, 200));
@@ -2001,7 +2009,9 @@ Deno.serve(async (req) => {
           }).eq('id', pos.id);
           balance += saleProceeds;
           await supabase.from('unified_wallet').update({ balance, updated_at: now.toISOString() }).eq('id', wallet.id);
-          await addLog('unified', 'replace', pos.symbol, closeReason, { oldScore: currentScore, newSymbol: betterCandidate?.sym, newScore: betterCandidate?.scoring.totalScore, pnl: pnlKRW });
+          const { data: allClosedToday2 } = await supabase.from('unified_trades').select('pnl').neq('status', 'open').gte('closed_at', todayStart.toISOString());
+          const cumulPnl2 = (allClosedToday2 || []).reduce((s: number, t: any) => s + (t.pnl || 0), 0);
+          await addLog('unified', 'replace', pos.symbol, `[Round ${currentRound}] ${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 오늘의 총 누적 수익: ${fmtKRWRaw(cumulPnl2)}`, { oldScore: currentScore, newSymbol: betterCandidate?.sym, newScore: betterCandidate?.scoring.totalScore, pnl: pnlKRW, cumulativePnl: cumulPnl2, round: currentRound });
         }
         await new Promise(r => setTimeout(r, 200));
       }
