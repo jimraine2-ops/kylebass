@@ -1530,7 +1530,14 @@ Deno.serve(async (req) => {
           }).eq('id', pos.id);
           await supabase.from('unified_wallet').update({ balance: newBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
           balance = newBalance;
-          await addLog('unified', 'exit', sym, `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`, { pnl: pnlKRW, pnlPct: +pnlPct.toFixed(2) });
+          // ★ 누적 수익 계산
+          const { data: allClosedToday } = await supabase
+            .from('unified_trades')
+            .select('pnl')
+            .neq('status', 'open')
+            .gte('closed_at', todayStart2.toISOString());
+          const cumulPnl = (allClosedToday || []).reduce((s, t) => s + (t.pnl || 0), 0);
+          await addLog('unified', 'exit', sym, `[Round ${currentRound}] ${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 오늘의 총 누적 수익: ${fmtKRWRaw(cumulPnl)} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`, { pnl: pnlKRW, pnlPct: +pnlPct.toFixed(2), cumulativePnl: cumulPnl, round: currentRound });
         }
       }
       await new Promise(r => setTimeout(r, 200));
