@@ -5,13 +5,13 @@ import { Link } from "react-router-dom";
 import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { SessionIndicator } from "@/components/trading/SessionIndicator";
 import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
+import { ProfitScoreboard } from "@/components/dashboard/ProfitScoreboard";
 
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useUnifiedPortfolio } from "@/hooks/useStockData";
 import { useAgentStatus, useAgentLogs } from "@/hooks/useAgentStatus";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useTodayProfit } from "@/hooks/useTodayProfit";
 import { useMemo } from "react";
 import { formatStockName } from "@/lib/koreanStockMap";
 
