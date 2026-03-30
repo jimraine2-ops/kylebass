@@ -1562,6 +1562,38 @@ Deno.serve(async (req) => {
       await addLog('system', 'info', null, `[일일목표] 오늘 실현 PnL: ${fmtKRWRaw(dailyPnl)} / 목표 ₩500,000 (${(dailyPnl/DAILY_TARGET_KRW_CONST*100).toFixed(1)}%)`, { dailyPnl });
     }
 
+    // ========== [Safe-Pause] 오전 9시(KST) 이전 거래 일시 중단 ==========
+    const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000); // UTC → KST
+    const kstHour = kstNow.getUTCHours();
+    const kstMin = kstNow.getUTCMinutes();
+    const kstTimeMinutes = kstHour * 60 + kstMin;
+    const isBeforeKST9AM = kstTimeMinutes < 540; // 540 = 9 * 60
+    const currentOpenCountForPause = (openPos || []).filter((p: any) => p.status === 'open').length;
+    
+    // Safe-Pause: 9시(KST) 이전 + 모든 포지션 청산 완료 → 신규 매수 금지
+    let safePauseActive = false;
+    if (isBeforeKST9AM && currentOpenCountForPause === 0) {
+      safePauseActive = true;
+      await addLog('system', 'market-pause', null, 
+        `[Market-Pause] 🟡 프리마켓 수익 확정 및 거래 일시 중지 (오전 9시 KST 재개) | ` +
+        `오늘의 총 누적 수익: ${fmtKRWRaw(dailyPnl)} | ` +
+        `상태: 대기 중 | 다음 사냥 준비: 12,000원 미만 실적/수급주 스캔 중 | ` +
+        `현재 KST ${kstHour.toString().padStart(2,'0')}:${kstMin.toString().padStart(2,'0')}`,
+        { safePause: true, kstTime: `${kstHour}:${kstMin}`, dailyPnl, nextResumeKST: '09:00' }
+      );
+    }
+    
+    // [Day-Start] 오전 9시 KST 도달 직후 5분간(9:00~9:05) → 강화 필터링 + 라운드 시작 로그
+    const isDayStartWindow = kstTimeMinutes >= 540 && kstTimeMinutes < 545; // 9:00~9:05 KST
+    if (isDayStartWindow && currentOpenCountForPause === 0) {
+      await addLog('system', 'day-start', null, 
+        `[Day-Start] 🟢 데이장 개시! Round ${currentRound} 사냥 재개 | ` +
+        `잔고: ${fmtKRWRaw(Math.round(balance))} | 누적 수익 유지: ${fmtKRWRaw(dailyPnl)} | ` +
+        `Finnhub × Twelve Data 교차 필터링 강화 중 (9:00~9:05 KST 최적 수급 포착)`,
+        { dayStart: true, round: currentRound, balance: Math.round(balance), dailyPnl }
+      );
+    }
+
     // ========== UNIFIED ENTRY SCAN ==========
     // ★ 필승 로직: 시장 하락 또는 개장 직후 15분 뇌동매매 방지
     if (marketBuyHalt) {
