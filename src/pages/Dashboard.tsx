@@ -62,6 +62,7 @@ export default function Dashboard() {
       </div>
 
       <ServerStatusBanner />
+      <SafePauseBanner />
 
       {/* 수익 현황판 */}
       <ProfitScoreboard
