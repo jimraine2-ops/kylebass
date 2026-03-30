@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { Search, Trash2, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
-import { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 
 interface TradeLogTableProps {
   closedTrades: any[];
@@ -211,9 +211,8 @@ export function TradeLogTable({ closedTrades, openPositions = [] }: TradeLogTabl
                   const isExpanded = expandedId === entry.id;
 
                   return (
-                    <>
+                    <React.Fragment key={entry.id}>
                       <tr
-                        key={entry.id}
                         className={`border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer ${
                           isOpen ? 'bg-primary/5' : statusInfo.isExit ? 'bg-stock-down/5' : ''
                         }`}
@@ -299,7 +298,7 @@ export function TradeLogTable({ closedTrades, openPositions = [] }: TradeLogTabl
                           </td>
                         </tr>
                       )}
-                    </>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
