@@ -1602,12 +1602,15 @@ Deno.serve(async (req) => {
     if (isOpeningRush) {
       await addLog('unified', 'hold', null, `[필승-뇌동방지] 🚫 정규장 개장 직후 15분(09:30~09:45 ET) — 매수 잠금`, {});
     }
+    if (safePauseActive) {
+      await addLog('unified', 'hold', null, `[Safe-Pause] 🟡 오전 9시(KST) 이전 신규 매수 금지 — 프리마켓 수익 보전 모드`, { safePause: true });
+    }
 
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
     const MAX_POSITIONS = 5; // ★ 정예 1~5선: 100만 원을 최대 5개에 분산 투입
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
-    if (!marketBuyHalt && !isOpeningRush) {
+    if (!marketBuyHalt && !isOpeningRush && !safePauseActive) {
       for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
         const batch = SCAN_SYMBOLS.slice(i, i + 5);
         const results = await Promise.all(batch.map(async (sym) => {
