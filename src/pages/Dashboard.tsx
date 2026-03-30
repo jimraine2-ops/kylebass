@@ -6,6 +6,7 @@ import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { SessionIndicator } from "@/components/trading/SessionIndicator";
 import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { ProfitScoreboard } from "@/components/dashboard/ProfitScoreboard";
+import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
 
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
@@ -61,6 +62,7 @@ export default function Dashboard() {
       </div>
 
       <ServerStatusBanner />
+      <SafePauseBanner />
 
       {/* 수익 현황판 */}
       <ProfitScoreboard
