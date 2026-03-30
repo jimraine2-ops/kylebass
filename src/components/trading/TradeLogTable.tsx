@@ -298,7 +298,7 @@ export function TradeLogTable({ closedTrades, openPositions = [] }: TradeLogTabl
                           </td>
                         </tr>
                       )}
-                    </>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
