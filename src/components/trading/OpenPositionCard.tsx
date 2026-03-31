@@ -1,3 +1,4 @@
+import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -84,7 +85,7 @@ function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: 
   return { message: '', color: 'text-muted-foreground', winProb };
 }
 
-export function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice, fxRate = 1350, liveScore, prevScore, onOpenModal }: OpenPositionCardProps) {
+export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCardProps>(function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice, fxRate = 1350, liveScore, prevScore, onOpenModal }, _ref) {
   const displayPrice = livePrice ?? pos.currentPrice ?? pos.price;
   const investmentKRW = Math.round(pos.price * pos.quantity * fxRate);
   const currentValueKRW = Math.round(displayPrice * pos.quantity * fxRate);
@@ -325,4 +326,5 @@ export function OpenPositionCard({ position: pos, onSelect, isSelected, livePric
       </div>
     </div>
   );
-}
+});
+OpenPositionCard.displayName = "OpenPositionCard";
