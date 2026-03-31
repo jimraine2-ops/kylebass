@@ -1895,23 +1895,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 정예 1~5선 집중 투자: 필승 패턴 or (65점+90%익절확률+뉴스긍정) 확정 후보만
+    // ★ [Alpha-Entry] 정예 1~5선 집중 투자: 3% 진공구간 + 뉴스 90%+ + 익절확률 95%
     const filteredCandidates = candidates.filter(c => {
       if ((c as any)._newsBlocked) return false;
       const winProb = getWinProbability(c.scoring.totalScore);
       const hasCritical = (c as any).hasCriticalPattern;
       const newsSent = (c as any).newsSentiment || 50;
-      // ★ 뉴스+지표 95% 일치 시 최우선 진입
-      const newsBoost = newsSent >= 80 && winProb >= 90;
-      // 필승 패턴 감지 시: 50점 이상 + 패턴 익절확률 90%+ → 즉시 진입
+      
+      // ★ [Alpha-Entry] 진공 구간 분석: 3%+ 상승 공간이 매물대 없이 열려 있는가
+      const vacuumData = c.data ? detectVacuumZone(c.data.closes, c.data.highs, c.data.lows, c.data.volumes) : { hasVacuum: false, vacuumPct: 0, resistance: 0 };
+      const hasVacuum = vacuumData.hasVacuum;
+      
+      // ★ 뉴스+지표 동기화: 뉴스 90%+ & 익절확률 95%+ = 확정적 진입
+      const alphaEntry = newsSent >= ALPHA_ENTRY_NEWS_MIN && winProb >= ALPHA_ENTRY_WIN_PROB;
+      
+      // 필승 패턴 감지 시: 패턴 익절확률 90%+ → 즉시 진입
       if (hasCritical) {
         const patternConf = (c as any).criticalPatternConfidence || 0;
-        return patternConf >= 90 || (c.scoring.totalScore >= 65 && winProb >= 90);
+        return patternConf >= 90 || (c.scoring.totalScore >= 70 && winProb >= ALPHA_ENTRY_WIN_PROB);
       }
-      // ★ 뉴스 강세(80%+) + 지표 65점+ = 확정적 익절 → 즉시 투입
-      if (newsBoost) return true;
-      // 일반 진입: 65점+ & 90% 이상
-      return c.scoring.totalScore >= 65 && winProb >= 90;
+      // ★ Alpha-Entry: 뉴스 90%+ & 익절확률 95%+ & 진공구간 → 최우선 진입
+      if (alphaEntry && hasVacuum) return true;
+      // ★ 뉴스 90%+ & 익절확률 95% → 진공 없어도 진입 허용
+      if (alphaEntry) return true;
+      // 일반 진입: 70점+ & 95% 이상 (기존 65/90 → 강화)
+      return c.scoring.totalScore >= 70 && winProb >= ALPHA_ENTRY_WIN_PROB;
     });
     const topCandidates = filteredCandidates.slice(0, 5);
 
