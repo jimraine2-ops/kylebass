@@ -307,7 +307,29 @@ function detectEnergyCondensation(closes: number[], highs: number[], lows: numbe
   return { detected, signals, confidence };
 }
 
-// ===== 필승 패턴 A/B/C 감지 (점수 무관 즉시 진입) =====
+// ===== [Alpha-Entry] 진공 구간(Vacuum Zone) 감지: 현재가~직전고점 사이 매물대 분석 =====
+function detectVacuumZone(closes: number[], highs: number[], lows: number[], volumes: number[]): { hasVacuum: boolean; vacuumPct: number; resistance: number } {
+  const n = closes.length - 1;
+  if (n < 10) return { hasVacuum: false, vacuumPct: 0, resistance: 0 };
+  const currentPrice = closes[n];
+  const recentHigh = Math.max(...highs.slice(-20));
+  const gapPct = recentHigh > currentPrice ? ((recentHigh - currentPrice) / currentPrice) * 100 : 0;
+  if (gapPct < 3.0) return { hasVacuum: false, vacuumPct: gapPct, resistance: recentHigh };
+  // 매물대 분석: 현재가~고점 사이 캔들이 거의 없으면 진공
+  let candlesInZone = 0;
+  let volumeInZone = 0;
+  for (let i = Math.max(0, n - 20); i < n; i++) {
+    if (highs[i] >= currentPrice && lows[i] <= recentHigh) {
+      candlesInZone++;
+      volumeInZone += volumes[i];
+    }
+  }
+  const avgVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  const isLowResistance = candlesInZone <= 3 || (avgVol > 0 && volumeInZone / (candlesInZone || 1) < avgVol * 0.3);
+  return { hasVacuum: isLowResistance && gapPct >= 3.0, vacuumPct: gapPct, resistance: recentHigh };
+}
+
+
 function detectCriticalPatterns(closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[], quote: any): { patternA: boolean; patternB: boolean; patternC: boolean; patterns: string[]; confidence: number; whaleTrace: ReturnType<typeof detectWhaleTrace>; energyCondensation: ReturnType<typeof detectEnergyCondensation> } {
   const n = closes.length - 1;
   if (n < 20) return { patternA: false, patternB: false, patternC: false, patterns: [], confidence: 0, whaleTrace: { detected: false, supportLevel: 0, confidence: 0 }, energyCondensation: { detected: false, signals: [], confidence: 0 } };
