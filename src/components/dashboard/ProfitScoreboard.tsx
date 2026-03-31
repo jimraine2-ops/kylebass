@@ -130,4 +130,5 @@ export const ProfitScoreboard = forwardRef<HTMLDivElement, ProfitScoreboardProps
       </CardContent>
     </Card>
   );
-}
+});
+ProfitScoreboard.displayName = "ProfitScoreboard";
