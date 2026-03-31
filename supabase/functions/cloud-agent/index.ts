@@ -2024,10 +2024,10 @@ Deno.serve(async (req) => {
         const scoring = score10Indicators(data.quote, data.closes, data.highs, data.lows, data.opens, data.volumes, isLowVolumeSession);
         const currentScore = scoring?.totalScore || 0;
 
-        // ★ 승률 강화: 교체매매 점수 차이 10→20점 (잦은 교체 = 잦은 패 → 차단)
+        // ★ 교체매매 점수 차이 15점 이상일 때만 실행 (잦은 교체 방지)
         const betterCandidate = candidates.find(c =>
           c.scoring.totalScore >= 70 &&
-          c.scoring.totalScore - currentScore >= 20 &&
+          c.scoring.totalScore - currentScore >= 15 &&
           !refreshedOpenPos.some(p => p.symbol === c.sym)
         );
 
