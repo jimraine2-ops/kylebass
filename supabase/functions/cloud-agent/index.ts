@@ -1236,16 +1236,20 @@ Deno.serve(async (req) => {
 
     // Session adaptation — ★ 필승형: 최소 65점 강제 하한선 (장외에서도 65점 이하 진입 금지)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // ★ 절대 하한 65점
+    // ★ 정규장 후반(UTC 14시 이후) 진입 기준 70점 상향 — 승률 하락 방어
+    const utcHour = now.getUTCHours();
+    const isLateRegularSession = utcHour >= 14; // UTC 14:00+ (ET 10:00+ 정규장 후반)
+    const lateSessionFloor = isLateRegularSession ? 70 : 65;
+    const adaptedEntryThreshold = Math.max(rawAdapted, lateSessionFloor); // ★ 후반장 70점, 기본 65점
     const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
 
     if (entryRelax < 1.0) {
-      await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점 | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin} | 선취매모드: ${isLowVolumeSession ? 'ON' : 'OFF'}`, {});
+      await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점${isLateRegularSession ? ' (후반장 70점 강화)' : ''} | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin} | 선취매모드: ${isLowVolumeSession ? 'ON' : 'OFF'}`, {});
     }
 
-    await addLog('unified', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 통합 진입 문턱: ${adaptedEntryThreshold}점 | ${sessionLabel} | 매수중단: ${marketBuyHalt ? 'YES' : 'NO'}`, {});
+    await addLog('unified', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 통합 진입 문턱: ${adaptedEntryThreshold}점${isLateRegularSession ? ' [후반장 강화]' : ''} | ${sessionLabel} | 매수중단: ${marketBuyHalt ? 'YES' : 'NO'}`, {});
 
     // ========== EXIT CHECKS (지표 우선형 동적 방어 전략) ==========
     const symbolsToCheck = [...new Set((openPos || []).map((p: any) => p.symbol))];
