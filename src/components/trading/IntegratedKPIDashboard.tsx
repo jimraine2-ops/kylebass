@@ -195,13 +195,13 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             🛡️ Iron-Defense | +1%→SL+0.2% | +3%→즉시 확정
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔥 체결강도 200%↑ = 트레일링(-1%) 극대화
+            🎯 Dynamic-Target | 체결강도별 2~3% 가변 익절
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🎯 Alpha-Entry | 뉴스90%↑ + 익절확률95%↑ + 진공구간
+            📉 Adaptive-Exit | 고점-0.5% OR 체결강도 80%↓ → 즉시 익절
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            💎 ₩12,000↓ 저가주 5종목 | 3% 필수 수익 확정
+            💎 ₩12,000↓ 저가주 호가 최적화 | 선제적 매도
           </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
@@ -220,23 +220,23 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
     <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🏆 3% 익절 무조건 성공 — Iron-Defense 전략</p>
-          <p className="italic text-yellow-400/80">"1.0%는 생존을 위한 방어선이고, 3.0%는 승리를 위한 공격선이다."</p>
+          <p className="font-bold text-yellow-400 text-sm">🏆 Dynamic-Target + Adaptive-Exit 전략</p>
+          <p className="italic text-yellow-400/80">"시장은 생물이다. 3%가 목표지만, 힘이 2.5%에서 꺾인다면 그곳이 우리의 종착역이다."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Alpha-Entry] 3% 진공구간 요격</p>
-            <p>📰 Finnhub 뉴스 90%↑ + Twelve Data 체결강도 상위 1%</p>
-            <p>🎯 매물대 없는 진공구간 포착 → 익절확률 95%↑ 종목만 5선 압축</p>
+            <p className="font-semibold text-foreground">[Dynamic-Target] 종목별 맞춤 익절</p>
+            <p>🔥 체결강도 150%↑ → 3.0% 익절 (강력 홀딩)</p>
+            <p>📊 체결강도 100~150% → 2.5% 익절 (분할 대응)</p>
+            <p>⚡ 체결강도 100%↓ → 2.0% 익절 (빠른 회전)</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Iron-Defense] 2단계 방어 체계</p>
-            <p>🔒 1단계: +1.0% → SL 매수가+0.2% 고정 (패배 영구 소멸)</p>
-            <p>⚡ 2단계: +3.0% 터치 → 즉시 시장가 매도 수익 확정</p>
-            <p>🔥 예외: 체결강도 200%↑ 폭발 시 → 트레일링(고점-1%)으로 10~20% 극대화</p>
+            <p className="font-semibold text-foreground">[Adaptive-Exit] 힘의 균열 감지 즉시 익절</p>
+            <p>📉 고점 대비 -0.5% 하락 OR 체결강도 80% 미만 → 현재가 즉시 익절</p>
+            <p>🔒 어떤 경우에도 본절가(+0.2%) 아래 매도 금지</p>
           </div>
           <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[₩12,000↓ 저가주] 호가 최적화</p>
-            <p>💎 100만 원 대량매수 → 몇 호가 변동만으로 3% 달성</p>
-            <p>💧 3% 익절가 매수대기 잔량 ₩1,000만↑ 유동성 확보 필수</p>
+            <p className="font-semibold text-foreground">[저가주 호가 최적화] ₩12,000↓</p>
+            <p>💎 호가창 얇아질 조짐 → AI 추천 구간에서 선제적 매도</p>
+            <p>🛡️ Iron-Defense: +1% → SL+0.2% | +3% → 즉시 확정</p>
           </div>
         </CardContent>
       </Card>

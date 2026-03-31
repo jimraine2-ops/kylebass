@@ -1309,10 +1309,45 @@ Deno.serve(async (req) => {
         const capType = getCapType(price, sym);
         const isPennyPos = price < 5 || pos.cap_type === 'small';
 
-        // ===== [수익 무한 확장] 고수익 익절 지시서 — 3% 전까지 매도 금지, 고점-2% 트레일링 =====
+        // ===== [수익 무한 확장] 고수익 익절 지시서 — Dynamic-Target + Adaptive-Exit =====
         const indicatorsOver60 = quantScore >= 60;
         const peakPrice = Math.max(pos.peak_price || pos.price, price);
         const drop = peakPrice > 0 ? ((peakPrice - price) / peakPrice) * 100 : 0;
+
+        // ★ [Dynamic-Target] 체결강도 기반 가변 익절 목표 산출
+        const aggrDetailStr = scoring?.indicators?.aggression?.details || '';
+        const aggrMatch = aggrDetailStr.match(/(\d+)%/);
+        const volumeIntensity = aggrMatch ? parseInt(aggrMatch[1]) : 0;
+        const dynamicTPPct = volumeIntensity >= 150 ? 3.0 : volumeIntensity >= 100 ? 2.5 : 2.0;
+        const dynamicTPLabel = volumeIntensity >= 150 ? '강력 홀딩' : volumeIntensity >= 100 ? '분할 대응' : '빠른 회전';
+        
+        // ★ [Dynamic-Target] AI 추천 매도 구간 로그
+        if (pnlPct >= 0.5) {
+          await addLog('unified', 'info', sym, `[AI 추천 매도 구간] ${sym} 체결강도 ${volumeIntensity}% → ${dynamicTPPct}% 익절 추천 (${dynamicTPLabel}) | 현재 +${pnlPct.toFixed(2)}%`, { volumeIntensity, dynamicTPPct, dynamicTPLabel, pnlPct: +pnlPct.toFixed(2) });
+        }
+
+        // ★ [Adaptive-Exit] 힘의 균열 감지: 목표 미도달이라도 고점-0.5% 하락 OR 체결강도 80% 미만 → 즉시 익절
+        let adaptiveExitTriggered = false;
+        if (pnlPct >= 1.0 && pnlPct < dynamicTPPct) {
+          const peakDrop = drop >= 0.5;
+          const aggrCollapse = volumeIntensity < 80;
+          if (peakDrop || aggrCollapse) {
+            adaptiveExitTriggered = true;
+            const triggerReason = peakDrop && aggrCollapse 
+              ? `고점-${drop.toFixed(2)}% + 체결강도 ${volumeIntensity}%(<80%)` 
+              : peakDrop ? `고점-${drop.toFixed(2)}%` : `체결강도 ${volumeIntensity}%(<80%)`;
+            // 본절가 보호(+0.2%) 확인: 어떤 경우에도 본절 이하 매도 금지
+            if (pnlPct >= 0.2) {
+              await addLog('unified', 'info', sym, `[Adaptive-Exit] ${sym} 힘의 균열 감지! ${triggerReason} → +${pnlPct.toFixed(2)}%에서 즉시 익절 실행`, { volumeIntensity, drop: +drop.toFixed(2), pnlPct: +pnlPct.toFixed(2), dynamicTPPct });
+            }
+          }
+        }
+
+        // ★ [저가주 최적화] ₩12,000 미만: 호가 얇아질 때 선제적 매도
+        const isLowPriceStock = toKRW(price) < 12000;
+        if (isLowPriceStock && pnlPct >= 2.0 && pnlPct < 3.0 && volumeIntensity < 100) {
+          await addLog('unified', 'info', sym, `[저가주 호가 최적화] ${sym} ₩${Math.round(toKRW(price)).toLocaleString()} 저가주 | 체결강도 ${volumeIntensity}%(<100%) + ${pnlPct.toFixed(1)}% → 선제적 ${dynamicTPPct}% 구간 매도 권장`, { volumeIntensity, pnlPct: +pnlPct.toFixed(2), priceKRW: Math.round(toKRW(price)) });
+        }
 
         // ★ 수익 추격 모드: 3.0% 돌파 시 SL→매수가+1.5%
         if (pnlPct >= PROFIT_CHASE_TRIGGER && pos.stop_loss < pos.price * PROFIT_CHASE_SL_PCT) {
@@ -1426,14 +1461,22 @@ Deno.serve(async (req) => {
             newStatus = 'iron_defense_profit';
           }
         } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER) {
-          // ★ [Iron-Defense 1단계] 1~3% 구간: SL→매수가+0.2% 고정, 3% 돌파까지 인내
-          if (pos.stop_loss < pos.price * ZERO_RISK_SL_PCT) {
-            const ironSL = +(pos.price * ZERO_RISK_SL_PCT).toFixed(4);
-            await supabase.from('unified_trades').update({ stop_loss: ironSL }).eq('id', pos.id);
-            pos.stop_loss = ironSL;
-            await addLog('unified', 'defense', sym, `[🛡️Iron-Defense 1단계] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.0% → SL=${fmtKRW(ironSL)}(매수가+0.2%) 고정! 패배 영구 소멸`, { quantScore, pnlPct: +pnlPct.toFixed(2), newSL: ironSL });
+          // ★ [Adaptive-Exit] 힘의 균열 감지 → 즉시 익절 (본절+0.2% 이상일 때만)
+          if (adaptiveExitTriggered && pnlPct >= 0.2) {
+            shouldClose = true;
+            const triggerDetail = drop >= 0.5 ? `고점-${drop.toFixed(2)}%` : `체결강도 ${volumeIntensity}%(<80%)`;
+            closeReason = `[🎯Adaptive-Exit] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 힘의 균열(${triggerDetail}) → 목표 ${dynamicTPPct}% 미도달이나 즉시 익절 (체결강도 ${volumeIntensity}%/${dynamicTPLabel})`;
+            newStatus = 'adaptive_exit_profit';
+          } else {
+            // ★ [Iron-Defense 1단계] 1~3% 구간: SL→매수가+0.2% 고정, 목표까지 인내
+            if (pos.stop_loss < pos.price * ZERO_RISK_SL_PCT) {
+              const ironSL = +(pos.price * ZERO_RISK_SL_PCT).toFixed(4);
+              await supabase.from('unified_trades').update({ stop_loss: ironSL }).eq('id', pos.id);
+              pos.stop_loss = ironSL;
+              await addLog('unified', 'defense', sym, `[🛡️Iron-Defense 1단계] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.0% → SL=${fmtKRW(ironSL)}(매수가+0.2%) 고정! 패배 영구 소멸`, { quantScore, pnlPct: +pnlPct.toFixed(2), newSL: ironSL });
+            }
+            await addLog('unified', 'hold', sym, `[🎯${dynamicTPPct}%확정대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 | 체결강도 ${volumeIntensity}% → AI 추천: ${dynamicTPPct}% 익절 (${dynamicTPLabel}) | SL=매수가+0.2%`, { quantScore, pnlPct: +pnlPct.toFixed(2), volumeIntensity, dynamicTPPct, dynamicTPLabel });
           }
-          await addLog('unified', 'hold', sym, `[🎯3%확정대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 3.0% 터치 시 즉시 수익 확정 예정 (현재 SL=매수가+0.2%)`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         } else if (pnlPct >= 0 && pnlPct < 1.0) {
           // ★ 0~1% 구간: 본절가 보호 발동 전 — 홀딩
           if (quantScore >= 50) {

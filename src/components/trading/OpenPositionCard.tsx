@@ -102,6 +102,10 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
   const aiJudgment = getAIHoldingJudgment(score, unrealizedPnlPct);
   const isHoldingRecommended = !isProfit && score !== null && score >= 50;
 
+  // ★ [Dynamic-Target] AI 추천 매도 구간 계산 (체결강도 기반)
+  // 실제 체결강도는 서버에서 계산하므로 여기서는 점수 기반 근사
+  const dynamicTP = score !== null ? (score >= 70 ? { pct: 3.0, label: '강력 홀딩' } : score >= 55 ? { pct: 2.5, label: '분할 대응' } : { pct: 2.0, label: '빠른 회전' }) : null;
+
   // ★ 15% 목표가 & 진행률 계산
   const isSuperTarget = (pos.ai_reason || '').includes('15%') || (pos.ai_reason || '').includes('슈퍼');
   const targetPct = isSuperTarget ? 15 : (pos.take_profit && pos.price > 0)
@@ -197,6 +201,23 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
           </div>
         </div>
       </div>
+
+      {/* ★ [AI 추천 매도 구간] Dynamic-Target 배지 */}
+      {dynamicTP && unrealizedPnlPct >= 0.5 && (
+        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1.5 rounded bg-warning/10 border border-warning/30">
+          <Target className="w-3.5 h-3.5 text-warning shrink-0" />
+          <span className="text-warning">
+            [AI 추천 매도 구간] +{dynamicTP.pct}% ({dynamicTP.label}) | 현재 +{unrealizedPnlPct.toFixed(2)}%
+            {unrealizedPnlPct >= dynamicTP.pct && ' ✅ 목표 도달!'}
+          </span>
+          <Badge variant="outline" className={cn(
+            "text-[9px] px-1.5 py-0 ml-auto font-bold",
+            unrealizedPnlPct >= dynamicTP.pct ? 'border-stock-up/40 text-stock-up' : 'border-warning/40 text-warning'
+          )}>
+            {unrealizedPnlPct >= dynamicTP.pct ? '🎯 익절 구간' : `${((unrealizedPnlPct / dynamicTP.pct) * 100).toFixed(0)}%`}
+          </Badge>
+        </div>
+      )}
 
       {/* ★ 목표가 진행률 게이지 */}
       <div className="flex items-center gap-2">
