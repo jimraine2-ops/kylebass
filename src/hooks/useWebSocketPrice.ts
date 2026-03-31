@@ -55,6 +55,7 @@ export function useWebSocketPrices(symbols: string[]) {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        retryCountRef.current = 0; // Reset on successful connection
         setState(prev => ({ ...prev, isConnected: true, error: null }));
         // Subscribe to all symbols
         symbolsRef.current.forEach(s => {
