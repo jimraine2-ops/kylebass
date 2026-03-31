@@ -52,7 +52,7 @@ const AnimatedNumber = forwardRef<HTMLSpanElement, { value: number; prefix?: str
 );
 AnimatedNumber.displayName = "AnimatedNumber";
 
-export function ProfitScoreboard({
+export const ProfitScoreboard = forwardRef<HTMLDivElement, ProfitScoreboardProps>(function ProfitScoreboard({
   totalProfitKRW,
   roundNumber,
   bestTicker,
@@ -60,7 +60,7 @@ export function ProfitScoreboard({
   winRate,
   totalTrades,
   isLoading,
-}: ProfitScoreboardProps) {
+}, _ref) {
   const isProfit = totalProfitKRW >= 0;
 
   return (
@@ -130,4 +130,5 @@ export function ProfitScoreboard({
       </CardContent>
     </Card>
   );
-}
+});
+ProfitScoreboard.displayName = "ProfitScoreboard";
