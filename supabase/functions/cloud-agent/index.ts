@@ -1236,7 +1236,11 @@ Deno.serve(async (req) => {
 
     // Session adaptation — ★ 필승형: 최소 65점 강제 하한선 (장외에서도 65점 이하 진입 금지)
     const rawAdapted = Math.round(baseEntryThreshold * entryRelax);
-    const adaptedEntryThreshold = Math.max(rawAdapted, 65); // ★ 절대 하한 65점
+    // ★ 정규장 후반(UTC 14시 이후) 진입 기준 70점 상향 — 승률 하락 방어
+    const utcHour = now.getUTCHours();
+    const isLateRegularSession = utcHour >= 14; // UTC 14:00+ (ET 10:00+ 정규장 후반)
+    const lateSessionFloor = isLateRegularSession ? 70 : 65;
+    const adaptedEntryThreshold = Math.max(rawAdapted, lateSessionFloor); // ★ 후반장 70점, 기본 65점
     const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
