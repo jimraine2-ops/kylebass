@@ -30,6 +30,8 @@ export function useWebSocketPrices(symbols: string[]) {
   const symbolsRef = useRef<string[]>([]);
   const pricesRef = useRef<Map<string, PriceData>>(new Map());
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryCountRef = useRef(0);
+  const maxRetries = 5;
 
   const flushBatch = useCallback(() => {
     setState(prev => ({
