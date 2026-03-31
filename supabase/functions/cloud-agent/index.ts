@@ -1624,10 +1624,9 @@ Deno.serve(async (req) => {
     const kstTimeMinutes = kstHour * 60 + kstMin;
     const currentOpenCountForPause = (openPos || []).filter((p: any) => p.status === 'open').length;
     
-    // ★ 세션 기반 판단: 주말이면 Safe-Pause, 그 외에는 현재 세션(PRE/REGULAR/AFTER/DAY)에 따라 거래 허용
-    const currentSession = getMarketSession();
+    // ★ 세션 기반 판단: 주말(DAY)이면 Safe-Pause, 그 외에는 거래 허용
     let safePauseActive = false;
-    if (currentSession.session === 'DAY') {
+    if (currentSession === 'DAY') {
       // 주말(토/일)인 경우에만 Safe-Pause 발동
       safePauseActive = true;
       await addLog('system', 'market-pause', null, 
