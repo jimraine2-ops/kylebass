@@ -7,6 +7,7 @@ import { SessionIndicator } from "@/components/trading/SessionIndicator";
 import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { ProfitScoreboard } from "@/components/dashboard/ProfitScoreboard";
 import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
+import { HourlyWinRateChart } from "@/components/dashboard/HourlyWinRateChart";
 
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
