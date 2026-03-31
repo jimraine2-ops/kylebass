@@ -326,4 +326,5 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
       </div>
     </div>
   );
-}
+});
+OpenPositionCard.displayName = "OpenPositionCard";
