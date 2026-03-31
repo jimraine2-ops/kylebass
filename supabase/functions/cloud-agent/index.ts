@@ -1617,26 +1617,26 @@ Deno.serve(async (req) => {
       await addLog('system', 'info', null, `[일일목표] 오늘 실현 PnL: ${fmtKRWRaw(dailyPnl)} / 목표 ₩500,000 (${(dailyPnl/DAILY_TARGET_KRW_CONST*100).toFixed(1)}%)`, { dailyPnl });
     }
 
-    // ========== [Safe-Pause] 오전 9시(KST) 이전 거래 일시 중단 ==========
+    // ========== [Safe-Pause] 미국 장 세션 기준 거래 판단 ==========
     const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000); // UTC → KST
     const kstHour = kstNow.getUTCHours();
     const kstMin = kstNow.getUTCMinutes();
     const kstTimeMinutes = kstHour * 60 + kstMin;
-    const isBeforeKST9AM = kstTimeMinutes < 540; // 540 = 9 * 60
     const currentOpenCountForPause = (openPos || []).filter((p: any) => p.status === 'open').length;
     
-    // Safe-Pause: 9시(KST) 이전 + 모든 포지션 청산 완료 → 신규 매수 금지
+    // ★ 세션 기반 판단: 주말(DAY)이면 Safe-Pause, 그 외에는 거래 허용
     let safePauseActive = false;
-    if (isBeforeKST9AM && currentOpenCountForPause === 0) {
+    if (currentSession === 'DAY') {
+      // 주말(토/일)인 경우에만 Safe-Pause 발동
       safePauseActive = true;
       await addLog('system', 'market-pause', null, 
-        `[Market-Pause] 🟡 프리마켓 수익 확정 및 거래 일시 중지 (오전 9시 KST 재개) | ` +
+        `[Market-Pause] 🟡 주말 휴장 — 미국 시장 폐장 상태 | ` +
         `오늘의 총 누적 수익: ${fmtKRWRaw(dailyPnl)} | ` +
-        `상태: 대기 중 | 다음 사냥 준비: 12,000원 미만 실적/수급주 스캔 중 | ` +
-        `현재 KST ${kstHour.toString().padStart(2,'0')}:${kstMin.toString().padStart(2,'0')}`,
-        { safePause: true, kstTime: `${kstHour}:${kstMin}`, dailyPnl, nextResumeKST: '09:00' }
+        `상태: 대기 중 | 다음 거래: 월요일 프리마켓(04:00 ET) 자동 재개`,
+        { safePause: true, session: currentSession, dailyPnl }
       );
     }
+    // ★ PRE_MARKET, REGULAR, AFTER_HOURS → 모두 거래 허용 (세션별 설정은 getMarketSession에서 관리)
     
     // [Day-Start] 오전 9시 KST 도달 직후 5분간(9:00~9:05) → 강화 필터링 + 라운드 시작 로그
     const isDayStartWindow = kstTimeMinutes >= 540 && kstTimeMinutes < 545; // 9:00~9:05 KST
@@ -1658,7 +1658,7 @@ Deno.serve(async (req) => {
       await addLog('unified', 'hold', null, `[필승-뇌동방지] 🚫 정규장 개장 직후 15분(09:30~09:45 ET) — 매수 잠금`, {});
     }
     if (safePauseActive) {
-      await addLog('unified', 'hold', null, `[Safe-Pause] 🟡 오전 9시(KST) 이전 신규 매수 금지 — 프리마켓 수익 보전 모드`, { safePause: true });
+      await addLog('unified', 'hold', null, `[Safe-Pause] 🟡 주말 휴장 — 신규 매수 금지`, { safePause: true });
     }
 
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
