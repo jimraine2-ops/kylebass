@@ -1659,7 +1659,7 @@ Deno.serve(async (req) => {
       await addLog('unified', 'hold', null, `[필승-뇌동방지] 🚫 정규장 개장 직후 15분(09:30~09:45 ET) — 매수 잠금`, {});
     }
     if (safePauseActive) {
-      await addLog('unified', 'hold', null, `[Safe-Pause] 🟡 오전 9시(KST) 이전 신규 매수 금지 — 프리마켓 수익 보전 모드`, { safePause: true });
+      await addLog('unified', 'hold', null, `[Safe-Pause] 🟡 주말 휴장 — 신규 매수 금지`, { safePause: true });
     }
 
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
