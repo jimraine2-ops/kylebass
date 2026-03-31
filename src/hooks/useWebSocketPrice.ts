@@ -30,6 +30,8 @@ export function useWebSocketPrices(symbols: string[]) {
   const symbolsRef = useRef<string[]>([]);
   const pricesRef = useRef<Map<string, PriceData>>(new Map());
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryCountRef = useRef(0);
+  const maxRetries = 5;
 
   const flushBatch = useCallback(() => {
     setState(prev => ({
@@ -53,6 +55,7 @@ export function useWebSocketPrices(symbols: string[]) {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        retryCountRef.current = 0; // Reset on successful connection
         setState(prev => ({ ...prev, isConnected: true, error: null }));
         // Subscribe to all symbols
         symbolsRef.current.forEach(s => {
@@ -96,11 +99,18 @@ export function useWebSocketPrices(symbols: string[]) {
         setState(prev => ({ ...prev, error: 'WebSocket 연결 오류', isConnected: false }));
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         setState(prev => ({ ...prev, isConnected: false }));
         wsRef.current = null;
-        // Auto-reconnect in 3s
-        reconnectTimerRef.current = setTimeout(connect, 3000);
+        
+        // 429 = rate limited, use exponential backoff and stop after max retries
+        if (retryCountRef.current >= maxRetries) {
+          setState(prev => ({ ...prev, error: 'Finnhub 연결 한도 초과 — Polling 모드로 전환' }));
+          return;
+        }
+        retryCountRef.current += 1;
+        const backoff = Math.min(3000 * Math.pow(2, retryCountRef.current - 1), 60000);
+        reconnectTimerRef.current = setTimeout(connect, backoff);
       };
 
     } catch (e) {
