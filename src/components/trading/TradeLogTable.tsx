@@ -61,7 +61,7 @@ function formatHoldDuration(openedAt: string, closedAt: string | null): string {
   return `${hrs}시간 ${mins % 60}분`;
 }
 
-export function TradeLogTable({ closedTrades, openPositions = [] }: TradeLogTableProps) {
+export const TradeLogTable = React.forwardRef<HTMLDivElement, TradeLogTableProps>(function TradeLogTable({ closedTrades, openPositions = [] }, _ref) {
   const [searchQuery, setSearchQuery] = useState('');
   const [tabFilter, setTabFilter] = useState<TabFilter>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
