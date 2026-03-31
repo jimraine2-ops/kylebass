@@ -1246,10 +1246,10 @@ Deno.serve(async (req) => {
     const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
 
     if (entryRelax < 1.0) {
-      await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점 | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin} | 선취매모드: ${isLowVolumeSession ? 'ON' : 'OFF'}`, {});
+      await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점${isLateRegularSession ? ' (후반장 70점 강화)' : ''} | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin} | 선취매모드: ${isLowVolumeSession ? 'ON' : 'OFF'}`, {});
     }
 
-    await addLog('unified', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 통합 진입 문턱: ${adaptedEntryThreshold}점 | ${sessionLabel} | 매수중단: ${marketBuyHalt ? 'YES' : 'NO'}`, {});
+    await addLog('unified', 'learn', null, `[AI-Learn] 승률 ${recentWinRate.toFixed(1)}% → 통합 진입 문턱: ${adaptedEntryThreshold}점${isLateRegularSession ? ' [후반장 강화]' : ''} | ${sessionLabel} | 매수중단: ${marketBuyHalt ? 'YES' : 'NO'}`, {});
 
     // ========== EXIT CHECKS (지표 우선형 동적 방어 전략) ==========
     const symbolsToCheck = [...new Set((openPos || []).map((p: any) => p.symbol))];
