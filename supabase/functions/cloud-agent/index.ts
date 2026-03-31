@@ -1396,23 +1396,48 @@ Deno.serve(async (req) => {
             }
           }
         } else if (pnlPct >= PROFIT_CHASE_TRIGGER) {
-          // ★ 3~15% 구간: 수익 추격 모드 — 고점-2.0% 트레일링만 적용, 절대 조기 매도 금지
-          if (drop >= TRAILING_DROP_PCT && !indicatorsStrong) {
-            shouldClose = true;
-            closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% + 지표 약화(${quantScore}점) → 수익 확정`;
-            newStatus = 'trailing_profit';
-          } else if (drop >= TRAILING_DROP_PCT && indicatorsStrong) {
-            await addLog('unified', 'hold', sym, `[Iron Hold] ${sym} +${pnlPct.toFixed(2)}% 고점-${drop.toFixed(2)}% BUT 지표 ${quantScore}점(≥55) → 30% 추격 중`, { quantScore, drop, isIronHold });
+          // ★ [Iron-Defense 2단계] 3% 도달 즉시 수익 확정 — 체결강도 200%+ 예외 시 트레일링 전환
+          const aggressionPct = scoring?.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
+          const currentAggression = aggressionPct ? parseInt(aggressionPct) : 0;
+          const isVolumeExplosion = currentAggression >= VOLUME_EXPLOSION_THRESHOLD;
+
+          if (pnlPct >= 15.0) {
+            // 15%+ 구간: 기존 트레일링 유지
+            if (drop >= TRAILING_DROP_PCT && !indicatorsStrong) {
+              shouldClose = true;
+              closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% + 지표 약화(${quantScore}점) → 수익 확정`;
+              newStatus = 'trailing_profit';
+            } else {
+              await addLog('unified', 'hold', sym, `[🛡️철벽홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 추격 중 | 체결강도 ${currentAggression}% | 지표 ${quantScore}점 → 고점-${TRAILING_DROP_PCT}% 트레일링`, { quantScore, pnlPct: +pnlPct.toFixed(2), drop, aggression: currentAggression });
+            }
+          } else if (isVolumeExplosion && indicatorsStrong) {
+            // ★ [Iron-Defense 예외] 체결강도 200%+ & 지표 55점+ → 트레일링(고점-1%)으로 10~20% 추격
+            if (drop >= 1.0) {
+              shouldClose = true;
+              closeReason = `[🔥폭발익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 체결강도 ${currentAggression}%(≥200%) 폭발 후 고점-${drop.toFixed(2)}% → 확정`;
+              newStatus = 'explosion_profit';
+            } else {
+              await addLog('unified', 'hold', sym, `[🔥폭발추격] ${sym} +${pnlPct.toFixed(2)}% | 체결강도 ${currentAggression}%(≥200%) 폭발! 고점-1.0% 트레일링으로 10~20% 극대화 추격 중`, { quantScore, pnlPct: +pnlPct.toFixed(2), aggression: currentAggression, drop });
+            }
           } else {
-            await addLog('unified', 'hold', sym, `[🛡️철벽홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 추격 중 | 지표 ${quantScore}점 → 고점-${TRAILING_DROP_PCT}% 트레일링, 30% 목표 추격!`, { quantScore, pnlPct: +pnlPct.toFixed(2), drop });
+            // ★ [Iron-Defense 2단계 확정] 3% 터치 → 즉시 시장가 매도로 수익 확정
+            shouldClose = true;
+            closeReason = `[🎯3%확정익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% ≥ 3.0% Iron-Defense 2단계 → 즉시 수익 확정 (체결강도 ${currentAggression}%<200%)`;
+            newStatus = 'iron_defense_profit';
           }
         } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER) {
-          // ★ 1~3% 구간: 절대 매도 금지! 3% 돌파까지 인내
-          await addLog('unified', 'hold', sym, `[🎯3%돌파대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 3.0% 돌파 시 수익 추격 모드 발동 예정 (현재 매도 금지!)`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          // ★ [Iron-Defense 1단계] 1~3% 구간: SL→매수가+0.2% 고정, 3% 돌파까지 인내
+          if (pos.stop_loss < pos.price * ZERO_RISK_SL_PCT) {
+            const ironSL = +(pos.price * ZERO_RISK_SL_PCT).toFixed(4);
+            await supabase.from('unified_trades').update({ stop_loss: ironSL }).eq('id', pos.id);
+            pos.stop_loss = ironSL;
+            await addLog('unified', 'defense', sym, `[🛡️Iron-Defense 1단계] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.0% → SL=${fmtKRW(ironSL)}(매수가+0.2%) 고정! 패배 영구 소멸`, { quantScore, pnlPct: +pnlPct.toFixed(2), newSL: ironSL });
+          }
+          await addLog('unified', 'hold', sym, `[🎯3%확정대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 3.0% 터치 시 즉시 수익 확정 예정 (현재 SL=매수가+0.2%)`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         } else if (pnlPct >= 0 && pnlPct < 1.0) {
           // ★ 0~1% 구간: 본절가 보호 발동 전 — 홀딩
           if (quantScore >= 50) {
-            await addLog('unified', 'hold', sym, `[홀딩] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 본절가 보호(+1.0%) 대기 중`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+            await addLog('unified', 'hold', sym, `[홀딩] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → Iron-Defense 1단계(+1.0%) 대기 중`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           }
         } else if (pos.take_profit && price >= pos.take_profit) {
           // TP 도달 → 상향 또는 트레일링 전환 (매도 금지)
