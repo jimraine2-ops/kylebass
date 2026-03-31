@@ -102,6 +102,10 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
   const aiJudgment = getAIHoldingJudgment(score, unrealizedPnlPct);
   const isHoldingRecommended = !isProfit && score !== null && score >= 50;
 
+  // ★ [Dynamic-Target] AI 추천 매도 구간 계산 (체결강도 기반)
+  // 실제 체결강도는 서버에서 계산하므로 여기서는 점수 기반 근사
+  const dynamicTP = score !== null ? (score >= 70 ? { pct: 3.0, label: '강력 홀딩' } : score >= 55 ? { pct: 2.5, label: '분할 대응' } : { pct: 2.0, label: '빠른 회전' }) : null;
+
   // ★ 15% 목표가 & 진행률 계산
   const isSuperTarget = (pos.ai_reason || '').includes('15%') || (pos.ai_reason || '').includes('슈퍼');
   const targetPct = isSuperTarget ? 15 : (pos.take_profit && pos.price > 0)
