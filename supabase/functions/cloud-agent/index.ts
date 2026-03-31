@@ -1633,7 +1633,7 @@ Deno.serve(async (req) => {
         `[Market-Pause] 🟡 주말 휴장 — 미국 시장 폐장 상태 | ` +
         `오늘의 총 누적 수익: ${fmtKRWRaw(dailyPnl)} | ` +
         `상태: 대기 중 | 다음 거래: 월요일 프리마켓(04:00 ET) 자동 재개`,
-        { safePause: true, session: currentSession.session, dailyPnl }
+        { safePause: true, session: currentSession, dailyPnl }
       );
     }
     // ★ PRE_MARKET, REGULAR, AFTER_HOURS → 모두 거래 허용 (세션별 설정은 getMarketSession에서 관리)
