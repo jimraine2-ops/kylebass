@@ -98,16 +98,16 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🛡️ Zero-Loss | 0.8% → 매수가+0.1% 고정
+            🛡️ Iron-Defense | +1%→SL+0.2% | +3%→즉시 확정
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔒 Iron-Hold | 익절확률 90%↑ = 매도 금지
+            🔥 체결강도 200%↑ = 트레일링(-1%) 극대화
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            📰 Finnhub 85%↑ + Twelve Data 지표 수렴
+            🎯 Alpha-Entry | 뉴스90%↑ + 익절확률95%↑ + 진공구간
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            🎯 ₩12,000↓ 저가주 5종목 | 30~50% 추격
+            💎 ₩12,000↓ 저가주 5종목 | 3% 필수 수익 확정
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
@@ -118,22 +118,23 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🏆 Finnhub × Twelve Data 하이브리드 필승 전략</p>
-          <p className="italic text-yellow-400/80">"Finnhub로 사냥감을 식별하고, Twelve Data로 심장을 쏜다."</p>
+          <p className="font-bold text-yellow-400 text-sm">🏆 3% 익절 무조건 성공 — Iron-Defense 전략</p>
+          <p className="italic text-yellow-400/80">"1.0%는 생존을 위한 방어선이고, 3.0%는 승리를 위한 공격선이다."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Dual-Engine] 데이터 소스 역할 분담</p>
-            <p>📰 Finnhub: 뉴스 감성 85%↑ 'Extreme Bullish' + 섹터 모멘텀 주도주</p>
-            <p>📊 Twelve Data: 10대 지표 0.1초 쿼리 + ₩12,000↓ 호가·체결 감시</p>
+            <p className="font-semibold text-foreground">[Alpha-Entry] 3% 진공구간 요격</p>
+            <p>📰 Finnhub 뉴스 90%↑ + Twelve Data 체결강도 상위 1%</p>
+            <p>🎯 매물대 없는 진공구간 포착 → 익절확률 95%↑ 종목만 5선 압축</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Zero-Loss] The Golden Cross 진입</p>
-            <p>🔒 ₩12,000↓ + Extreme Bullish + 수렴→발산 + 익절확률 90%↑ → ₩100만 투입</p>
-            <p>🔒 +0.8% → SL 매수가+0.1% 강제 고정 (Zero-Risk Lock)</p>
+            <p className="font-semibold text-foreground">[Iron-Defense] 2단계 방어 체계</p>
+            <p>🔒 1단계: +1.0% → SL 매수가+0.2% 고정 (패배 영구 소멸)</p>
+            <p>⚡ 2단계: +3.0% 터치 → 즉시 시장가 매도 수익 확정</p>
+            <p>🔥 예외: 체결강도 200%↑ 폭발 시 → 트레일링(고점-1%)으로 10~20% 극대화</p>
           </div>
           <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Iron-Hold] 무패 & 30~50% 추격</p>
-            <p>🛡️ 익절확률 90%+ → 눌림목 매도 금지 | 점수 45점↓ 붕괴 시까지 무제한 홀딩</p>
-            <p>🎯 정예 5종목 | 데이장/프리마켓 선취매</p>
+            <p className="font-semibold text-foreground">[₩12,000↓ 저가주] 호가 최적화</p>
+            <p>💎 100만 원 대량매수 → 몇 호가 변동만으로 3% 달성</p>
+            <p>💧 3% 익절가 매수대기 잔량 ₩1,000만↑ 유동성 확보 필수</p>
           </div>
         </CardContent>
       </Card>
