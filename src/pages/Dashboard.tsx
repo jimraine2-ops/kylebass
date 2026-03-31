@@ -172,6 +172,9 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* 시간대별 승률 차트 */}
+      <HourlyWinRateChart />
+
       {/* 최근 에이전트 활동 */}
       <Card>
         <CardContent className="p-3 space-y-2">
