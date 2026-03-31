@@ -1461,14 +1461,22 @@ Deno.serve(async (req) => {
             newStatus = 'iron_defense_profit';
           }
         } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER) {
-          // ★ [Iron-Defense 1단계] 1~3% 구간: SL→매수가+0.2% 고정, 3% 돌파까지 인내
-          if (pos.stop_loss < pos.price * ZERO_RISK_SL_PCT) {
-            const ironSL = +(pos.price * ZERO_RISK_SL_PCT).toFixed(4);
-            await supabase.from('unified_trades').update({ stop_loss: ironSL }).eq('id', pos.id);
-            pos.stop_loss = ironSL;
-            await addLog('unified', 'defense', sym, `[🛡️Iron-Defense 1단계] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.0% → SL=${fmtKRW(ironSL)}(매수가+0.2%) 고정! 패배 영구 소멸`, { quantScore, pnlPct: +pnlPct.toFixed(2), newSL: ironSL });
+          // ★ [Adaptive-Exit] 힘의 균열 감지 → 즉시 익절 (본절+0.2% 이상일 때만)
+          if (adaptiveExitTriggered && pnlPct >= 0.2) {
+            shouldClose = true;
+            const triggerDetail = drop >= 0.5 ? `고점-${drop.toFixed(2)}%` : `체결강도 ${volumeIntensity}%(<80%)`;
+            closeReason = `[🎯Adaptive-Exit] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 힘의 균열(${triggerDetail}) → 목표 ${dynamicTPPct}% 미도달이나 즉시 익절 (체결강도 ${volumeIntensity}%/${dynamicTPLabel})`;
+            newStatus = 'adaptive_exit_profit';
+          } else {
+            // ★ [Iron-Defense 1단계] 1~3% 구간: SL→매수가+0.2% 고정, 목표까지 인내
+            if (pos.stop_loss < pos.price * ZERO_RISK_SL_PCT) {
+              const ironSL = +(pos.price * ZERO_RISK_SL_PCT).toFixed(4);
+              await supabase.from('unified_trades').update({ stop_loss: ironSL }).eq('id', pos.id);
+              pos.stop_loss = ironSL;
+              await addLog('unified', 'defense', sym, `[🛡️Iron-Defense 1단계] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.0% → SL=${fmtKRW(ironSL)}(매수가+0.2%) 고정! 패배 영구 소멸`, { quantScore, pnlPct: +pnlPct.toFixed(2), newSL: ironSL });
+            }
+            await addLog('unified', 'hold', sym, `[🎯${dynamicTPPct}%확정대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 | 체결강도 ${volumeIntensity}% → AI 추천: ${dynamicTPPct}% 익절 (${dynamicTPLabel}) | SL=매수가+0.2%`, { quantScore, pnlPct: +pnlPct.toFixed(2), volumeIntensity, dynamicTPPct, dynamicTPLabel });
           }
-          await addLog('unified', 'hold', sym, `[🎯3%확정대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 3.0% 터치 시 즉시 수익 확정 예정 (현재 SL=매수가+0.2%)`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         } else if (pnlPct >= 0 && pnlPct < 1.0) {
           // ★ 0~1% 구간: 본절가 보호 발동 전 — 홀딩
           if (quantScore >= 50) {
