@@ -17,12 +17,16 @@ const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
 const PENNY_BREAKEVEN_PCT = 1.0; // ★ 동전주 본절보호: +1.0% (강화)
 const PENNY_IRON_HOLD_SCORE = 65; // ★ 동전주 철갑 홀딩: 65점
 const PENNY_MAX_POSITIONS = 3; // ★ 동전주 최대 3종목 집중
-const GHOST_BREAKEVEN_PCT = 1.0; // ★ Zero-Risk Lock: +1.0% 돌파 시 즉시 SL→매수가+0.1% (패배 원천 차단)
-const PROFIT_CHASE_TRIGGER = 3.0; // ★ 수익 추격 모드 발동: +3.0% 돌파 시 SL→매수가+1.5%
+const GHOST_BREAKEVEN_PCT = 1.0; // ★ Zero-Risk Lock: +1.0% 돌파 시 즉시 SL→매수가+0.2% (Iron-Defense 1단계)
+const PROFIT_CHASE_TRIGGER = 3.0; // ★ 3% 익절 확정 트리거: +3.0% 터치 즉시 시장가 매도 (Iron-Defense 2단계)
 const PROFIT_CHASE_SL_PCT = 1.015; // ★ 수익 추격 SL: 매수가 +1.5%
 const TRAILING_DROP_PCT = 2.0; // ★ 추격 매도: 고점 대비 2.0% 하락 시에만 전량 매도
 const DAILY_TARGET_KRW_CONST = 500000; // ★ 일일 목표: ₩500,000 (일당 50만 원 탈취)
-const ZERO_RISK_SL_PCT = 1.001; // ★ Zero-Risk Lock SL: 매수가 +0.1% (패배 기록 0 유지)
+const ZERO_RISK_SL_PCT = 1.002; // ★ Iron-Defense 1단계 SL: 매수가 +0.2% (기존 +0.1% → 강화)
+const ALPHA_ENTRY_NEWS_MIN = 90; // ★ [Alpha-Entry] 뉴스 감성 90%+ 필수
+const ALPHA_ENTRY_WIN_PROB = 95; // ★ [Alpha-Entry] 익절 확률 95% 이상만 진입
+const VOLUME_EXPLOSION_THRESHOLD = 200; // ★ [Iron-Defense 예외] 체결강도 200%+ 시 트레일링 전환
+const EXIT_LIQUIDITY_MIN_KRW = 10000000; // ★ 3% 익절가 매수대기 잔량 ₩1,000만+ 필수
 const PREDICTIVE_ENTRY_SCORE = 60; // ★ Anti-Latency: 뉴스 없이 지표 60점 돌파 시 선취매
 const LIQUIDITY_MULTIPLIER = 10; // ★ Liquidity Guard: 진입금액의 10배 이상 매수잔량 필요
 const PASSIVE_FILL_TICKS = 3; // ★ 호가 장악: 매수 1호가 알박기 (시장가 금지)
@@ -303,7 +307,29 @@ function detectEnergyCondensation(closes: number[], highs: number[], lows: numbe
   return { detected, signals, confidence };
 }
 
-// ===== 필승 패턴 A/B/C 감지 (점수 무관 즉시 진입) =====
+// ===== [Alpha-Entry] 진공 구간(Vacuum Zone) 감지: 현재가~직전고점 사이 매물대 분석 =====
+function detectVacuumZone(closes: number[], highs: number[], lows: number[], volumes: number[]): { hasVacuum: boolean; vacuumPct: number; resistance: number } {
+  const n = closes.length - 1;
+  if (n < 10) return { hasVacuum: false, vacuumPct: 0, resistance: 0 };
+  const currentPrice = closes[n];
+  const recentHigh = Math.max(...highs.slice(-20));
+  const gapPct = recentHigh > currentPrice ? ((recentHigh - currentPrice) / currentPrice) * 100 : 0;
+  if (gapPct < 3.0) return { hasVacuum: false, vacuumPct: gapPct, resistance: recentHigh };
+  // 매물대 분석: 현재가~고점 사이 캔들이 거의 없으면 진공
+  let candlesInZone = 0;
+  let volumeInZone = 0;
+  for (let i = Math.max(0, n - 20); i < n; i++) {
+    if (highs[i] >= currentPrice && lows[i] <= recentHigh) {
+      candlesInZone++;
+      volumeInZone += volumes[i];
+    }
+  }
+  const avgVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  const isLowResistance = candlesInZone <= 3 || (avgVol > 0 && volumeInZone / (candlesInZone || 1) < avgVol * 0.3);
+  return { hasVacuum: isLowResistance && gapPct >= 3.0, vacuumPct: gapPct, resistance: recentHigh };
+}
+
+
 function detectCriticalPatterns(closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[], quote: any): { patternA: boolean; patternB: boolean; patternC: boolean; patterns: string[]; confidence: number; whaleTrace: ReturnType<typeof detectWhaleTrace>; energyCondensation: ReturnType<typeof detectEnergyCondensation> } {
   const n = closes.length - 1;
   if (n < 20) return { patternA: false, patternB: false, patternC: false, patterns: [], confidence: 0, whaleTrace: { detected: false, supportLevel: 0, confidence: 0 }, energyCondensation: { detected: false, signals: [], confidence: 0 } };
@@ -1370,23 +1396,48 @@ Deno.serve(async (req) => {
             }
           }
         } else if (pnlPct >= PROFIT_CHASE_TRIGGER) {
-          // ★ 3~15% 구간: 수익 추격 모드 — 고점-2.0% 트레일링만 적용, 절대 조기 매도 금지
-          if (drop >= TRAILING_DROP_PCT && !indicatorsStrong) {
-            shouldClose = true;
-            closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% + 지표 약화(${quantScore}점) → 수익 확정`;
-            newStatus = 'trailing_profit';
-          } else if (drop >= TRAILING_DROP_PCT && indicatorsStrong) {
-            await addLog('unified', 'hold', sym, `[Iron Hold] ${sym} +${pnlPct.toFixed(2)}% 고점-${drop.toFixed(2)}% BUT 지표 ${quantScore}점(≥55) → 30% 추격 중`, { quantScore, drop, isIronHold });
+          // ★ [Iron-Defense 2단계] 3% 도달 즉시 수익 확정 — 체결강도 200%+ 예외 시 트레일링 전환
+          const aggressionPct = scoring?.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
+          const currentAggression = aggressionPct ? parseInt(aggressionPct) : 0;
+          const isVolumeExplosion = currentAggression >= VOLUME_EXPLOSION_THRESHOLD;
+
+          if (pnlPct >= 15.0) {
+            // 15%+ 구간: 기존 트레일링 유지
+            if (drop >= TRAILING_DROP_PCT && !indicatorsStrong) {
+              shouldClose = true;
+              closeReason = `[추격익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 고점-${drop.toFixed(2)}% + 지표 약화(${quantScore}점) → 수익 확정`;
+              newStatus = 'trailing_profit';
+            } else {
+              await addLog('unified', 'hold', sym, `[🛡️철벽홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 추격 중 | 체결강도 ${currentAggression}% | 지표 ${quantScore}점 → 고점-${TRAILING_DROP_PCT}% 트레일링`, { quantScore, pnlPct: +pnlPct.toFixed(2), drop, aggression: currentAggression });
+            }
+          } else if (isVolumeExplosion && indicatorsStrong) {
+            // ★ [Iron-Defense 예외] 체결강도 200%+ & 지표 55점+ → 트레일링(고점-1%)으로 10~20% 추격
+            if (drop >= 1.0) {
+              shouldClose = true;
+              closeReason = `[🔥폭발익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 체결강도 ${currentAggression}%(≥200%) 폭발 후 고점-${drop.toFixed(2)}% → 확정`;
+              newStatus = 'explosion_profit';
+            } else {
+              await addLog('unified', 'hold', sym, `[🔥폭발추격] ${sym} +${pnlPct.toFixed(2)}% | 체결강도 ${currentAggression}%(≥200%) 폭발! 고점-1.0% 트레일링으로 10~20% 극대화 추격 중`, { quantScore, pnlPct: +pnlPct.toFixed(2), aggression: currentAggression, drop });
+            }
           } else {
-            await addLog('unified', 'hold', sym, `[🛡️철벽홀딩] ${sym} +${pnlPct.toFixed(2)}% 수익 추격 중 | 지표 ${quantScore}점 → 고점-${TRAILING_DROP_PCT}% 트레일링, 30% 목표 추격!`, { quantScore, pnlPct: +pnlPct.toFixed(2), drop });
+            // ★ [Iron-Defense 2단계 확정] 3% 터치 → 즉시 시장가 매도로 수익 확정
+            shouldClose = true;
+            closeReason = `[🎯3%확정익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% ≥ 3.0% Iron-Defense 2단계 → 즉시 수익 확정 (체결강도 ${currentAggression}%<200%)`;
+            newStatus = 'iron_defense_profit';
           }
         } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER) {
-          // ★ 1~3% 구간: 절대 매도 금지! 3% 돌파까지 인내
-          await addLog('unified', 'hold', sym, `[🎯3%돌파대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 3.0% 돌파 시 수익 추격 모드 발동 예정 (현재 매도 금지!)`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+          // ★ [Iron-Defense 1단계] 1~3% 구간: SL→매수가+0.2% 고정, 3% 돌파까지 인내
+          if (pos.stop_loss < pos.price * ZERO_RISK_SL_PCT) {
+            const ironSL = +(pos.price * ZERO_RISK_SL_PCT).toFixed(4);
+            await supabase.from('unified_trades').update({ stop_loss: ironSL }).eq('id', pos.id);
+            pos.stop_loss = ironSL;
+            await addLog('unified', 'defense', sym, `[🛡️Iron-Defense 1단계] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.0% → SL=${fmtKRW(ironSL)}(매수가+0.2%) 고정! 패배 영구 소멸`, { quantScore, pnlPct: +pnlPct.toFixed(2), newSL: ironSL });
+          }
+          await addLog('unified', 'hold', sym, `[🎯3%확정대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 3.0% 터치 시 즉시 수익 확정 예정 (현재 SL=매수가+0.2%)`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
         } else if (pnlPct >= 0 && pnlPct < 1.0) {
           // ★ 0~1% 구간: 본절가 보호 발동 전 — 홀딩
           if (quantScore >= 50) {
-            await addLog('unified', 'hold', sym, `[홀딩] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → 본절가 보호(+1.0%) 대기 중`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
+            await addLog('unified', 'hold', sym, `[홀딩] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 → Iron-Defense 1단계(+1.0%) 대기 중`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
           }
         } else if (pos.take_profit && price >= pos.take_profit) {
           // TP 도달 → 상향 또는 트레일링 전환 (매도 금지)
@@ -1844,23 +1895,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 정예 1~5선 집중 투자: 필승 패턴 or (65점+90%익절확률+뉴스긍정) 확정 후보만
+    // ★ [Alpha-Entry] 정예 1~5선 집중 투자: 3% 진공구간 + 뉴스 90%+ + 익절확률 95%
     const filteredCandidates = candidates.filter(c => {
       if ((c as any)._newsBlocked) return false;
       const winProb = getWinProbability(c.scoring.totalScore);
       const hasCritical = (c as any).hasCriticalPattern;
       const newsSent = (c as any).newsSentiment || 50;
-      // ★ 뉴스+지표 95% 일치 시 최우선 진입
-      const newsBoost = newsSent >= 80 && winProb >= 90;
-      // 필승 패턴 감지 시: 50점 이상 + 패턴 익절확률 90%+ → 즉시 진입
+      
+      // ★ [Alpha-Entry] 진공 구간 분석: 3%+ 상승 공간이 매물대 없이 열려 있는가
+      const vacuumData = c.data ? detectVacuumZone(c.data.closes, c.data.highs, c.data.lows, c.data.volumes) : { hasVacuum: false, vacuumPct: 0, resistance: 0 };
+      const hasVacuum = vacuumData.hasVacuum;
+      
+      // ★ 뉴스+지표 동기화: 뉴스 90%+ & 익절확률 95%+ = 확정적 진입
+      const alphaEntry = newsSent >= ALPHA_ENTRY_NEWS_MIN && winProb >= ALPHA_ENTRY_WIN_PROB;
+      
+      // 필승 패턴 감지 시: 패턴 익절확률 90%+ → 즉시 진입
       if (hasCritical) {
         const patternConf = (c as any).criticalPatternConfidence || 0;
-        return patternConf >= 90 || (c.scoring.totalScore >= 65 && winProb >= 90);
+        return patternConf >= 90 || (c.scoring.totalScore >= 70 && winProb >= ALPHA_ENTRY_WIN_PROB);
       }
-      // ★ 뉴스 강세(80%+) + 지표 65점+ = 확정적 익절 → 즉시 투입
-      if (newsBoost) return true;
-      // 일반 진입: 65점+ & 90% 이상
-      return c.scoring.totalScore >= 65 && winProb >= 90;
+      // ★ Alpha-Entry: 뉴스 90%+ & 익절확률 95%+ & 진공구간 → 최우선 진입
+      if (alphaEntry && hasVacuum) return true;
+      // ★ 뉴스 90%+ & 익절확률 95% → 진공 없어도 진입 허용
+      if (alphaEntry) return true;
+      // 일반 진입: 70점+ & 95% 이상 (기존 65/90 → 강화)
+      return c.scoring.totalScore >= 70 && winProb >= ALPHA_ENTRY_WIN_PROB;
     });
     const topCandidates = filteredCandidates.slice(0, 5);
 
