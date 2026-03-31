@@ -202,19 +202,30 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
         </div>
       </div>
 
-      {/* ★ [AI 추천 매도 구간] Dynamic-Target 배지 */}
-      {dynamicTP && unrealizedPnlPct >= 0.5 && (
-        <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1.5 rounded bg-warning/10 border border-warning/30">
-          <Target className="w-3.5 h-3.5 text-warning shrink-0" />
-          <span className="text-warning">
-            [AI 추천 매도 구간] +{dynamicTP.pct}% ({dynamicTP.label}) | 현재 +{unrealizedPnlPct.toFixed(2)}%
+      {/* ★ [AI 추천 익절%] Dynamic-Target — 항상 표시 */}
+      {dynamicTP && (
+        <div className={cn(
+          "flex items-center gap-2 text-[11px] font-semibold px-2 py-1.5 rounded border",
+          unrealizedPnlPct >= dynamicTP.pct
+            ? 'bg-stock-up/15 border-stock-up/40'
+            : unrealizedPnlPct >= dynamicTP.pct * 0.5
+              ? 'bg-warning/10 border-warning/30'
+              : 'bg-muted/50 border-border'
+        )}>
+          <Target className={cn("w-3.5 h-3.5 shrink-0",
+            unrealizedPnlPct >= dynamicTP.pct ? 'text-stock-up' : 'text-warning'
+          )} />
+          <span className={cn(
+            unrealizedPnlPct >= dynamicTP.pct ? 'text-stock-up' : 'text-warning'
+          )}>
+            [AI 추천 익절] +{dynamicTP.pct}% ({dynamicTP.label}) | 현재 {unrealizedPnlPct >= 0 ? '+' : ''}{unrealizedPnlPct.toFixed(2)}%
             {unrealizedPnlPct >= dynamicTP.pct && ' ✅ 목표 도달!'}
           </span>
           <Badge variant="outline" className={cn(
             "text-[9px] px-1.5 py-0 ml-auto font-bold",
             unrealizedPnlPct >= dynamicTP.pct ? 'border-stock-up/40 text-stock-up' : 'border-warning/40 text-warning'
           )}>
-            {unrealizedPnlPct >= dynamicTP.pct ? '🎯 익절 구간' : `${((unrealizedPnlPct / dynamicTP.pct) * 100).toFixed(0)}%`}
+            {unrealizedPnlPct >= dynamicTP.pct ? '🎯 익절 구간' : `${Math.max(0, (unrealizedPnlPct / dynamicTP.pct) * 100).toFixed(0)}%`}
           </Badge>
         </div>
       )}
