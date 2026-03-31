@@ -325,4 +325,5 @@ export const TradeLogTable = React.forwardRef<HTMLDivElement, TradeLogTableProps
       </CardContent>
     </Card>
   );
-}
+});
+TradeLogTable.displayName = "TradeLogTable";
