@@ -195,13 +195,13 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             🛡️ Iron-Defense | +1%→SL+0.2% | +3%→즉시 확정
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔥 체결강도 200%↑ = 트레일링(-1%) 극대화
+            🎯 Dynamic-Target | 체결강도별 2~3% 가변 익절
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🎯 Alpha-Entry | 뉴스90%↑ + 익절확률95%↑ + 진공구간
+            📉 Adaptive-Exit | 고점-0.5% OR 체결강도 80%↓ → 즉시 익절
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            💎 ₩12,000↓ 저가주 5종목 | 3% 필수 수익 확정
+            💎 ₩12,000↓ 저가주 호가 최적화 | 선제적 매도
           </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
