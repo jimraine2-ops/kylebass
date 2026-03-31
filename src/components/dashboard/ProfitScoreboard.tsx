@@ -132,3 +132,4 @@ export const ProfitScoreboard = forwardRef<HTMLDivElement, ProfitScoreboardProps
   );
 });
 ProfitScoreboard.displayName = "ProfitScoreboard";
+
