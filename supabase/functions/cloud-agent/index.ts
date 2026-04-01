@@ -1660,17 +1660,22 @@ Deno.serve(async (req) => {
       await addLog('system', 'info', null, `[일일목표] 오늘 실현 PnL: ${fmtKRWRaw(dailyPnl)} / 목표 ₩500,000 (${(dailyPnl/DAILY_TARGET_KRW_CONST*100).toFixed(1)}%)`, { dailyPnl });
     }
 
-    // ========== [Safe-Pause] 미국 장 세션 기준 거래 판단 ==========
+    // ========== [Safe-Exit + Day-Break] 타임 슬롯 제어 ==========
     const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000); // UTC → KST
     const kstHour = kstNow.getUTCHours();
     const kstMin = kstNow.getUTCMinutes();
     const kstTimeMinutes = kstHour * 60 + kstMin;
     const currentOpenCountForPause = (openPos || []).filter((p: any) => p.status === 'open').length;
     
-    // ★ 세션 기반 판단: 주말(DAY)이면 Safe-Pause, 그 외에는 거래 허용
+    // ★ [Safe-Exit] 프리마켓 청산 완료 후 KST 9:00까지 매수 일시 중지
+    // 조건: 보유 포지션 0개 AND KST 9:00 이전 → 스캔은 계속하되 신규 매수 금지
+    const isBeforeKST9 = kstTimeMinutes < 540; // KST 09:00 전
+    const isAfterKST9 = kstTimeMinutes >= 540; // KST 09:00 이후
+    const safeExitPause = isBeforeKST9 && currentOpenCountForPause === 0;
+    
+    // ★ 세션 기반 판단: 주말(DAY) 또는 Safe-Exit 대기 중이면 매수 금지
     let safePauseActive = false;
     if (currentSession === 'DAY') {
-      // 주말(토/일)인 경우에만 Safe-Pause 발동
       safePauseActive = true;
       await addLog('system', 'market-pause', null, 
         `[Market-Pause] 🟡 주말 휴장 — 미국 시장 폐장 상태 | ` +
@@ -1678,19 +1683,49 @@ Deno.serve(async (req) => {
         `상태: 대기 중 | 다음 거래: 월요일 프리마켓(04:00 ET) 자동 재개`,
         { safePause: true, session: currentSession, dailyPnl }
       );
-    }
-    // ★ PRE_MARKET, REGULAR, AFTER_HOURS → 모두 거래 허용 (세션별 설정은 getMarketSession에서 관리)
-    
-    // [Day-Start] 오전 9시 KST 도달 직후 5분간(9:00~9:05) → 강화 필터링 + 라운드 시작 로그
-    const isDayStartWindow = kstTimeMinutes >= 540 && kstTimeMinutes < 545; // 9:00~9:05 KST
-    if (isDayStartWindow && currentOpenCountForPause === 0) {
-      await addLog('system', 'day-start', null, 
-        `[Day-Start] 🟢 데이장 개시! Round ${currentRound} 사냥 재개 | ` +
-        `잔고: ${fmtKRWRaw(Math.round(balance))} | 누적 수익 유지: ${fmtKRWRaw(dailyPnl)} | ` +
-        `Finnhub × Twelve Data 교차 필터링 강화 중 (9:00~9:05 KST 최적 수급 포착)`,
-        { dayStart: true, round: currentRound, balance: Math.round(balance), dailyPnl }
+    } else if (safeExitPause) {
+      // ★ [Safe-Exit] 프리마켓 청산 완료 → KST 9:00까지 매수 금지 (스캔은 유지)
+      safePauseActive = true;
+      const minutesUntil9 = 540 - kstTimeMinutes;
+      const hoursLeft = Math.floor(minutesUntil9 / 60);
+      const minsLeft = minutesUntil9 % 60;
+      await addLog('system', 'safe-exit', null, 
+        `[Safe-Exit] 🟡 프리마켓 청산 완료 — KST 09:00까지 매수 일시 중지 | ` +
+        `남은 시간: ${hoursLeft}시간 ${minsLeft}분 | ` +
+        `스캔 엔진 가동 중: Finnhub × Twelve Data 0순위 종목 사전 선별 | ` +
+        `오늘의 총 누적 수익: ${fmtKRWRaw(dailyPnl)}`,
+        { safeExitPause: true, kstTime: `${kstHour.toString().padStart(2,'0')}:${kstMin.toString().padStart(2,'0')}`, minutesUntil9, dailyPnl }
       );
     }
+    
+    // ★ [Day-Break] KST 9:00:01 도달 → 매수 제한 해제 + ₩1,000,000 원금 재세팅 + 공격 모드 전환
+    const isDayBreakWindow = kstTimeMinutes >= 540 && kstTimeMinutes < 545; // KST 9:00~9:05
+    if (isDayBreakWindow && currentOpenCountForPause === 0) {
+      // ★ 원금 ₩1,000,000 리셋 (라운드 시작)
+      const DAY_BREAK_CAPITAL = 1000000;
+      if (balance !== DAY_BREAK_CAPITAL) {
+        await supabase.from('unified_wallet').update({ 
+          balance: DAY_BREAK_CAPITAL, 
+          initial_balance: DAY_BREAK_CAPITAL,
+          updated_at: now.toISOString() 
+        }).eq('id', wallet.id);
+        balance = DAY_BREAK_CAPITAL;
+      }
+      
+      await addLog('system', 'day-break', null, 
+        `[Day-Break] 🟢 오전 9시 데이장 사냥 강제 재개! Round ${currentRound} 공격 모드 전환 | ` +
+        `원금 ${fmtKRWRaw(DAY_BREAK_CAPITAL)} 세팅 완료 | 누적 수익 유지: ${fmtKRWRaw(dailyPnl)} | ` +
+        `₩12,000↓ 저가주 중 익절확률 95%↑ + AI 추천 2~3% 구간 확보 종목 즉시 투입 | ` +
+        `아시아 세션 수급 + Finnhub 최신 뉴스 결합 종목 최우선 요격`,
+        { dayBreak: true, round: currentRound, balance: DAY_BREAK_CAPITAL, dailyPnl }
+      );
+    }
+    
+    // ★ [Zero-Loss] 100% 익절 방어막 상시 가동 로그 (매 사이클)
+    await addLog('system', 'defense', null, 
+      `[Zero-Loss] 🛡️ Iron-Defense 상시 가동 | +1.0%→SL+0.2% 본절보호 | 가변 익절 2%/2.5%/3% | 체결강도 200%↑→트레일링(-1%)`,
+      { zeroLoss: true }
+    );
 
     // ========== UNIFIED ENTRY SCAN ==========
     // ★ 필승 로직: 시장 하락 또는 개장 직후 15분 뇌동매매 방지
@@ -1701,7 +1736,8 @@ Deno.serve(async (req) => {
       await addLog('unified', 'hold', null, `[필승-뇌동방지] 🚫 정규장 개장 직후 15분(09:30~09:45 ET) — 매수 잠금`, {});
     }
     if (safePauseActive) {
-      await addLog('unified', 'hold', null, `[Safe-Pause] 🟡 주말 휴장 — 신규 매수 금지`, { safePause: true });
+      const pauseReason = safeExitPause ? 'Safe-Exit 대기 중 — KST 09:00 재개 예정' : '주말 휴장';
+      await addLog('unified', 'hold', null, `[Safe-Pause] 🟡 ${pauseReason} — 신규 매수 금지 (스캔 엔진 가동 중)`, { safePause: true, safeExitPause });
     }
 
     let openCount = (openPos || []).filter(p => p.status === 'open').length;

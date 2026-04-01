@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { OpenPositionCard } from "@/components/trading/OpenPositionCard";
 import { TradeLogTable } from "@/components/trading/TradeLogTable";
 import { RadarChartCard } from "@/components/recommendation/RadarChartCard";
+import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
 import { useQuantSignals } from "@/hooks/useStockData";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { formatStockName } from "@/lib/koreanStockMap";
@@ -95,6 +96,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
 
   return (
     <div className="space-y-6">
+      <SafePauseBanner />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
