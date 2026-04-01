@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { OpenPositionCard } from "@/components/trading/OpenPositionCard";
 import { TradeLogTable } from "@/components/trading/TradeLogTable";
 import { RadarChartCard } from "@/components/recommendation/RadarChartCard";
+import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
 import { useQuantSignals } from "@/hooks/useStockData";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { formatStockName } from "@/lib/koreanStockMap";
