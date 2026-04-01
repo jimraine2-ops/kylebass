@@ -52,7 +52,22 @@ export function SafePauseBanner() {
     return () => clearInterval(interval);
   }, []);
 
-  return (
+  // Scan engine animation cycle
+  useEffect(() => {
+    if (mode !== 'safe-exit') return;
+    const stageInterval = setInterval(() => {
+      setScanStage(prev => (prev + 1) % SCAN_STAGES.length);
+      setScanProgress(0);
+      setScannedCount(prev => prev + Math.floor(Math.random() * 120 + 30));
+    }, 3000);
+    const progressInterval = setInterval(() => {
+      setScanProgress(prev => Math.min(prev + 4, 100));
+    }, 100);
+    return () => { clearInterval(stageInterval); clearInterval(progressInterval); };
+  }, [mode]);
+
+  const currentStage = SCAN_STAGES[scanStage];
+
     <div className="space-y-2">
       {/* [Safe-Exit] 매수 일시 중지 배너 */}
       {mode === 'safe-exit' && (
