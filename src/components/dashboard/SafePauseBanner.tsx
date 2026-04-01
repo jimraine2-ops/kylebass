@@ -68,6 +68,7 @@ export function SafePauseBanner() {
 
   const currentStage = SCAN_STAGES[scanStage];
 
+  return (
     <div className="space-y-2">
       {/* [Safe-Exit] 매수 일시 중지 배너 */}
       {mode === 'safe-exit' && (
