@@ -73,8 +73,8 @@ function getMarketSession(): { session: SessionType; label: string; spreadMultip
     // 애프터마켓 16:00~20:00 → 공격적 체결 0.2%
     return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8, entryRelax: 0.75, rvolMin: 1.0, aggressiveSlippage: 0.002 };
   }
-  // 야간 20:00~04:00 → 데이장 모드 (공격적 체결 0.3%)
-  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6, rvolMin: 1.0, aggressiveSlippage: 0.003 };
+  // 야간 20:00~04:00 → 오버나이트 모드 (평일 야간, 매매 가능)
+  return { session: 'OVERNIGHT', label: '오버나이트', spreadMultiplier: 2.5, entryRelax: 0.6, rvolMin: 1.0, aggressiveSlippage: 0.003 };
 }
 
 function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultiplier: number, aggressiveSlippage: number = 0.0002): number {
