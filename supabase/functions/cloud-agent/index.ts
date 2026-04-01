@@ -45,7 +45,7 @@ function fmtKRWRaw(krw: number): string { return `₩${krw.toLocaleString('ko-KR
 function getToken(): string { return Deno.env.get('FINNHUB_API_KEY') || ''; }
 
 // ===== Session Detection (US Eastern Time) =====
-type SessionType = 'DAY' | 'PRE_MARKET' | 'REGULAR' | 'AFTER_HOURS';
+type SessionType = 'DAY' | 'PRE_MARKET' | 'REGULAR' | 'AFTER_HOURS' | 'OVERNIGHT';
 
 function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number; entryRelax: number; rvolMin: number; aggressiveSlippage: number } {
   const now = new Date();
@@ -73,8 +73,8 @@ function getMarketSession(): { session: SessionType; label: string; spreadMultip
     // 애프터마켓 16:00~20:00 → 공격적 체결 0.2%
     return { session: 'AFTER_HOURS', label: '애프터마켓', spreadMultiplier: 1.8, entryRelax: 0.75, rvolMin: 1.0, aggressiveSlippage: 0.002 };
   }
-  // 야간 20:00~04:00 → 데이장 모드 (공격적 체결 0.3%)
-  return { session: 'DAY', label: '데이장', spreadMultiplier: 2.5, entryRelax: 0.6, rvolMin: 1.0, aggressiveSlippage: 0.003 };
+  // 야간 20:00~04:00 → 오버나이트 모드 (평일 야간, 매매 가능)
+  return { session: 'OVERNIGHT', label: '오버나이트', spreadMultiplier: 2.5, entryRelax: 0.6, rvolMin: 1.0, aggressiveSlippage: 0.003 };
 }
 
 function applySessionSlippage(price: number, side: 'buy' | 'sell', spreadMultiplier: number, aggressiveSlippage: number = 0.0002): number {
@@ -1269,7 +1269,7 @@ Deno.serve(async (req) => {
     const adaptedEntryThreshold = Math.max(rawAdapted, lateSessionFloor); // ★ 후반장 70점, 기본 65점
     const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
-    const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
+    const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS' || currentSession === 'OVERNIGHT';
 
     if (entryRelax < 1.0) {
       await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점${isLateRegularSession ? ' (후반장 70점 강화)' : ''} | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin} | 선취매모드: ${isLowVolumeSession ? 'ON' : 'OFF'}`, {});
@@ -1920,7 +1920,7 @@ Deno.serve(async (req) => {
     }
 
     // Sort: critical pattern → score surge → super pattern → explosive → volume burst → liquidity → score
-    const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
+    const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY' || currentSession === 'OVERNIGHT') ? 'small' : 'large';
     candidates.sort((a, b) => {
       // ★ 동전주($1 미만) 최우선
       const aPenny = (a as any).isPennyStock ? 5 : 0;
