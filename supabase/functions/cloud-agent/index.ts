@@ -1920,7 +1920,7 @@ Deno.serve(async (req) => {
     }
 
     // Sort: critical pattern → score surge → super pattern → explosive → volume burst → liquidity → score
-    const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY') ? 'small' : 'large';
+    const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY' || currentSession === 'OVERNIGHT') ? 'small' : 'large';
     candidates.sort((a, b) => {
       // ★ 동전주($1 미만) 최우선
       const aPenny = (a as any).isPennyStock ? 5 : 0;
