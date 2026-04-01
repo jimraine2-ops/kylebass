@@ -17,6 +17,7 @@ import { RadarChartCard } from "@/components/recommendation/RadarChartCard";
 import { useQuantSignals } from "@/hooks/useStockData";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { formatStockName } from "@/lib/koreanStockMap";
+import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
 
 interface IntegratedKPIDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
