@@ -184,6 +184,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
   return (
     <div className="space-y-6">
+      <SafePauseBanner />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           {/* ★ 연승 카운터 */}
