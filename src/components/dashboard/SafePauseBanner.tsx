@@ -1,16 +1,25 @@
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Clock, Play, Pause, Zap, Target } from "lucide-react";
+import { Shield, Clock, Play, Pause, Zap, Target, Radio, Search, BarChart3, Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type TimeSlotMode = 'safe-exit' | 'day-break' | 'active';
+
+const SCAN_STAGES = [
+  { icon: "🔍", label: "Finnhub 뉴스 수집 중", sub: "실시간 감성 분석" },
+  { icon: "📊", label: "Twelve Data 지표 계산 중", sub: "RSI·MACD·볼린저" },
+  { icon: "🎯", label: "₩12,000↓ 저가주 필터링", sub: "익절확률 95%↑ 선별" },
+  { icon: "⚡", label: "0순위 종목 랭킹 생성", sub: "체결강도·수급 교차 검증" },
+];
 
 export function SafePauseBanner() {
   const [kstTime, setKstTime] = useState("");
   const [mode, setMode] = useState<TimeSlotMode>('active');
   const [countdown, setCountdown] = useState("");
   const [blink, setBlink] = useState(true);
-
+  const [scanStage, setScanStage] = useState(0);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scannedCount, setScannedCount] = useState(0);
   useEffect(() => {
     const update = () => {
       const now = new Date();
