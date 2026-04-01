@@ -1,16 +1,25 @@
 import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Clock, Play, Pause, Zap, Target } from "lucide-react";
+import { Shield, Clock, Play, Pause, Zap, Target, Radio, Search, BarChart3, Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type TimeSlotMode = 'safe-exit' | 'day-break' | 'active';
+
+const SCAN_STAGES = [
+  { icon: "🔍", label: "Finnhub 뉴스 수집 중", sub: "실시간 감성 분석" },
+  { icon: "📊", label: "Twelve Data 지표 계산 중", sub: "RSI·MACD·볼린저" },
+  { icon: "🎯", label: "₩12,000↓ 저가주 필터링", sub: "익절확률 95%↑ 선별" },
+  { icon: "⚡", label: "0순위 종목 랭킹 생성", sub: "체결강도·수급 교차 검증" },
+];
 
 export function SafePauseBanner() {
   const [kstTime, setKstTime] = useState("");
   const [mode, setMode] = useState<TimeSlotMode>('active');
   const [countdown, setCountdown] = useState("");
   const [blink, setBlink] = useState(true);
-
+  const [scanStage, setScanStage] = useState(0);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scannedCount, setScannedCount] = useState(0);
   useEffect(() => {
     const update = () => {
       const now = new Date();
@@ -43,12 +52,37 @@ export function SafePauseBanner() {
     return () => clearInterval(interval);
   }, []);
 
+  // Scan engine animation cycle
+  useEffect(() => {
+    if (mode !== 'safe-exit') return;
+    const stageInterval = setInterval(() => {
+      setScanStage(prev => (prev + 1) % SCAN_STAGES.length);
+      setScanProgress(0);
+      setScannedCount(prev => prev + Math.floor(Math.random() * 120 + 30));
+    }, 3000);
+    const progressInterval = setInterval(() => {
+      setScanProgress(prev => Math.min(prev + 4, 100));
+    }, 100);
+    return () => { clearInterval(stageInterval); clearInterval(progressInterval); };
+  }, [mode]);
+
+  const currentStage = SCAN_STAGES[scanStage];
+
   return (
     <div className="space-y-2">
       {/* [Safe-Exit] 매수 일시 중지 배너 */}
       {mode === 'safe-exit' && (
         <div className="relative overflow-hidden rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
+          {/* Scanning sweep animation */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: `linear-gradient(90deg, transparent 0%, hsl(45 100% 60% / 0.06) ${scanProgress}%, transparent ${Math.min(scanProgress + 15, 100)}%)`,
+              transition: 'background 0.1s linear',
+            }}
+          />
+
+          <div className="relative flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <Pause className="w-4 h-4 text-yellow-400" />
               <span
@@ -66,15 +100,49 @@ export function SafePauseBanner() {
               <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-yellow-500/30 text-yellow-400 bg-yellow-500/10">
                 ⏳ 재개까지 {countdown}
               </Badge>
-              <span className="text-[10px] text-yellow-400/70">
-                스캔 엔진 가동 중 · 0순위 종목 사전 선별
-              </span>
             </div>
           </div>
-          <div className="mt-2 flex items-center gap-3 text-[10px] text-yellow-400/80">
-            <span>🔍 Finnhub × Twelve Data 교차 필터링 중</span>
-            <span>📊 ₩12,000↓ 저가주 사전 스캔</span>
-            <span>🎯 익절확률 95%↑ 종목 선별 대기</span>
+
+          {/* Scan Engine Live Status */}
+          <div className="relative mt-3 rounded-md border border-yellow-500/20 bg-yellow-500/5 p-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Radio className="w-3.5 h-3.5 text-yellow-400 animate-pulse" />
+                <span className="text-[11px] font-bold text-yellow-400">스캔 엔진 가동 중</span>
+              </div>
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-yellow-500/20 text-yellow-400/80 gap-1">
+                <Search className="w-2.5 h-2.5" />
+                {scannedCount.toLocaleString()}개 종목 스캔 완료
+              </Badge>
+            </div>
+
+            {/* Current stage with progress */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="animate-pulse">{currentStage.icon}</span>
+                <span className="font-semibold text-yellow-300">{currentStage.label}</span>
+                <span className="text-yellow-400/60">— {currentStage.sub}</span>
+              </div>
+              <div className="h-1 w-full rounded-full bg-yellow-500/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-100 ease-linear"
+                  style={{
+                    width: `${scanProgress}%`,
+                    background: 'linear-gradient(90deg, hsl(45 100% 50% / 0.4), hsl(45 100% 60% / 0.8))',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Stage indicators */}
+            <div className="flex items-center gap-3 text-[9px] text-yellow-400/60">
+              {SCAN_STAGES.map((s, i) => (
+                <span key={i} className={cn("flex items-center gap-1 transition-all duration-300", i === scanStage ? "text-yellow-300 scale-105 font-semibold" : i < scanStage ? "text-yellow-400/40" : "")}>
+                  <span className={cn("w-1.5 h-1.5 rounded-full", i === scanStage ? "bg-yellow-400 animate-pulse" : i < scanStage ? "bg-yellow-400/40" : "bg-yellow-400/15")} />
+                  {s.icon} {s.label.split(' ')[0]}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       )}
