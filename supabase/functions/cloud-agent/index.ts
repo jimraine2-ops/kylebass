@@ -45,7 +45,7 @@ function fmtKRWRaw(krw: number): string { return `₩${krw.toLocaleString('ko-KR
 function getToken(): string { return Deno.env.get('FINNHUB_API_KEY') || ''; }
 
 // ===== Session Detection (US Eastern Time) =====
-type SessionType = 'DAY' | 'PRE_MARKET' | 'REGULAR' | 'AFTER_HOURS';
+type SessionType = 'DAY' | 'PRE_MARKET' | 'REGULAR' | 'AFTER_HOURS' | 'OVERNIGHT';
 
 function getMarketSession(): { session: SessionType; label: string; spreadMultiplier: number; entryRelax: number; rvolMin: number; aggressiveSlippage: number } {
   const now = new Date();
