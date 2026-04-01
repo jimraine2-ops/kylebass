@@ -1269,7 +1269,7 @@ Deno.serve(async (req) => {
     const adaptedEntryThreshold = Math.max(rawAdapted, lateSessionFloor); // ★ 후반장 70점, 기본 65점
     const adaptedRvolMin = entryRelax < 1.0 ? 1.5 : 2.0;
     const adaptedVwapMin = entryRelax < 1.0 ? 2 : 4;
-    const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS';
+    const isLowVolumeSession = currentSession === 'DAY' || currentSession === 'PRE_MARKET' || currentSession === 'AFTER_HOURS' || currentSession === 'OVERNIGHT';
 
     if (entryRelax < 1.0) {
       await addLog('system', 'info', null, `[전세션 엔진] ${sessionLabel} 적응형 진입: 문턱 ${baseEntryThreshold}→${adaptedEntryThreshold}점${isLateRegularSession ? ' (후반장 70점 강화)' : ''} | RVOL≥${adaptedRvolMin} | VWAP≥${adaptedVwapMin} | 선취매모드: ${isLowVolumeSession ? 'ON' : 'OFF'}`, {});
