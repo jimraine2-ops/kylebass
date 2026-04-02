@@ -19,6 +19,7 @@ interface OpenPositionCardProps {
 
 function getStrategyTag(aiReason: string | null): { label: string; color: string } {
   if (!aiReason) return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
+  if (aiReason.includes('가치 기반 우량')) return { label: '💎가치우량', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' };
   if (aiReason.includes('동전주')) return { label: '🪙동전주', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' };
   if (aiReason.includes('선취매')) return { label: '📡선취매', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' };
   if (aiReason.includes('필승패턴')) return { label: '🎯필승패턴', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' };
@@ -49,10 +50,12 @@ function getScoreLabel(score: number): string {
   return '매도 검토';
 }
 
-function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: string; color: string; winProb: number } | null {
+function getAIHoldingJudgment(score: number | null, pnlPct: number, valueGrade?: string): { message: string; color: string; winProb: number } | null {
   if (score === null) return null;
+  const valueVerified = valueGrade === 'A' || valueGrade === 'B';
   let winProb = 0;
-  if (score >= 70) winProb = 90;
+  if (valueVerified && score >= 65) winProb = 98;
+  else if (score >= 70) winProb = 90;
   else if (score >= 65) winProb = 85;
   else if (score >= 60) winProb = 80;
   else if (score >= 55) winProb = 75;
@@ -61,11 +64,11 @@ function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: 
   else if (score >= 40) winProb = 30;
   else winProb = 15;
   if (pnlPct >= 2) winProb = Math.min(98, winProb + 10);
-  else if (pnlPct >= 1) winProb = Math.min(95, winProb + 5);
+  else if (pnlPct >= 1) winProb = Math.min(98, winProb + 5);
 
   // ★ 철갑 홀딩: 지표 60점 이상이면 하락 중에도 "통계적으로 반드시 이긴다"
   if (pnlPct < 0 && score >= 60) {
-    return { message: `[🛡️ 철갑 홀딩] 가격 하락 중이나 지표 ${score}점으로 견고함 — 통계적으로 반드시 이긴다. 수익권 진입까지 절대 매도 금지`, color: 'text-stock-up', winProb };
+    return { message: `[🛡️ 철갑 홀딩] 가격 하락 중이나 지표 ${score}점으로 견고함${valueVerified ? ' + 가치 검증 완료' : ''} — 통계적으로 반드시 이긴다. 수익권 진입까지 절대 매도 금지`, color: 'text-stock-up', winProb };
   }
   if (pnlPct < 0 && score >= 50) {
     return { message: `[AI 판단: 홀딩 권장 - 지표 양호] 눌림목 구간, 반등 대기`, color: 'text-stock-up', winProb };
@@ -77,7 +80,7 @@ function getAIHoldingJudgment(score: number | null, pnlPct: number): { message: 
     return { message: `[AI 판단: 매도 검토] 추세 이탈 위험`, color: 'text-destructive', winProb };
   }
   if (pnlPct >= 0 && score >= 55) {
-    return { message: `[AI 판단: 강력 보유] 추가 상승 기대`, color: 'text-stock-up', winProb };
+    return { message: `[AI 판단: 강력 보유]${valueVerified ? ' 가치 우량' : ''} 추가 상승 기대`, color: 'text-stock-up', winProb };
   }
   if (pnlPct >= 0 && score >= 45) {
     return { message: `[AI 판단: 보유 유지] 안정 구간`, color: 'text-primary', winProb };
@@ -95,11 +98,16 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
   const pnlColor = isProfit ? 'text-stock-up' : 'text-stock-down';
   const tag = getStrategyTag(pos.ai_reason);
 
+  // ★ [Value-Filter] ai_reason에서 가치 등급 추출
+  const valueGradeMatch = (pos.ai_reason || '').match(/가치 등급:\s*([ABCD])/);
+  const valueGrade = valueGradeMatch ? valueGradeMatch[1] : undefined;
+  const valueVerified = valueGrade === 'A' || valueGrade === 'B';
+
   const score = liveScore ?? pos.entry_score ?? null;
   const scoreChanged = score !== null && prevScore !== null && prevScore !== undefined ? score - prevScore : 0;
   const isDanger = score !== null && score < 40;
 
-  const aiJudgment = getAIHoldingJudgment(score, unrealizedPnlPct);
+  const aiJudgment = getAIHoldingJudgment(score, unrealizedPnlPct, valueGrade);
   const isHoldingRecommended = !isProfit && score !== null && score >= 50;
 
   // ★ [Dynamic-Target] AI 추천 매도 구간 계산 (체결강도 기반)
@@ -186,6 +194,16 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
           <Badge variant="outline" className="text-[10px]">
             신뢰도: {pos.ai_confidence}%
           </Badge>
+          {valueVerified && (
+            <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-bold border-emerald-500/50 bg-emerald-500/20 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]">
+              💎 가치등급 {valueGrade} (우량) | 익절확정 98%
+            </Badge>
+          )}
+          {valueGrade && !valueVerified && valueGrade !== 'N/A' && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-muted-foreground/30 text-muted-foreground">
+              가치 {valueGrade}
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">

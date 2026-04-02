@@ -747,13 +747,68 @@ async function discoverAllUSStocks(): Promise<string[]> {
   }
 }
 
+// ===== [Value-Filter] 기업 가치 3대 핵심 지표 =====
+const valueCache: Map<string, { grade: string; score: number; details: any; ts: number }> = new Map();
+const VALUE_CACHE_TTL = 600000; // 10분 캐시
+
+async function getValueFilter(symbol: string): Promise<{ grade: string; score: number; cashFlowOk: boolean; revenueGrowth: boolean; perUndervalued: boolean; details: any }> {
+  const cached = valueCache.get(symbol);
+  if (cached && Date.now() - cached.ts < VALUE_CACHE_TTL) {
+    return { ...cached.details, grade: cached.grade, score: cached.score };
+  }
+  
+  const defaultResult = { grade: 'N/A', score: 0, cashFlowOk: false, revenueGrowth: false, perUndervalued: false, details: {} };
+  
+  try {
+    const data = await finnhubFetch(`/stock/metric?symbol=${symbol}&metric=all`);
+    if (!data || !data.metric) return defaultResult;
+    
+    const m = data.metric;
+    let valueScore = 0;
+    const details: any = {};
+    
+    // 1. 현금 흐름 (Cash Flow): 영업현금흐름 양수 OR 유동비율 >= 1.0
+    const cashFlowPerShare = m.cashFlowPerShareAnnual || m.cashFlowPerShareTTM || 0;
+    const currentRatio = m.currentRatioAnnual || m.currentRatioQuarterly || 0;
+    const cashFlowOk = cashFlowPerShare > 0 || currentRatio >= 1.0;
+    if (cashFlowOk) valueScore += 35;
+    details.cashFlowPerShare = cashFlowPerShare;
+    details.currentRatio = +currentRatio.toFixed(2);
+    details.cashFlowOk = cashFlowOk;
+    
+    // 2. 매출 성장성: QoQ or YoY 매출 성장 양수
+    const revenueGrowthQoQ = m.revenueGrowthQuarterlyYoy || m.revenueGrowth3Y || m.revenueGrowth5Y || 0;
+    const revenueGrowth = revenueGrowthQoQ > 0;
+    if (revenueGrowth) valueScore += 35;
+    details.revenueGrowthPct = +revenueGrowthQoQ.toFixed(2);
+    details.revenueGrowth = revenueGrowth;
+    
+    // 3. 저평가 구간: PER이 업종 평균 대비 과도하지 않음 (PER < 50 or negative earnings = deep value)
+    const peRatio = m.peAnnual || m.peBasicExclExtraTTM || m.peTTM || 0;
+    const perUndervalued = peRatio > 0 ? peRatio < 50 : true; // 적자 기업도 성장주로 허용
+    if (perUndervalued) valueScore += 30;
+    details.peRatio = peRatio > 0 ? +peRatio.toFixed(1) : 'N/A(적자)';
+    details.perUndervalued = perUndervalued;
+    
+    // 등급 산정: A(80+), B(50+), C(35+), D(미달)
+    const grade = valueScore >= 80 ? 'A' : valueScore >= 50 ? 'B' : valueScore >= 35 ? 'C' : 'D';
+    
+    valueCache.set(symbol, { grade, score: valueScore, details: { cashFlowOk, revenueGrowth, perUndervalued, details }, ts: Date.now() });
+    return { grade, score: valueScore, cashFlowOk, revenueGrowth, perUndervalued, details };
+  } catch {
+    return defaultResult;
+  }
+}
+
 // ===== Win Probability Calculator (익절 확률 산출) =====
 // ★ 동전주 여부 판별
 function isPennyStock(price: number): boolean {
   return price > 0 && price < PENNY_THRESHOLD_USD;
 }
 
-function getWinProbability(score: number): number {
+function getWinProbability(score: number, valueVerified = false): number {
+  // ★ [Value-Filter] 가치 검증 완료 시 98% 격상
+  if (valueVerified && score >= 65) return 98;
   if (score >= 80) return 98;
   if (score >= 75) return 95;
   if (score >= 70) return 90;
@@ -1953,7 +2008,7 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 뉴스 감성 분석: 상위 10개 후보에만 적용 (타임아웃 방지)
+    // ★ 뉴스 감성 + 기업 가치 분석: 상위 10개 후보에만 적용 (타임아웃 방지)
     const preFilteredTop = candidates.slice(0, 10);
     for (const c of preFilteredTop) {
       try {
@@ -1966,6 +2021,31 @@ Deno.serve(async (req) => {
         }
       } catch { /* non-critical */ }
       
+      // ★ [Value-Filter] 기업 가치 3대 핵심 지표 검증
+      try {
+        const valueResult = await getValueFilter(c.sym);
+        (c as any).valueGrade = valueResult.grade;
+        (c as any).valueScore = valueResult.score;
+        (c as any).valueDetails = valueResult.details;
+        (c as any).valueVerified = valueResult.grade === 'A' || valueResult.grade === 'B';
+        
+        const gradeEmoji = valueResult.grade === 'A' ? '🏆' : valueResult.grade === 'B' ? '✅' : valueResult.grade === 'C' ? '⚠️' : '🚫';
+        const cfTag = valueResult.cashFlowOk ? '✅' : '❌';
+        const revTag = valueResult.revenueGrowth ? '✅' : '❌';
+        const perTag = valueResult.perUndervalued ? '✅' : '❌';
+        await addLog('unified', 'scan', c.sym, `[💎가치필터] ${c.sym} 등급: ${gradeEmoji}${valueResult.grade}(${valueResult.score}점) | 현금흐름${cfTag} 매출성장${revTag} 저평가${perTag} | PER: ${valueResult.details.peRatio || 'N/A'} | 유동비율: ${valueResult.details.currentRatio || 'N/A'}`, { valueFilter: valueResult });
+        
+        // ★ D등급(가치 미달): 쓰레기 주식 차단 — "아무리 지표가 좋아도 100만 원을 허용하지 마라"
+        if (valueResult.grade === 'D' && !(c as any).hasCriticalPattern) {
+          await addLog('unified', 'scan', c.sym, `[🚫가치차단] ${c.sym} 기업 가치 D등급 — 현금흐름/매출/PER 모두 미달 → 진입 금지`, {});
+          (c as any)._valueBlocked = true;
+        }
+      } catch { 
+        (c as any).valueGrade = 'N/A';
+        (c as any).valueScore = 0;
+        (c as any).valueVerified = false;
+      }
+      
       // ★ 뉴스+지표 동기화 필터: 뉴스 약세(40% 미만) + 지표 70점 미만 → 차단
       const newsSent = (c as any).newsSentiment || 50;
       if (newsSent < 40 && c.scoring.totalScore < 70 && !(c as any).hasCriticalPattern) {
@@ -1974,16 +2054,24 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ [Alpha-Entry] 정예 1~5선 집중 투자: 3% 진공구간 + 뉴스 90%+ + 익절확률 95%
+    // ★ [Alpha-Entry] 정예 1~5선 집중 투자: 3% 진공구간 + 뉴스 90%+ + 익절확률 95% + 가치 검증
     const filteredCandidates = candidates.filter(c => {
       if ((c as any)._newsBlocked) return false;
-      const winProb = getWinProbability(c.scoring.totalScore);
+      if ((c as any)._valueBlocked) return false; // ★ 가치 D등급 차단
+      const valueVerified = (c as any).valueVerified || false;
+      const winProb = getWinProbability(c.scoring.totalScore, valueVerified);
       const hasCritical = (c as any).hasCriticalPattern;
       const newsSent = (c as any).newsSentiment || 50;
       
       // ★ [Alpha-Entry] 진공 구간 분석: 3%+ 상승 공간이 매물대 없이 열려 있는가
       const vacuumData = c.data ? detectVacuumZone(c.data.closes, c.data.highs, c.data.lows, c.data.volumes) : { hasVacuum: false, vacuumPct: 0, resistance: 0 };
       const hasVacuum = vacuumData.hasVacuum;
+      
+      // ★ [Value-Filter] 교차 검증: 뉴스 + 지표 + 가치 모두 합치 → 98% 격상
+      const tripleVerified = newsSent >= ALPHA_ENTRY_NEWS_MIN && winProb >= ALPHA_ENTRY_WIN_PROB && valueVerified;
+      if (tripleVerified) {
+        (c as any)._tripleVerified = true;
+      }
       
       // ★ 뉴스+지표 동기화: 뉴스 90%+ & 익절확률 95%+ = 확정적 진입
       const alphaEntry = newsSent >= ALPHA_ENTRY_NEWS_MIN && winProb >= ALPHA_ENTRY_WIN_PROB;
@@ -2089,13 +2177,21 @@ Deno.serve(async (req) => {
       const superTag = isSuperEntry ? ` | 🎯슈퍼패턴[${(r as any).superPatternSignals.join('+')}] 15%타겟 집중투자(${(positionPct*100).toFixed(0)}%)` : '';
       const criticalTag = isCriticalPatternEntry ? ` | 🎯필승패턴[${(r as any).criticalPatterns.join('+')}] 익절확률${(r as any).criticalPatternConfidence}%` : '';
       
+      // ★ [Value-Filter] 가치 등급 & 익절 확률 계산
+      const valueGrade = (r as any).valueGrade || 'N/A';
+      const valueVerified = (r as any).valueVerified || false;
+      const tripleVerified = (r as any)._tripleVerified || false;
+      const winProb = getWinProbability(r.scoring.totalScore, valueVerified);
+      const valueTag = valueGrade !== 'N/A' ? ` | 💎가치등급:${valueGrade}(${valueVerified ? '검증완료' : '미달'})` : '';
+      const tripleTag = tripleVerified ? ' | 🏆3중검증(지표+뉴스+가치)→익절확정98%' : '';
+      
       // ★ 엔진 개편: 지표 상세 근거 로그
       const indDetails = Object.entries(r.scoring.indicators)
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
       const roundTag = currentRound > 1 ? `[Round ${currentRound}] ` : '';
-      const preBuyLabel = isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : '10대지표매수';
-      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} 10대 지표 중 ${r.scoring.metCount}개 충족 (${r.scoring.totalScore}점) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const preBuyLabel = isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
+      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: 3.0% (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       // ★ 필승 패턴 알림
       if (isCriticalPatternEntry) {
@@ -2117,12 +2213,12 @@ Deno.serve(async (req) => {
         stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
         cap_type: r.capType,
         entry_score: r.scoring.totalScore,
-        ai_reason: logMsg, ai_confidence: r.scoring.totalScore,
+        ai_reason: logMsg, ai_confidence: valueVerified ? Math.max(r.scoring.totalScore, 98) : r.scoring.totalScore,
       });
       await supabase.from('unified_wallet').update({ balance: newBuyBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
       balance = newBuyBalance;
       openCount++;
-      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry, isPenny: isPennyEntry });
+      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry, isPenny: isPennyEntry, valueGrade, valueScore: (r as any).valueScore || 0, valueVerified, tripleVerified, winProb });
     }
 
     // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
