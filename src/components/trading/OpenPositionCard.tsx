@@ -194,6 +194,16 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
           <Badge variant="outline" className="text-[10px]">
             신뢰도: {pos.ai_confidence}%
           </Badge>
+          {valueVerified && (
+            <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-bold border-emerald-500/50 bg-emerald-500/20 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]">
+              💎 가치등급 {valueGrade} (우량) | 익절확정 98%
+            </Badge>
+          )}
+          {valueGrade && !valueVerified && valueGrade !== 'N/A' && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-muted-foreground/30 text-muted-foreground">
+              가치 {valueGrade}
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
