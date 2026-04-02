@@ -16,6 +16,7 @@ import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
 import { useQuantSignals } from "@/hooks/useStockData";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { formatStockName } from "@/lib/koreanStockMap";
+import { useValueGrades } from "@/hooks/useValueGrade";
 
 interface MainTradingDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
@@ -44,6 +45,10 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
   const openPositions = data?.openPositions || [];
   const closedTrades = data?.closedTrades || [];
   const stats = data?.stats || {};
+
+  // ★ [Value-Filter] 보유 포지션 심볼의 기업 가치 등급 배치 조회
+  const openSymbols = openPositions.map((p: any) => p.symbol as string);
+  const { data: valueGrades } = useValueGrades(openSymbols);
 
   // Find quant indicators for selected symbol
   const allQuantStocks = [...(quantData?.premium || []), ...(quantData?.penny || [])];
@@ -286,6 +291,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
                 fxRate={fxRate}
                 onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
                 isSelected={pos.symbol === selectedSymbol}
+                valueGradeData={valueGrades?.[pos.symbol] || null}
               />
             ))}
           </CardContent>

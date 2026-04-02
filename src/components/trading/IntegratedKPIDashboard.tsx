@@ -18,6 +18,7 @@ import { useQuantSignals } from "@/hooks/useStockData";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
+import { useValueGrades } from "@/hooks/useValueGrade";
 
 interface IntegratedKPIDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
@@ -47,6 +48,10 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
   const openPositions = data?.openPositions || [];
   const closedTrades = data?.closedTrades || [];
   const stats = data?.stats || {};
+
+  // ★ [Value-Filter] 보유 포지션 심볼의 기업 가치 등급 배치 조회
+  const openSymbols = openPositions.map((p: any) => p.symbol as string);
+  const { data: valueGrades } = useValueGrades(openSymbols);
 
   const allQuantStocks = [...(quantData?.premium || []), ...(quantData?.penny || [])];
   const selectedQuantStock = selectedSymbol
@@ -458,6 +463,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
                 onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
                 isSelected={pos.symbol === selectedSymbol}
                 onOpenModal={() => setModalSymbol(pos.symbol)}
+                valueGradeData={valueGrades?.[pos.symbol] || null}
               />
             ))}
           </CardContent>
