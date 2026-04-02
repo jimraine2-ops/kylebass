@@ -2213,12 +2213,12 @@ Deno.serve(async (req) => {
         stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
         cap_type: r.capType,
         entry_score: r.scoring.totalScore,
-        ai_reason: logMsg, ai_confidence: r.scoring.totalScore,
+        ai_reason: logMsg, ai_confidence: valueVerified ? Math.max(r.scoring.totalScore, 98) : r.scoring.totalScore,
       });
       await supabase.from('unified_wallet').update({ balance: newBuyBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
       balance = newBuyBalance;
       openCount++;
-      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry, isPenny: isPennyEntry });
+      await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry, isPenny: isPennyEntry, valueGrade, valueScore: (r as any).valueScore || 0, valueVerified, tripleVerified, winProb });
     }
 
     // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
