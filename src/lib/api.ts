@@ -119,6 +119,15 @@ export async function fetchSuperScan() {
   return data;
 }
 
+// Fetch basic financials for value filter
+export async function fetchBasicFinancials(symbol: string) {
+  const { data, error } = await supabase.functions.invoke('stock-data', {
+    body: { action: 'basic-financials', symbol },
+  });
+  if (error) throw error;
+  return data;
+}
+
 // Legacy no-ops
 export async function aiAnalyzeAndTrade(symbol: string, price: number, chartData?: any[], quantScore?: number, indicators?: any):Promise<any> {
   return { decision: { action: 'HOLD', reason: '통합 엔진으로 이관됨' }, trade: null };
