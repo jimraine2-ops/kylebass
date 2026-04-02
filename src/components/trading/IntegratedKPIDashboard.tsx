@@ -463,6 +463,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
                 onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
                 isSelected={pos.symbol === selectedSymbol}
                 onOpenModal={() => setModalSymbol(pos.symbol)}
+                valueGradeData={valueGrades?.[pos.symbol] || null}
               />
             ))}
           </CardContent>
