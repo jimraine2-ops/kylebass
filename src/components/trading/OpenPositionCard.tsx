@@ -1,4 +1,5 @@
 import React from "react";
+import type { ValueGradeResult } from "@/hooks/useValueGrade";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
