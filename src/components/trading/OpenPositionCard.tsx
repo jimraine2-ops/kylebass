@@ -90,7 +90,7 @@ function getAIHoldingJudgment(score: number | null, pnlPct: number, valueGrade?:
   return { message: '', color: 'text-muted-foreground', winProb };
 }
 
-export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCardProps>(function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice, fxRate = 1350, liveScore, prevScore, onOpenModal }, _ref) {
+export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCardProps>(function OpenPositionCard({ position: pos, onSelect, isSelected, livePrice, fxRate = 1350, liveScore, prevScore, onOpenModal, valueGradeData }, _ref) {
   const displayPrice = livePrice ?? pos.currentPrice ?? pos.price;
   const investmentKRW = Math.round(pos.price * pos.quantity * fxRate);
   const currentValueKRW = Math.round(displayPrice * pos.quantity * fxRate);
@@ -100,9 +100,9 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
   const pnlColor = isProfit ? 'text-stock-up' : 'text-stock-down';
   const tag = getStrategyTag(pos.ai_reason);
 
-  // ★ [Value-Filter] ai_reason에서 가치 등급 추출
+  // ★ [Value-Filter] ai_reason에서 추출 OR 실시간 재무 데이터에서 산출
   const valueGradeMatch = (pos.ai_reason || '').match(/가치 등급:\s*([ABCD])/);
-  const valueGrade = valueGradeMatch ? valueGradeMatch[1] : undefined;
+  const valueGrade = valueGradeMatch ? valueGradeMatch[1] : (valueGradeData?.grade && valueGradeData.grade !== 'N/A' ? valueGradeData.grade : undefined);
   const valueVerified = valueGrade === 'A' || valueGrade === 'B';
 
   const score = liveScore ?? pos.entry_score ?? null;
