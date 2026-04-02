@@ -18,6 +18,7 @@ import { useQuantSignals } from "@/hooks/useStockData";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
+import { useValueGrades } from "@/hooks/useValueGrade";
 
 interface IntegratedKPIDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
