@@ -205,6 +205,9 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
             💎 ₩12,000↓ 저가주 호가 최적화 | 선제적 매도
           </Badge>
+          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
+            💎 Value-Filter | 기업가치 A/B등급 → 익절확정 98%
+          </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
           </Badge>
