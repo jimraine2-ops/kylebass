@@ -747,13 +747,68 @@ async function discoverAllUSStocks(): Promise<string[]> {
   }
 }
 
+// ===== [Value-Filter] 기업 가치 3대 핵심 지표 =====
+const valueCache: Map<string, { grade: string; score: number; details: any; ts: number }> = new Map();
+const VALUE_CACHE_TTL = 600000; // 10분 캐시
+
+async function getValueFilter(symbol: string): Promise<{ grade: string; score: number; cashFlowOk: boolean; revenueGrowth: boolean; perUndervalued: boolean; details: any }> {
+  const cached = valueCache.get(symbol);
+  if (cached && Date.now() - cached.ts < VALUE_CACHE_TTL) {
+    return { ...cached.details, grade: cached.grade, score: cached.score };
+  }
+  
+  const defaultResult = { grade: 'N/A', score: 0, cashFlowOk: false, revenueGrowth: false, perUndervalued: false, details: {} };
+  
+  try {
+    const data = await finnhubFetch(`/stock/metric?symbol=${symbol}&metric=all`);
+    if (!data || !data.metric) return defaultResult;
+    
+    const m = data.metric;
+    let valueScore = 0;
+    const details: any = {};
+    
+    // 1. 현금 흐름 (Cash Flow): 영업현금흐름 양수 OR 유동비율 >= 1.0
+    const cashFlowPerShare = m.cashFlowPerShareAnnual || m.cashFlowPerShareTTM || 0;
+    const currentRatio = m.currentRatioAnnual || m.currentRatioQuarterly || 0;
+    const cashFlowOk = cashFlowPerShare > 0 || currentRatio >= 1.0;
+    if (cashFlowOk) valueScore += 35;
+    details.cashFlowPerShare = cashFlowPerShare;
+    details.currentRatio = +currentRatio.toFixed(2);
+    details.cashFlowOk = cashFlowOk;
+    
+    // 2. 매출 성장성: QoQ or YoY 매출 성장 양수
+    const revenueGrowthQoQ = m.revenueGrowthQuarterlyYoy || m.revenueGrowth3Y || m.revenueGrowth5Y || 0;
+    const revenueGrowth = revenueGrowthQoQ > 0;
+    if (revenueGrowth) valueScore += 35;
+    details.revenueGrowthPct = +revenueGrowthQoQ.toFixed(2);
+    details.revenueGrowth = revenueGrowth;
+    
+    // 3. 저평가 구간: PER이 업종 평균 대비 과도하지 않음 (PER < 50 or negative earnings = deep value)
+    const peRatio = m.peAnnual || m.peBasicExclExtraTTM || m.peTTM || 0;
+    const perUndervalued = peRatio > 0 ? peRatio < 50 : true; // 적자 기업도 성장주로 허용
+    if (perUndervalued) valueScore += 30;
+    details.peRatio = peRatio > 0 ? +peRatio.toFixed(1) : 'N/A(적자)';
+    details.perUndervalued = perUndervalued;
+    
+    // 등급 산정: A(80+), B(50+), C(35+), D(미달)
+    const grade = valueScore >= 80 ? 'A' : valueScore >= 50 ? 'B' : valueScore >= 35 ? 'C' : 'D';
+    
+    valueCache.set(symbol, { grade, score: valueScore, details: { cashFlowOk, revenueGrowth, perUndervalued, details }, ts: Date.now() });
+    return { grade, score: valueScore, cashFlowOk, revenueGrowth, perUndervalued, details };
+  } catch {
+    return defaultResult;
+  }
+}
+
 // ===== Win Probability Calculator (익절 확률 산출) =====
 // ★ 동전주 여부 판별
 function isPennyStock(price: number): boolean {
   return price > 0 && price < PENNY_THRESHOLD_USD;
 }
 
-function getWinProbability(score: number): number {
+function getWinProbability(score: number, valueVerified = false): number {
+  // ★ [Value-Filter] 가치 검증 완료 시 98% 격상
+  if (valueVerified && score >= 65) return 98;
   if (score >= 80) return 98;
   if (score >= 75) return 95;
   if (score >= 70) return 90;
