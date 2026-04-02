@@ -98,11 +98,16 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
   const pnlColor = isProfit ? 'text-stock-up' : 'text-stock-down';
   const tag = getStrategyTag(pos.ai_reason);
 
+  // ★ [Value-Filter] ai_reason에서 가치 등급 추출
+  const valueGradeMatch = (pos.ai_reason || '').match(/가치 등급:\s*([ABCD])/);
+  const valueGrade = valueGradeMatch ? valueGradeMatch[1] : undefined;
+  const valueVerified = valueGrade === 'A' || valueGrade === 'B';
+
   const score = liveScore ?? pos.entry_score ?? null;
   const scoreChanged = score !== null && prevScore !== null && prevScore !== undefined ? score - prevScore : 0;
   const isDanger = score !== null && score < 40;
 
-  const aiJudgment = getAIHoldingJudgment(score, unrealizedPnlPct);
+  const aiJudgment = getAIHoldingJudgment(score, unrealizedPnlPct, valueGrade);
   const isHoldingRecommended = !isProfit && score !== null && score >= 50;
 
   // ★ [Dynamic-Target] AI 추천 매도 구간 계산 (체결강도 기반)
