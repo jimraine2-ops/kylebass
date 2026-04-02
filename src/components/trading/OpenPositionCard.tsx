@@ -16,6 +16,7 @@ interface OpenPositionCardProps {
   liveScore?: number | null;
   prevScore?: number | null;
   onOpenModal?: () => void;
+  valueGradeData?: ValueGradeResult | null;
 }
 
 function getStrategyTag(aiReason: string | null): { label: string; color: string } {
