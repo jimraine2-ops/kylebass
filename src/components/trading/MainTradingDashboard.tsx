@@ -16,6 +16,7 @@ import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
 import { useQuantSignals } from "@/hooks/useStockData";
 import { EditableBalance } from "@/components/trading/EditableBalance";
 import { formatStockName } from "@/lib/koreanStockMap";
+import { useValueGrades } from "@/hooks/useValueGrade";
 
 interface MainTradingDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
