@@ -2008,7 +2008,7 @@ Deno.serve(async (req) => {
       return b.scoring.totalScore - a.scoring.totalScore;
     });
 
-    // ★ 뉴스 감성 분석: 상위 10개 후보에만 적용 (타임아웃 방지)
+    // ★ 뉴스 감성 + 기업 가치 분석: 상위 10개 후보에만 적용 (타임아웃 방지)
     const preFilteredTop = candidates.slice(0, 10);
     for (const c of preFilteredTop) {
       try {
@@ -2020,6 +2020,31 @@ Deno.serve(async (req) => {
           await addLog('unified', 'scan', c.sym, `[📰뉴스감성] ${c.sym} ${sentLabel} ${news.bullishPct}% (${news.newsCount}건) | ${news.headline?.slice(0, 50) || ''}`, { sentiment: news.bullishPct, newsCount: news.newsCount });
         }
       } catch { /* non-critical */ }
+      
+      // ★ [Value-Filter] 기업 가치 3대 핵심 지표 검증
+      try {
+        const valueResult = await getValueFilter(c.sym);
+        (c as any).valueGrade = valueResult.grade;
+        (c as any).valueScore = valueResult.score;
+        (c as any).valueDetails = valueResult.details;
+        (c as any).valueVerified = valueResult.grade === 'A' || valueResult.grade === 'B';
+        
+        const gradeEmoji = valueResult.grade === 'A' ? '🏆' : valueResult.grade === 'B' ? '✅' : valueResult.grade === 'C' ? '⚠️' : '🚫';
+        const cfTag = valueResult.cashFlowOk ? '✅' : '❌';
+        const revTag = valueResult.revenueGrowth ? '✅' : '❌';
+        const perTag = valueResult.perUndervalued ? '✅' : '❌';
+        await addLog('unified', 'scan', c.sym, `[💎가치필터] ${c.sym} 등급: ${gradeEmoji}${valueResult.grade}(${valueResult.score}점) | 현금흐름${cfTag} 매출성장${revTag} 저평가${perTag} | PER: ${valueResult.details.peRatio || 'N/A'} | 유동비율: ${valueResult.details.currentRatio || 'N/A'}`, { valueFilter: valueResult });
+        
+        // ★ D등급(가치 미달): 쓰레기 주식 차단 — "아무리 지표가 좋아도 100만 원을 허용하지 마라"
+        if (valueResult.grade === 'D' && !(c as any).hasCriticalPattern) {
+          await addLog('unified', 'scan', c.sym, `[🚫가치차단] ${c.sym} 기업 가치 D등급 — 현금흐름/매출/PER 모두 미달 → 진입 금지`, {});
+          (c as any)._valueBlocked = true;
+        }
+      } catch { 
+        (c as any).valueGrade = 'N/A';
+        (c as any).valueScore = 0;
+        (c as any).valueVerified = false;
+      }
       
       // ★ 뉴스+지표 동기화 필터: 뉴스 약세(40% 미만) + 지표 70점 미만 → 차단
       const newsSent = (c as any).newsSentiment || 50;
