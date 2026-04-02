@@ -2054,16 +2054,24 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ [Alpha-Entry] 정예 1~5선 집중 투자: 3% 진공구간 + 뉴스 90%+ + 익절확률 95%
+    // ★ [Alpha-Entry] 정예 1~5선 집중 투자: 3% 진공구간 + 뉴스 90%+ + 익절확률 95% + 가치 검증
     const filteredCandidates = candidates.filter(c => {
       if ((c as any)._newsBlocked) return false;
-      const winProb = getWinProbability(c.scoring.totalScore);
+      if ((c as any)._valueBlocked) return false; // ★ 가치 D등급 차단
+      const valueVerified = (c as any).valueVerified || false;
+      const winProb = getWinProbability(c.scoring.totalScore, valueVerified);
       const hasCritical = (c as any).hasCriticalPattern;
       const newsSent = (c as any).newsSentiment || 50;
       
       // ★ [Alpha-Entry] 진공 구간 분석: 3%+ 상승 공간이 매물대 없이 열려 있는가
       const vacuumData = c.data ? detectVacuumZone(c.data.closes, c.data.highs, c.data.lows, c.data.volumes) : { hasVacuum: false, vacuumPct: 0, resistance: 0 };
       const hasVacuum = vacuumData.hasVacuum;
+      
+      // ★ [Value-Filter] 교차 검증: 뉴스 + 지표 + 가치 모두 합치 → 98% 격상
+      const tripleVerified = newsSent >= ALPHA_ENTRY_NEWS_MIN && winProb >= ALPHA_ENTRY_WIN_PROB && valueVerified;
+      if (tripleVerified) {
+        (c as any)._tripleVerified = true;
+      }
       
       // ★ 뉴스+지표 동기화: 뉴스 90%+ & 익절확률 95%+ = 확정적 진입
       const alphaEntry = newsSent >= ALPHA_ENTRY_NEWS_MIN && winProb >= ALPHA_ENTRY_WIN_PROB;
