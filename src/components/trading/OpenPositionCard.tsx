@@ -19,6 +19,7 @@ interface OpenPositionCardProps {
 
 function getStrategyTag(aiReason: string | null): { label: string; color: string } {
   if (!aiReason) return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
+  if (aiReason.includes('가치 기반 우량')) return { label: '💎가치우량', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' };
   if (aiReason.includes('동전주')) return { label: '🪙동전주', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' };
   if (aiReason.includes('선취매')) return { label: '📡선취매', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' };
   if (aiReason.includes('필승패턴')) return { label: '🎯필승패턴', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' };
