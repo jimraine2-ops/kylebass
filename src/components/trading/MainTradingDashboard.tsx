@@ -291,6 +291,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
                 fxRate={fxRate}
                 onSelect={() => setSelectedSymbol(pos.symbol === selectedSymbol ? null : pos.symbol)}
                 isSelected={pos.symbol === selectedSymbol}
+                valueGradeData={valueGrades?.[pos.symbol] || null}
               />
             ))}
           </CardContent>
