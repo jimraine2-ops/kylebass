@@ -49,6 +49,10 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
   const closedTrades = data?.closedTrades || [];
   const stats = data?.stats || {};
 
+  // ★ [Value-Filter] 보유 포지션 심볼의 기업 가치 등급 배치 조회
+  const openSymbols = openPositions.map((p: any) => p.symbol as string);
+  const { data: valueGrades } = useValueGrades(openSymbols);
+
   const allQuantStocks = [...(quantData?.premium || []), ...(quantData?.penny || [])];
   const selectedQuantStock = selectedSymbol
     ? allQuantStocks.find((s: any) => s.symbol === selectedSymbol)
