@@ -12,8 +12,13 @@ function getMarketSession(): { session: SessionType; label: string; nextEvent: s
   const day = et.getDay();
   const time = h * 60 + m;
 
-  if (day === 0 || day === 6) {
+  // 토요일 전체 + 일요일 20:00 ET 이전 = 주말 휴장
+  if (day === 6 || (day === 0 && time < 1200)) {
     return { session: 'DAY', label: '데이장(주말)', nextEvent: '월요일 프리마켓 04:00 ET' };
+  }
+  // 일요일 20:00 ET 이후 = 월요일 대비 오버나이트
+  if (day === 0 && time >= 1200) {
+    return { session: 'PRE_MARKET', label: '오버나이트(월요일 대기)', nextEvent: '프리마켓 04:00 ET' };
   }
   if (time >= 240 && time < 570) {
     return { session: 'PRE_MARKET', label: '프리마켓', nextEvent: '정규장 09:30 ET' };
