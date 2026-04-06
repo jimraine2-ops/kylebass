@@ -57,9 +57,15 @@ function getMarketSession(): { session: SessionType; label: string; spreadMultip
   const time = h * 60 + m;
 
   // ★ 전 세션 24시간 무제한 자동매매 — 모든 시간대에서 매매 가동
-  if (day === 0 || day === 6) {
+  // 토요일 전체 + 일요일 20:00 ET 이전 = 주말 휴장
+  // 일요일 20:00 ET 이후 = 월요일 프리마켓 대비 OVERNIGHT 모드
+  if (day === 6 || (day === 0 && time < 1200)) {
     // 주말: 데이장 (유동성 최저 → 공격적 슬리피지 최대)
     return { session: 'DAY', label: '데이장(주말)', spreadMultiplier: 2.5, entryRelax: 0.6, rvolMin: 1.0, aggressiveSlippage: 0.003 };
+  }
+  if (day === 0 && time >= 1200) {
+    // 일요일 20:00 ET 이후 → 월요일 프리마켓 대비 오버나이트 (매매 가능)
+    return { session: 'OVERNIGHT', label: '오버나이트(월요일 대기)', spreadMultiplier: 2.5, entryRelax: 0.6, rvolMin: 1.0, aggressiveSlippage: 0.003 };
   }
   if (time >= 240 && time < 570) {
     // 프리마켓 04:00~09:30 → 공격적 체결 0.25%
