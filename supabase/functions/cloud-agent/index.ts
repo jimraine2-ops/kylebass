@@ -27,12 +27,10 @@ const ZERO_RISK_SL_PCT = 1.003; // ★ Iron-Defense 1단계 SL: 매수가 +0.3% 
 const ALPHA_ENTRY_NEWS_MIN = 70; // ★ [Alpha-Entry] 뉴스 감성 70%+ (복리: 진입 기회 확대)
 const ALPHA_ENTRY_WIN_PROB = 85; // ★ [Alpha-Entry] 익절 확률 85% 이상 (복리: 진입 기회 확대)
 const VOLUME_EXPLOSION_THRESHOLD = 200; // ★ [Iron-Defense 예외] 체결강도 200%+ 시 트레일링 전환
-const EXIT_LIQUIDITY_MIN_KRW = 10000000; // ★ 3% 익절가 매수대기 잔량 ₩1,000만+ 필수
 const PREDICTIVE_ENTRY_SCORE = 58; // ★ Anti-Latency: 58점 돌파 시 선취매 (복리: 기회 확대)
 const LIQUIDITY_MULTIPLIER = 10; // ★ Liquidity Guard: 진입금액의 10배 이상 매수잔량 필요
 const PASSIVE_FILL_TICKS = 3; // ★ 호가 장악: 매수 1호가 알박기 (시장가 금지)
 const LATENCY_GUARD_SEC = 1.0; // ★ Timestamp Guard: 1초 이상 지연 시 2~3호가 아래 지정가
-const COMPOUND_INITIAL_CAPITAL_KRW = 5000000; // ★ [복리매매] 초기 원금: ₩5,000,000
 const STRICT_STOP_LOSS_PCT = 0.95; // ★ [복리매매] 엄격한 손절: -5% (기존 -10% → -5%, R:R 개선)
 const MAX_DAILY_LOSS_PCT = 0.10; // ★ [복리매매] 일일 최대 손실률: 잔고의 10%
 
@@ -1539,7 +1537,7 @@ Deno.serve(async (req) => {
               const ironSL = +(pos.price * ZERO_RISK_SL_PCT).toFixed(4);
               await supabase.from('unified_trades').update({ stop_loss: ironSL }).eq('id', pos.id);
               pos.stop_loss = ironSL;
-              await addLog('unified', 'defense', sym, `[🛡️Iron-Defense 1단계] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.0% → SL=${fmtKRW(ironSL)}(매수가+0.2%) 고정! 패배 영구 소멸`, { quantScore, pnlPct: +pnlPct.toFixed(2), newSL: ironSL });
+              await addLog('unified', 'defense', sym, `[🛡️Iron-Defense 1단계] ${sym} +${pnlPct.toFixed(2)}% ≥ 1.0% → SL=${fmtKRW(ironSL)}(매수가+0.3%) 고정! 패배 영구 소멸`, { quantScore, pnlPct: +pnlPct.toFixed(2), newSL: ironSL });
             }
             await addLog('unified', 'hold', sym, `[🎯${dynamicTPPct}%확정대기] ${sym} +${pnlPct.toFixed(2)}% | 지표 ${quantScore}점 | 체결강도 ${volumeIntensity}% → AI 추천: ${dynamicTPPct}% 익절 (${dynamicTPLabel}) | SL=매수가+0.2%`, { quantScore, pnlPct: +pnlPct.toFixed(2), volumeIntensity, dynamicTPPct, dynamicTPLabel });
           }
@@ -1635,8 +1633,8 @@ Deno.serve(async (req) => {
             closeReason = `[추세완전이탈] [${sessionLabel}] [${timeStr}] [${sym}] ${quantScore}점(<40) → 자산 보호 매도`;
             newStatus = 'trend_collapse';
           }
-          // -10% 이하 + 40~44점 + VWAP 이탈 → 매도
-          else if (pnlPct <= -10 && quantScore < 45 && !vwapCross && !emaAligned) {
+          // ★ [복리] -5% 이하 + 40~44점 + VWAP 이탈 → 매도 (기존 -10% → -5% 강화)
+          else if (pnlPct <= -5 && quantScore < 45 && !vwapCross && !emaAligned) {
             shouldClose = true;
             closeReason = `[복합위험] [${sessionLabel}] [${timeStr}] [${sym}] -${Math.abs(pnlPct).toFixed(2)}% + ${quantScore}점(<45) + VWAP이탈 → 매도`;
             newStatus = 'indicator_exit';
@@ -1861,6 +1859,10 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ★ [버그 수정] 데이장 단타 매도 후 openPos 갱신 — stale 데이터 방지
+    const refreshedOpenPosAfterDayTrade = (await supabase.from('unified_trades').select('*').eq('status', 'open')).data || [];
+    const currentOpenAfterDT = refreshedOpenPosAfterDayTrade.length;
+
     // ========== UNIFIED ENTRY SCAN ==========
     // ★ 필승 로직: 시장 하락 또는 개장 직후 15분 뇌동매매 방지
     if (marketBuyHalt) {
@@ -1874,8 +1876,9 @@ Deno.serve(async (req) => {
       await addLog('unified', 'hold', null, `[Safe-Pause] 🟡 ${pauseReason} — 신규 매수 금지 (스캔 엔진 가동 중)`, { safePause: true, safeExitPause });
     }
 
-    let openCount = (openPos || []).filter(p => p.status === 'open').length;
-    const pennyOpenCount = (openPos || []).filter((p: any) => p.status === 'open' && (p.cap_type === 'small' || p.price < 5)).length;
+    // ★ [버그 수정] 갱신된 openPos 사용 (데이장 매도 반영)
+    let openCount = currentOpenAfterDT;
+    const pennyOpenCount = refreshedOpenPosAfterDayTrade.filter((p: any) => p.price < PENNY_THRESHOLD_USD).length;
     const MAX_POSITIONS = 5; // ★ [복리] 최대 5 포지션 유지
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
 
@@ -1947,7 +1950,7 @@ Deno.serve(async (req) => {
           const entryAmountKRW = balance * 0.20; // 예상 진입 금액 (20%)
           const liquidityCheck = checkLiquidityGuard(tradingVal, entryAmountKRW);
           
-          // ★ 필승 패턴/매집 패턴/Predictive Entry + Finnhub 뉴스 90점 시 유동성 필터 해제
+          // ★ 필승 패턴/매집 패턴/Predictive Entry 시 유동성 필터 해제
           if (!isAccumCandidate && !hasCriticalPattern) {
             if (!liquidityCheck.passed && !isPredictiveEntry) {
               // 유동성 부족 → 차단 (필승 패턴/매집/예측형 제외)
@@ -2141,7 +2144,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ [Alpha-Entry] 정예 1~5선 집중 투자: 3% 진공구간 + 뉴스 90%+ + 익절확률 95% + 가치 검증
+    // ★ [Alpha-Entry] 정예 1~5선 집중 투자: 진공구간 + 뉴스 70%+ + 익절확률 85%+ + 가치 검증 (복리)
     const filteredCandidates = candidates.filter(c => {
       if ((c as any)._newsBlocked) return false;
       if ((c as any)._valueBlocked) return false; // ★ 가치 D등급 차단
@@ -2160,7 +2163,7 @@ Deno.serve(async (req) => {
         (c as any)._tripleVerified = true;
       }
       
-      // ★ 뉴스+지표 동기화: 뉴스 90%+ & 익절확률 95%+ = 확정적 진입
+      // ★ [복리] 뉴스+지표 동기화: 뉴스 70%+ & 익절확률 85%+ = 확정적 진입
       const alphaEntry = newsSent >= ALPHA_ENTRY_NEWS_MIN && winProb >= ALPHA_ENTRY_WIN_PROB;
       
       // 필승 패턴 감지 시: 패턴 익절확률 90%+ → 즉시 진입
@@ -2168,9 +2171,9 @@ Deno.serve(async (req) => {
         const patternConf = (c as any).criticalPatternConfidence || 0;
         return patternConf >= 90 || (c.scoring.totalScore >= 70 && winProb >= ALPHA_ENTRY_WIN_PROB);
       }
-      // ★ Alpha-Entry: 뉴스 90%+ & 익절확률 95%+ & 진공구간 → 최우선 진입
+      // ★ [복리] Alpha-Entry: 뉴스 70%+ & 익절확률 85%+ & 진공구간 → 최우선 진입
       if (alphaEntry && hasVacuum) return true;
-      // ★ 뉴스 90%+ & 익절확률 95% → 진공 없어도 진입 허용
+      // ★ [복리] 뉴스 70%+ & 익절확률 85%+ → 진공 없어도 진입 허용
       if (alphaEntry) return true;
       // ★ [복리매매] 일반 진입: 65점+ & 85% (복리: 진입 기회 확대로 매매 횟수↑)
       return c.scoring.totalScore >= 65 && winProb >= ALPHA_ENTRY_WIN_PROB;
@@ -2309,8 +2312,8 @@ Deno.serve(async (req) => {
       await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry, isPenny: isPennyEntry, valueGrade, valueScore: (r as any).valueScore || 0, valueVerified, tripleVerified, winProb });
     }
 
-    // ★ 역발상 추매 실행 (Dip-Buy Pyramiding)
-    if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS) {
+    // ★ 역발상 추매 실행 (Dip-Buy Pyramiding) — 일일 손실 한도 적용
+    if (dipBuyCandidates.length > 0 && openCount < MAX_POSITIONS && !isDailyLossExceeded) {
       dipBuyCandidates.sort((a, b) => b.scoring.totalScore - a.scoring.totalScore);
       for (const dip of dipBuyCandidates.slice(0, 2)) {
         const maxKRW = balance * 0.05;
