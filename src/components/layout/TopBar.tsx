@@ -4,12 +4,10 @@ import { Search, Loader2, Clock, TrendingUp } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useStockSearch, useStockQuotes, useQuantSignals } from "@/hooks/useStockData";
 import { useRecentSearches } from "@/hooks/useRecentSearches";
-import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { searchKoreanStocks, getKoreanName, type KoreanStockEntry } from "@/lib/koreanStockMap";
-import { SearchResultItem, InlinePriceBadge, InlineScoreBadge } from "@/components/search/SearchResultCard";
+import { SearchResultItem } from "@/components/search/SearchResultCard";
 
 export function TopBar() {
   const [query, setQuery] = useState("");
@@ -19,38 +17,13 @@ export function TopBar() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { recents, addRecent, clearRecents } = useRecentSearches();
-  const { toKRW } = useExchangeRate();
 
   const koreanResults = useMemo(() => searchKoreanStocks(debouncedQuery), [debouncedQuery]);
   const hasKoreanResults = koreanResults.length > 0;
 
-  const enableApiSearch = debouncedQuery.length >= 1 && !hasKoreanResults;
-  const { data: apiResults, isLoading } = useStockSearch(enableApiSearch ? debouncedQuery : "");
-
-  // Collect symbols for price & score lookup (max 10 for perf)
-  const visibleSymbols = useMemo(() => {
-    if (hasKoreanResults) return koreanResults.slice(0, 10).map(e => e.symbol);
-    if (apiResults?.length) return apiResults.slice(0, 10).map((r: any) => r.symbol);
-    if (!debouncedQuery && recents.length) return recents.slice(0, 8).map(r => r.symbol);
-    return [];
-  }, [hasKoreanResults, koreanResults, apiResults, debouncedQuery, recents]);
-
-  const hasVisibleSymbols = visibleSymbols.length > 0 && open;
-  const { data: quotes } = useStockQuotes(visibleSymbols, hasVisibleSymbols);
-  const { data: quantData } = useQuantSignals(hasVisibleSymbols ? visibleSymbols.slice(0, 8) : undefined);
-
-  // Build lookup maps
-  const priceMap = useMemo(() => {
-    const m = new Map<string, number>();
-    if (quotes) for (const q of quotes) { if (q?.symbol && q?.c) m.set(q.symbol, q.c); }
-    return m;
-  }, [quotes]);
-
-  const scoreMap = useMemo(() => {
-    const m = new Map<string, number>();
-    if (quantData?.results) for (const r of quantData.results) m.set(r.symbol, r.totalScore);
-    return m;
-  }, [quantData]);
+  // Free-only mode: disable external market-search APIs in the top bar.
+  const apiResults: Array<{ symbol: string; shortname?: string; description?: string; type?: string; exchange?: string }> = [];
+  const isLoading = false;
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -85,17 +58,6 @@ export function TopBar() {
   const showLoading = isLoading && !hasKoreanResults;
   const showRecents = !hasQuery && recents.length > 0;
   const showResults = hasQuery;
-
-  const renderInlineData = (symbol: string) => {
-    const price = priceMap.get(symbol);
-    const score = scoreMap.get(symbol);
-    return (
-      <div className="flex items-center gap-1.5 shrink-0">
-        {price != null && <InlinePriceBadge price={price} toKRW={toKRW} />}
-        {score != null && <InlineScoreBadge score={score} />}
-      </div>
-    );
-  };
 
   return (
     <header className="h-14 border-b border-border flex items-center gap-4 px-4 bg-card/50 backdrop-blur-sm">
@@ -144,7 +106,6 @@ export function TopBar() {
                         <span className="font-mono font-bold text-primary text-xs shrink-0">{r.symbol}</span>
                         <span className="text-foreground truncate text-xs">{r.label}</span>
                       </div>
-                      {renderInlineData(r.symbol)}
                     </li>
                   ))}
                 </ul>
@@ -155,7 +116,7 @@ export function TopBar() {
               <div className="px-4 py-6 text-center text-sm text-muted-foreground">
                 <Search className="w-5 h-5 mx-auto mb-2 opacity-40" />
                 <p>종목명, 초성(ㅌㅅㄹ), 티커(TSLA)로 검색하세요</p>
-                <p className="text-[10px] mt-1">미국 전체 상장 종목 검색 가능</p>
+                <p className="text-[10px] mt-1">무료 모드: 로컬 매핑/최근검색 중심</p>
               </div>
             )}
 
@@ -172,9 +133,6 @@ export function TopBar() {
                       koreanName={entry.koreanName}
                       englishName={entry.englishName}
                       category={entry.category}
-                      price={priceMap.get(entry.symbol)}
-                      score={scoreMap.get(entry.symbol)}
-                      toKRW={toKRW}
                       onSelect={handleSelect}
                     />
                   ))}
@@ -194,28 +152,6 @@ export function TopBar() {
                     <p className="text-sm text-muted-foreground">일치하는 종목이 없습니다</p>
                     <p className="text-[10px] text-muted-foreground mt-1">유효하지 않은 종목이거나 상장 폐지된 종목입니다</p>
                   </div>
-                )}
-                {!showLoading && apiResults && apiResults.length > 0 && (
-                  <>
-                    <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border bg-muted/30 flex items-center gap-1">
-                      <Search className="w-3 h-3" /> 🔍 전체 시장 검색 ({apiResults.length}건)
-                    </div>
-                    <ul>
-                      {apiResults.map((r: any) => (
-                        <SearchResultItem
-                          key={r.symbol}
-                          symbol={r.symbol}
-                          englishName={r.shortname || r.description}
-                          type={r.type}
-                          exchange={r.exchange}
-                          price={priceMap.get(r.symbol)}
-                          score={scoreMap.get(r.symbol)}
-                          toKRW={toKRW}
-                          onSelect={handleSelect}
-                        />
-                      ))}
-                    </ul>
-                  </>
                 )}
               </>
             )}
