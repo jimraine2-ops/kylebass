@@ -9,6 +9,7 @@ import { Bot, Play, Pause, RotateCcw, Target, Wallet, TrendingUp, ClipboardList,
 const GITHUB_STOCKS_CSV_URL = "https://raw.githubusercontent.com/vega/vega-datasets/main/data/stocks.csv";
 const START_BALANCE_KRW = 1_000_000;
 const DAILY_TARGET_KRW = 300_000;
+const MAX_ENTRY_PRICE_KRW = 12_000;
 const MAX_LOGS = 500;
 
 type SimStatus = "idle" | "running" | "completed";
@@ -49,12 +50,15 @@ interface TradeRecord {
   id: string;
   symbol: string;
   buyDate: string;
-  buyPriceUsd: number;
+  buyPriceKrw: number;
   sellDate: string;
-  sellPriceUsd: number;
+  sellPriceKrw: number;
   quantity: number;
   pnlKrw: number;
   reason: string;
+  // Backward compatibility for previously cached localStorage records
+  buyPriceUsd?: number;
+  sellPriceUsd?: number;
 }
 
 interface LogEntry {
@@ -74,7 +78,7 @@ interface SimState {
   logs: LogEntry[];
 }
 
-const STORAGE_KEY = "github-free-paper-trading-v1";
+const STORAGE_KEY = "github-free-paper-trading-v2";
 
 const createInitialSimState = (): SimState => ({
   cursor: 3,
@@ -113,6 +117,10 @@ function parseCsvToMarketData(csv: string): MarketData {
 
   const preferredSymbols = ["AAPL", "MSFT", "AMZN", "GOOG", "IBM"];
   const symbols = preferredSymbols.filter((symbol) => bySymbol[symbol]?.length);
+
+  if (symbols.length === 0) {
+    return { symbols: [], bySymbol, timeline: [] };
+  }
 
   symbols.forEach((symbol) => {
     bySymbol[symbol] = bySymbol[symbol].sort((a, b) => a.timestamp - b.timestamp);
@@ -227,7 +235,8 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
           if (!now || !prev1 || !prev2) return null;
           const momentumPct = ((now / prev2) - 1) * 100;
           const slopePct = ((now / prev1) - 1) * 100;
-          return { symbol, now, momentumPct, slopePct };
+          const nowKrw = now * fxRate;
+          return { symbol, now, nowKrw, momentumPct, slopePct };
         })
         .filter(Boolean)
         .sort((a: any, b: any) => b.momentumPct - a.momentumPct);
@@ -237,7 +246,7 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
           logs,
           date,
           "SCAN",
-          `후보 1위 ${ranked[0].symbol} | 모멘텀 ${ranked[0].momentumPct.toFixed(2)}% | 단기기울기 ${ranked[0].slopePct.toFixed(2)}%`
+          `후보 1위 ${ranked[0].symbol} | 현재가 ${formatKrw(ranked[0].nowKrw)} | 모멘텀 ${ranked[0].momentumPct.toFixed(2)}% | 단기기울기 ${ranked[0].slopePct.toFixed(2)}%`
         );
       }
 
@@ -251,7 +260,7 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
 
           if (priceNow >= position.entryPriceUsd * 1.005 && stopLossUsd < position.entryPriceUsd * 1.001) {
             stopLossUsd = position.entryPriceUsd * 1.001;
-            logs = appendLog(logs, date, "RISK_LOCK", `${position.symbol} 본절 보호 라인 상향 (${stopLossUsd.toFixed(2)} USD)`);
+            logs = appendLog(logs, date, "RISK_LOCK", `${position.symbol} 본절 보호 라인 상향 (${formatKrw(stopLossUsd * fxRate)})`);
           }
           if (updatedHighest >= position.entryPriceUsd * 1.015) {
             takeProfitUsd = Math.max(takeProfitUsd, updatedHighest * 0.997);
@@ -275,9 +284,9 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
                 id: toId(),
                 symbol: position.symbol,
                 buyDate: position.entryDate,
-                buyPriceUsd: position.entryPriceUsd,
+                buyPriceKrw: position.entryPriceUsd * fxRate,
                 sellDate: date,
-                sellPriceUsd: priceNow,
+                sellPriceKrw: priceNow * fxRate,
                 quantity: position.quantity,
                 pnlKrw,
                 reason: exitReason,
@@ -288,7 +297,7 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
               logs,
               date,
               "SELL_FILLED",
-              `${position.symbol} 체결 완료 | ${position.quantity}주 | 손익 ${formatKrw(pnlKrw)} | 잔고 ${formatKrw(cashKrw)}`
+              `${position.symbol} 체결 완료 | ${position.quantity}주 @ ${formatKrw(priceNow * fxRate)} | 손익 ${formatKrw(pnlKrw)} | 잔고 ${formatKrw(cashKrw)}`
             );
             position = null;
           } else {
@@ -303,15 +312,30 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
         }
       }
 
-      if (!position && ranked[0] && ranked[0].momentumPct >= 0.8 && ranked[0].slopePct > 0) {
-        const target = ranked[0];
+      const eligibleRanked = ranked.filter((item: any) => item.nowKrw < MAX_ENTRY_PRICE_KRW);
+      if (!position && ranked.length > 0 && eligibleRanked.length === 0) {
+        logs = appendLog(
+          logs,
+          date,
+          "SCAN",
+          `진입 보류: ${MAX_ENTRY_PRICE_KRW.toLocaleString("ko-KR")}원 미만 종목 조건 불충족`
+        );
+      }
+
+      if (!position && eligibleRanked[0] && eligibleRanked[0].momentumPct >= 0.8 && eligibleRanked[0].slopePct > 0) {
+        const target = eligibleRanked[0];
         const tradeBudgetKrw = Math.max(0, cashKrw * 0.25);
         const oneShareKrw = target.now * fxRate;
         const quantity = Math.floor(tradeBudgetKrw / oneShareKrw);
 
         if (quantity > 0) {
           const orderCostKrw = quantity * oneShareKrw;
-          logs = appendLog(logs, date, "BUY_ORDER", `${target.symbol} 매수 주문 | 배정 ${formatKrw(tradeBudgetKrw)} | 수량 ${quantity}주`);
+          logs = appendLog(
+            logs,
+            date,
+            "BUY_ORDER",
+            `${target.symbol} 매수 주문 | 단가 ${formatKrw(oneShareKrw)} | 배정 ${formatKrw(tradeBudgetKrw)} | 수량 ${quantity}주`
+          );
           cashKrw -= orderCostKrw;
           position = {
             symbol: target.symbol,
@@ -327,7 +351,7 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
             logs,
             date,
             "BUY_FILLED",
-            `${target.symbol} 체결 완료 | ${quantity}주 @ ${target.now.toFixed(2)} USD | 현금 ${formatKrw(cashKrw)}`
+            `${target.symbol} 체결 완료 | ${quantity}주 @ ${formatKrw(oneShareKrw)} | 현금 ${formatKrw(cashKrw)}`
           );
         }
       }
@@ -395,6 +419,7 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
           </p>
           <p>데이터 소스: vega-datasets 공개 CSV (GitHub Raw) / API Key 없음 / 유료 과금 없음</p>
           <p>시작 자금: {formatKrw(START_BALANCE_KRW)} · 일 목표: {formatKrw(DAILY_TARGET_KRW)}</p>
+          <p>진입 필터: 현재가 {MAX_ENTRY_PRICE_KRW.toLocaleString("ko-KR")}원 미만 종목만 거래</p>
           <p className="text-warning flex items-center gap-1">
             <ShieldAlert className="w-3.5 h-3.5" />
             실제 시장에서 손익 보장은 불가능합니다. 본 모드는 학습용 자동매매 시뮬레이터입니다.
@@ -404,6 +429,7 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
 
       <div className="flex items-center gap-2 flex-wrap">
         <Badge variant="outline" className="text-[10px] border-stock-up/30 text-stock-up">Free API</Badge>
+        <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">₩12,000 미만 진입 필터</Badge>
         <Badge variant="outline" className="text-[10px]">진행 데이터: {currentDate}</Badge>
         <Badge variant="outline" className={`text-[10px] ${sim.status === "running" ? "border-warning/30 text-warning" : ""}`}>
           상태: {sim.status === "running" ? "자동매매 실행 중" : sim.status === "completed" ? "종료" : "대기"}
@@ -467,9 +493,9 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
           ) : (
             <div className="text-sm space-y-1">
               <p><span className="text-muted-foreground">종목:</span> <span className="font-semibold">{sim.position.symbol}</span></p>
-              <p><span className="text-muted-foreground">진입:</span> {sim.position.entryDate} @ {sim.position.entryPriceUsd.toFixed(2)} USD</p>
+              <p><span className="text-muted-foreground">진입:</span> {sim.position.entryDate} @ {formatKrw(sim.position.entryPriceUsd * fxRate)}</p>
               <p><span className="text-muted-foreground">수량:</span> {sim.position.quantity}주</p>
-              <p><span className="text-muted-foreground">익절/손절:</span> {sim.position.takeProfitUsd.toFixed(2)} / {sim.position.stopLossUsd.toFixed(2)} USD</p>
+              <p><span className="text-muted-foreground">익절/손절:</span> {formatKrw(sim.position.takeProfitUsd * fxRate)} / {formatKrw(sim.position.stopLossUsd * fxRate)}</p>
             </div>
           )}
         </CardContent>
@@ -501,8 +527,8 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
                       {sim.trades.map((trade) => (
                         <tr key={trade.id} className="border-b border-border/50">
                           <td className="py-2 px-2 font-semibold">{trade.symbol}</td>
-                          <td className="py-2 px-2">{trade.buyDate}<br />{trade.buyPriceUsd.toFixed(2)} USD</td>
-                          <td className="py-2 px-2">{trade.sellDate}<br />{trade.sellPriceUsd.toFixed(2)} USD</td>
+                          <td className="py-2 px-2">{trade.buyDate}<br />{formatKrw(trade.buyPriceKrw ?? ((trade.buyPriceUsd || 0) * fxRate))}</td>
+                          <td className="py-2 px-2">{trade.sellDate}<br />{formatKrw(trade.sellPriceKrw ?? ((trade.sellPriceUsd || 0) * fxRate))}</td>
                           <td className="py-2 px-2 text-right">{trade.quantity}</td>
                           <td className={`py-2 px-2 text-right font-semibold ${trade.pnlKrw >= 0 ? "text-stock-up" : "text-stock-down"}`}>
                             {trade.pnlKrw >= 0 ? "+" : "-"}{formatKrw(Math.abs(trade.pnlKrw))}
