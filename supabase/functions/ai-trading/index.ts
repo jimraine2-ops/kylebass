@@ -114,11 +114,12 @@ Deno.serve(async (req) => {
 
     // ==================== RESET UNIFIED WALLET ====================
     if (action === 'reset-unified-wallet') {
+      const COMPOUND_INITIAL = 5000000; // ★ [복리매매] 초기 원금 ₩5,000,000
       await supabase.from('unified_trades').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       await supabase.from('unified_wallet').update({
-        balance: 5000000, initial_balance: 5000000, updated_at: new Date().toISOString()
+        balance: COMPOUND_INITIAL, initial_balance: COMPOUND_INITIAL, updated_at: new Date().toISOString()
       }).not('id', 'is', null);
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ success: true, strategy: 'compound', initialBalance: COMPOUND_INITIAL }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // ==================== UPDATE WALLET BALANCE ====================
@@ -172,8 +173,8 @@ Deno.serve(async (req) => {
       }
 
       const ct = capType || (price >= 10 ? 'large' : 'small');
-      const stopLoss = +(price * 0.975).toFixed(4);
-      const takeProfit = +(price * 1.05).toFixed(4);
+      const stopLoss = +(price * 0.95).toFixed(4); // ★ [복리매매] -5% 엄격 손절
+      const takeProfit = +(price * 1.07).toFixed(4); // ★ [복리매매] +7% 목표
 
       const { error: insertErr } = await supabase.from('unified_trades').insert({
         symbol, side: 'buy', quantity, price,
@@ -246,8 +247,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'reset-wallet' || action === 'reset-scalping-wallet') {
+      const COMPOUND_INITIAL = 5000000; // ★ [복리매매] 초기 원금 ₩5,000,000
       await supabase.from('unified_trades').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-      await supabase.from('unified_wallet').update({ balance: 5000000, initial_balance: 5000000, updated_at: new Date().toISOString() }).not('id', 'is', null);
+      await supabase.from('unified_wallet').update({ balance: COMPOUND_INITIAL, initial_balance: COMPOUND_INITIAL, updated_at: new Date().toISOString() }).not('id', 'is', null);
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 

@@ -68,11 +68,23 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    // ★ [무료 전용] Lovable AI Gateway는 유료 API — 항상 로컬 번역 사용
+    // LOVABLE_API_KEY가 설정되어 있어도 호출하지 않음 (후불 결제 방지)
+    const USE_FREE_TRANSLATION_ONLY = true;
+    const LOVABLE_API_KEY = USE_FREE_TRANSLATION_ONLY ? null : Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
-      // Fallback: return original articles if no API key
-      console.warn('LOVABLE_API_KEY not configured, returning untranslated');
-      return new Response(JSON.stringify({ translated: articles }), {
+      // 무료 로컬 번역: 금융 전문 용어 매핑으로 핵심 키워드만 번역
+      const localTranslated = articles.slice(0, 20).map((a: any) => {
+        let headlineKo = a.headline || '';
+        let summaryKo = a.summary || '';
+        for (const [en, ko] of Object.entries(FINANCE_TERMS)) {
+          const regex = new RegExp(`\\b${en}\\b`, 'gi');
+          headlineKo = headlineKo.replace(regex, ko);
+          summaryKo = summaryKo.replace(regex, ko);
+        }
+        return { ...a, headline_ko: headlineKo, summary_ko: summaryKo, translated: true };
+      });
+      return new Response(JSON.stringify({ translated: localTranslated }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

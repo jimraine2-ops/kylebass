@@ -48,25 +48,24 @@ export default function AITradingPage() {
       <ServerStatusBanner />
 
       {/* Strategy Card */}
-      <Card className="border-yellow-500/30 bg-yellow-500/5">
+      <Card className="border-emerald-500/30 bg-emerald-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🎯 종목별 맞춤 익절 — Dynamic-Target & Adaptive-Exit</p>
-          <p className="italic text-yellow-400/80">"시장은 생물이다. 3%가 목표지만, 힘이 2.5%에서 꺾인다면 그곳이 우리의 종착역이다. 단 0.1%의 수익도 시장에 반납하지 마라."</p>
+          <p className="font-bold text-emerald-400 text-sm">📈 복리매매 + 데이장 단타 전략</p>
+          <p className="italic text-emerald-400/80">"수익이 쌓일수록 포지션이 커진다. 데이장에서 AI가 선점하고, 정규장에서 수확한다."</p>
+          <div className="border-l-2 border-emerald-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[복리매매] 수익금 재투입 복리 성장</p>
+            <p>💰 수익 → 원금 합산 → 포지션 ↑ → 수익 가속 (복리 효과)</p>
+            <p>📊 일일 목표 ₩30만~₩50만 (잔고 대비 6~10% 동적 조절)</p>
+          </div>
+          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[데이장 단타] 프리마켓 매수 → 정규장 매도</p>
+            <p>🌙 데이장: AI 10대 지표 분석으로 저가 선점 매수</p>
+            <p>☀️ 정규장: 유동성 풍부한 시간대에 +3~7% 수익 실현</p>
+          </div>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Dynamic-Target] 체결강도 기반 가변 익절</p>
-            <p>🔥 체결강도 150%↑ → "3.0% 익절 추천" (강력 홀딩)</p>
-            <p>📊 체결강도 100~150% → "2.5% 익절 추천" (분할 대응)</p>
-            <p>⚡ 체결강도 100%↓ → "2.0% 익절 추천" (빠른 회전)</p>
-          </div>
-          <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Adaptive-Exit] 힘의 균열 감지 즉시 익절</p>
-            <p>📉 고점 대비 -0.5% 하락 OR 체결강도 80% 미만 급락 → 즉시 전량 익절</p>
-            <p>🔒 100% 익절 사수: 본절가(+0.2%) 라인 절대 사수</p>
-          </div>
-          <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[₩12,000↓ 저가주] 호가 최적화</p>
-            <p>💎 호가창 얇아질 조짐 → AI 추천 2%/2.5% 구간에서 선제적 매도</p>
-            <p>🛡️ Iron-Defense: +1%→SL+0.2% | +3%→즉시 확정 | 200%↑ 트레일링</p>
+            <p className="font-semibold text-foreground">[엄격한 리스크 관리]</p>
+            <p>🔒 손절 -5% | +1%→SL+0.3% | +3%→즉시 확정 | 일일 손실 한도 잔고 10%</p>
+            <p>🔥 체결강도 200%↑ → 트레일링(고점-1.5%)으로 대시세 추격</p>
           </div>
         </CardContent>
       </Card>

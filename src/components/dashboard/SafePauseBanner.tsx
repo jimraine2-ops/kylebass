@@ -7,9 +7,9 @@ type TimeSlotMode = 'safe-exit' | 'day-break' | 'active';
 
 const SCAN_STAGES = [
   { icon: "🔍", label: "Finnhub 뉴스 수집 중", sub: "실시간 감성 분석" },
-  { icon: "📊", label: "Twelve Data 지표 계산 중", sub: "RSI·MACD·볼린저" },
-  { icon: "🎯", label: "₩12,000↓ 저가주 필터링", sub: "익절확률 95%↑ 선별" },
-  { icon: "⚡", label: "0순위 종목 랭킹 생성", sub: "체결강도·수급 교차 검증" },
+  { icon: "📊", label: "10대 지표 계산 중", sub: "RSI·MACD·볼린저·체결강도" },
+  { icon: "🎯", label: "₩12,000↓ 저가주 필터링", sub: "익절확률 85%↑ · 복리 최적화" },
+  { icon: "🌙", label: "데이장 단타 선점 종목 탐색", sub: "정규장 매도 타겟 선별" },
 ];
 
 export function SafePauseBanner() {
@@ -163,13 +163,13 @@ export function SafePauseBanner() {
                 KST {kstTime}
               </Badge>
               <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px] font-bold">
-                💰 ₩1,000,000 원금 세팅 완료
+                📈 복리 잔고 유지 — 수익금 재투입!
               </Badge>
             </div>
           </div>
           <div className="mt-2 flex items-center gap-3 text-[10px] text-stock-up/80">
-            <span>🎯 아시아 세션 수급 + 최신 뉴스 결합 종목 최우선 요격</span>
-            <span>💎 ₩12,000↓ 저가주 즉시 투입</span>
+            <span>🌙 데이장 단타: AI 분석 매수 → 정규장 매도 타겟</span>
+            <span>💎 ₩12,000↓ 저가주 복리 투입</span>
           </div>
         </div>
       )}
@@ -178,18 +178,18 @@ export function SafePauseBanner() {
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-2">
         <div className="flex items-center gap-2 flex-wrap">
           <Shield className="w-3.5 h-3.5 text-primary" />
-          <span className="text-[11px] font-bold text-primary">[Zero-Loss] 100% 익절 방어막 상시 가동</span>
+          <span className="text-[11px] font-bold text-primary">[복리 방어] SL -5% 엄격 | 일일 손실 한도 10%</span>
           <div className="flex items-center gap-1.5 ml-auto flex-wrap">
             <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-stock-up/30 text-stock-up gap-0.5">
               <Zap className="w-2.5 h-2.5" />
-              +1%→SL+0.2%
+              +1%→SL+0.3%
             </Badge>
             <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-warning/30 text-warning gap-0.5">
               <Target className="w-2.5 h-2.5" />
-              가변 2~3%
+              +3%→즉시 확정
             </Badge>
             <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/30 text-primary gap-0.5">
-              🔥 200%↑→트레일링
+              🌙 데이장→정규장
             </Badge>
           </div>
         </div>
