@@ -12,7 +12,7 @@ const DAILY_TARGET_KRW = 300_000;
 const MAX_ENTRY_PRICE_KRW = 12_000;
 const MAX_LOGS = 500;
 
-type SimStatus = "idle" | "running" | "completed";
+type SimStatus = "idle" | "running";
 
 type LogType =
   | "SCAN"
@@ -79,19 +79,23 @@ interface RankedCandidate {
 interface SimState {
   cursor: number;
   cashKrw: number;
-  realizedPnlKrw: number;
+  roundPnlKrw: number;
+  totalPnlKrw: number;
+  goalHits: number;
   status: SimStatus;
   position: Position | null;
   trades: TradeRecord[];
   logs: LogEntry[];
 }
 
-const STORAGE_KEY = "github-free-paper-trading-v2";
+const STORAGE_KEY = "github-free-paper-trading-v3";
 
 const createInitialSimState = (): SimState => ({
   cursor: 3,
   cashKrw: START_BALANCE_KRW,
-  realizedPnlKrw: 0,
+  roundPnlKrw: 0,
+  totalPnlKrw: 0,
+  goalHits: 0,
   status: "idle",
   position: null,
   trades: [],
@@ -186,10 +190,14 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
       if (!raw) return;
       const parsed = JSON.parse(raw) as SimState;
       if (!parsed || typeof parsed !== "object") return;
+      const legacyRealized = (parsed as unknown as { realizedPnlKrw?: number }).realizedPnlKrw || 0;
       setSim({
         ...createInitialSimState(),
         ...parsed,
-        status: parsed.status === "running" ? "idle" : parsed.status,
+        roundPnlKrw: parsed.roundPnlKrw ?? legacyRealized,
+        totalPnlKrw: parsed.totalPnlKrw ?? legacyRealized,
+        goalHits: parsed.goalHits ?? 0,
+        status: parsed.status === "running" ? "idle" : "idle",
       });
     } catch {
       // Ignore broken cache and continue with fresh simulator state.
@@ -215,31 +223,38 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
       ? currentPrices[sim.position.symbol] * sim.position.quantity * fxRate
       : 0;
   const equityKrw = sim.cashKrw + openPositionValueKrw;
-  const goalProgress = Math.max(0, Math.min(100, (sim.realizedPnlKrw / DAILY_TARGET_KRW) * 100));
+  const goalProgress = Math.max(0, Math.min(100, (sim.roundPnlKrw / DAILY_TARGET_KRW) * 100));
 
   const runTick = useCallback(() => {
     if (!marketData) return;
     setSim((prev) => {
       if (prev.status !== "running") return prev;
-      if (prev.cursor >= marketData.timeline.length) {
-        const doneLogs = appendLog(prev.logs, "-", "GOAL", "데이터 구간이 끝나 자동매매를 종료했습니다.");
-        return { ...prev, status: "completed", logs: doneLogs };
+      if (marketData.timeline.length === 0) {
+        const doneLogs = appendLog(prev.logs, "-", "GOAL", "데이터가 없어 자동매매를 일시정지했습니다.");
+        return { ...prev, status: "idle", logs: doneLogs };
       }
 
-      const date = marketData.timeline[prev.cursor];
-      const priceAt = (symbol: string) => marketData.bySymbol[symbol]?.[prev.cursor]?.price ?? null;
+      let cursor = prev.cursor;
       let logs = prev.logs;
+      if (cursor >= marketData.timeline.length || cursor < 2) {
+        cursor = 3;
+        logs = appendLog(logs, "-", "GOAL", "데이터 구간 끝 도달: 시작 구간으로 자동 재가동합니다.");
+      }
+
+      const date = marketData.timeline[cursor];
+      const priceAt = (symbol: string) => marketData.bySymbol[symbol]?.[cursor]?.price ?? null;
       let trades = prev.trades;
       let cashKrw = prev.cashKrw;
-      let realizedPnlKrw = prev.realizedPnlKrw;
+      let roundPnlKrw = prev.roundPnlKrw;
+      let totalPnlKrw = prev.totalPnlKrw;
+      let goalHits = prev.goalHits;
       let position = prev.position;
-      let status: SimStatus = prev.status;
 
       const ranked = marketData.symbols
         .map((symbol) => {
-          const now = marketData.bySymbol[symbol]?.[prev.cursor]?.price;
-          const prev1 = marketData.bySymbol[symbol]?.[prev.cursor - 1]?.price;
-          const prev2 = marketData.bySymbol[symbol]?.[prev.cursor - 2]?.price;
+          const now = marketData.bySymbol[symbol]?.[cursor]?.price;
+          const prev1 = marketData.bySymbol[symbol]?.[cursor - 1]?.price;
+          const prev2 = marketData.bySymbol[symbol]?.[cursor - 2]?.price;
           if (!now || !prev1 || !prev2) return null;
           const momentumPct = ((now / prev2) - 1) * 100;
           const slopePct = ((now / prev1) - 1) * 100;
@@ -286,7 +301,8 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
             const cost = position.entryPriceUsd * position.quantity * fxRate;
             const pnlKrw = gross - cost;
             cashKrw += gross;
-            realizedPnlKrw += pnlKrw;
+            roundPnlKrw += pnlKrw;
+            totalPnlKrw += pnlKrw;
             trades = [
               {
                 id: toId(),
@@ -364,21 +380,29 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
         }
       }
 
-      if (realizedPnlKrw >= DAILY_TARGET_KRW && status !== "completed") {
-        status = "completed";
-        logs = appendLog(logs, date, "GOAL", `일 목표 ${formatKrw(DAILY_TARGET_KRW)} 달성. 자동매매를 종료합니다.`);
+      if (roundPnlKrw >= DAILY_TARGET_KRW) {
+        goalHits += 1;
+        logs = appendLog(
+          logs,
+          date,
+          "GOAL",
+          `목표 ${formatKrw(DAILY_TARGET_KRW)} 달성 (누적 ${goalHits}회). 라운드 손익을 0으로 리셋하고 자동 재가동합니다.`
+        );
+        roundPnlKrw = 0;
       }
 
-      const nextCursor = prev.cursor + 1;
+      let nextCursor = cursor + 1;
       if (nextCursor >= marketData.timeline.length) {
-        status = "completed";
+        nextCursor = 3;
       }
 
       return {
         cursor: nextCursor,
         cashKrw,
-        realizedPnlKrw,
-        status,
+        roundPnlKrw,
+        totalPnlKrw,
+        goalHits,
+        status: "running",
         position,
         trades,
         logs,
@@ -423,11 +447,12 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
           <p className="font-semibold text-foreground flex items-center gap-1.5">
             <Bot className="w-3.5 h-3.5 text-primary" />
-            GitHub 무료 API 기반 자동 복리매매 (무과금 데이터 모드)
+            GitHub 무료 API 기반 무한 자동 복리매매 (무과금 데이터 모드)
           </p>
           <p>데이터 소스: vega-datasets 공개 CSV (GitHub Raw) / API Key 없음 / 유료 과금 없음</p>
           <p>시작 자금: {formatKrw(START_BALANCE_KRW)} · 일 목표: {formatKrw(DAILY_TARGET_KRW)}</p>
           <p>진입 필터: 현재가 {MAX_ENTRY_PRICE_KRW.toLocaleString("ko-KR")}원 미만 종목만 거래</p>
+          <p className="text-stock-up">목표 달성 시 자동 재가동: 목표 손익 달성 즉시 다음 라운드로 계속 자동매매합니다.</p>
           <p className="text-warning flex items-center gap-1">
             <ShieldAlert className="w-3.5 h-3.5" />
             실제 시장에서 손익 보장은 불가능합니다. 본 모드는 학습용 자동매매 시뮬레이터입니다.
@@ -439,8 +464,9 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
         <Badge variant="outline" className="text-[10px] border-stock-up/30 text-stock-up">Free API</Badge>
         <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">₩12,000 미만 진입 필터</Badge>
         <Badge variant="outline" className="text-[10px]">진행 데이터: {currentDate}</Badge>
+        <Badge variant="outline" className="text-[10px]">목표 달성 {sim.goalHits}회</Badge>
         <Badge variant="outline" className={`text-[10px] ${sim.status === "running" ? "border-warning/30 text-warning" : ""}`}>
-          상태: {sim.status === "running" ? "자동매매 실행 중" : sim.status === "completed" ? "종료" : "대기"}
+          상태: {sim.status === "running" ? "자동매매 무한 루프 실행 중" : "대기"}
         </Badge>
         <div className="ml-auto flex items-center gap-2">
           {sim.status === "running" ? (
@@ -461,7 +487,7 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground flex items-center gap-1"><Wallet className="w-3.5 h-3.5" />확정 현금</p>
@@ -476,9 +502,17 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground flex items-center gap-1"><Target className="w-3.5 h-3.5" />일 실현손익</p>
-            <p className={`text-lg font-bold font-mono ${sim.realizedPnlKrw >= 0 ? "text-stock-up" : "text-stock-down"}`}>
-              {sim.realizedPnlKrw >= 0 ? "+" : "-"}{formatKrw(Math.abs(sim.realizedPnlKrw))}
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><Target className="w-3.5 h-3.5" />현재 라운드 손익</p>
+            <p className={`text-lg font-bold font-mono ${sim.roundPnlKrw >= 0 ? "text-stock-up" : "text-stock-down"}`}>
+              {sim.roundPnlKrw >= 0 ? "+" : "-"}{formatKrw(Math.abs(sim.roundPnlKrw))}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">누적 실현손익</p>
+            <p className={`text-lg font-bold font-mono ${sim.totalPnlKrw >= 0 ? "text-stock-up" : "text-stock-down"}`}>
+              {sim.totalPnlKrw >= 0 ? "+" : "-"}{formatKrw(Math.abs(sim.totalPnlKrw))}
             </p>
           </CardContent>
         </Card>
