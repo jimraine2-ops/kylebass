@@ -1,6 +1,6 @@
 import { Bot, Zap, ShieldAlert, DollarSign } from "lucide-react";
 import { IntegratedKPIDashboard } from "@/components/trading/IntegratedKPIDashboard";
-import { ScalpingDashboard } from "@/components/trading/ScalpingDashboard";
+import { GitHubPaperCompoundDashboard } from "@/components/trading/GitHubPaperCompoundDashboard";
 import { SessionIndicator } from "@/components/trading/SessionIndicator";
 import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
@@ -107,7 +107,7 @@ export default function AITradingPage() {
             </CardContent>
           </Card>
 
-          <ScalpingDashboard wsGetPrice={ws.getPrice} wsConnected={ws.isConnected} fxRate={fxRate} />
+          <GitHubPaperCompoundDashboard fxRate={fxRate} />
         </TabsContent>
       </Tabs>
     </div>
