@@ -10,9 +10,10 @@ const GITHUB_STOCKS_CSV_URL = "https://raw.githubusercontent.com/vega/vega-datas
 const START_BALANCE_KRW = 1_000_000;
 const DAILY_TARGET_KRW = 300_000;
 const MAX_ENTRY_PRICE_KRW = 12_000;
+const GOAL_COOLDOWN_SEC = 30;
 const MAX_LOGS = 500;
 
-type SimStatus = "idle" | "running";
+type SimStatus = "idle" | "running" | "cooldown";
 
 type LogType =
   | "SCAN"
@@ -82,6 +83,7 @@ interface SimState {
   roundPnlKrw: number;
   totalPnlKrw: number;
   goalHits: number;
+  cooldownRemainingSec: number;
   status: SimStatus;
   position: Position | null;
   trades: TradeRecord[];
@@ -96,6 +98,7 @@ const createInitialSimState = (): SimState => ({
   roundPnlKrw: 0,
   totalPnlKrw: 0,
   goalHits: 0,
+  cooldownRemainingSec: 0,
   status: "idle",
   position: null,
   trades: [],
@@ -197,7 +200,8 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
         roundPnlKrw: parsed.roundPnlKrw ?? legacyRealized,
         totalPnlKrw: parsed.totalPnlKrw ?? legacyRealized,
         goalHits: parsed.goalHits ?? 0,
-        status: parsed.status === "running" ? "idle" : "idle",
+        cooldownRemainingSec: parsed.cooldownRemainingSec ?? 0,
+        status: "idle",
       });
     } catch {
       // Ignore broken cache and continue with fresh simulator state.
@@ -386,9 +390,21 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
           logs,
           date,
           "GOAL",
-          `목표 ${formatKrw(DAILY_TARGET_KRW)} 달성 (누적 ${goalHits}회). 라운드 손익을 0으로 리셋하고 자동 재가동합니다.`
+          `목표 ${formatKrw(DAILY_TARGET_KRW)} 달성 (누적 ${goalHits}회). ${GOAL_COOLDOWN_SEC}초 쿨다운 후 자동 재가동합니다.`
         );
         roundPnlKrw = 0;
+        return {
+          cursor,
+          cashKrw,
+          roundPnlKrw,
+          totalPnlKrw,
+          goalHits,
+          cooldownRemainingSec: GOAL_COOLDOWN_SEC,
+          status: "cooldown",
+          position,
+          trades,
+          logs,
+        };
       }
 
       let nextCursor = cursor + 1;
@@ -402,6 +418,7 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
         roundPnlKrw,
         totalPnlKrw,
         goalHits,
+        cooldownRemainingSec: prev.cooldownRemainingSec,
         status: "running",
         position,
         trades,
@@ -415,6 +432,22 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
     const timer = window.setInterval(runTick, 900);
     return () => window.clearInterval(timer);
   }, [runTick, sim.status]);
+
+  useEffect(() => {
+    if (sim.status !== "cooldown") return;
+    const timer = window.setInterval(() => {
+      setSim((prev) => {
+        if (prev.status !== "cooldown") return prev;
+        const nextSec = prev.cooldownRemainingSec - 1;
+        if (nextSec > 0) {
+          return { ...prev, cooldownRemainingSec: nextSec };
+        }
+        const logs = appendLog(prev.logs, "-", "GOAL", "쿨다운 종료. 자동매매를 재개합니다.");
+        return { ...prev, status: "running", cooldownRemainingSec: 0, logs };
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [appendLog, sim.status]);
 
   const handleReset = () => {
     if (!confirm("가상머니 자동복리 시뮬레이터를 초기화할까요? 로그/거래기록이 모두 초기화됩니다.")) return;
@@ -452,7 +485,7 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
           <p>데이터 소스: vega-datasets 공개 CSV (GitHub Raw) / API Key 없음 / 유료 과금 없음</p>
           <p>시작 자금: {formatKrw(START_BALANCE_KRW)} · 일 목표: {formatKrw(DAILY_TARGET_KRW)}</p>
           <p>진입 필터: 현재가 {MAX_ENTRY_PRICE_KRW.toLocaleString("ko-KR")}원 미만 종목만 거래</p>
-          <p className="text-stock-up">목표 달성 시 자동 재가동: 목표 손익 달성 즉시 다음 라운드로 계속 자동매매합니다.</p>
+          <p className="text-stock-up">목표 달성 시 {GOAL_COOLDOWN_SEC}초 쿨다운 후 다음 라운드 자동 재가동</p>
           <p className="text-warning flex items-center gap-1">
             <ShieldAlert className="w-3.5 h-3.5" />
             실제 시장에서 손익 보장은 불가능합니다. 본 모드는 학습용 자동매매 시뮬레이터입니다.
@@ -466,13 +499,17 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
         <Badge variant="outline" className="text-[10px]">진행 데이터: {currentDate}</Badge>
         <Badge variant="outline" className="text-[10px]">목표 달성 {sim.goalHits}회</Badge>
         <Badge variant="outline" className={`text-[10px] ${sim.status === "running" ? "border-warning/30 text-warning" : ""}`}>
-          상태: {sim.status === "running" ? "자동매매 무한 루프 실행 중" : "대기"}
+          상태: {sim.status === "running" ? "자동매매 무한 루프 실행 중" : sim.status === "cooldown" ? `쿨다운 ${sim.cooldownRemainingSec}초` : "대기"}
         </Badge>
         <div className="ml-auto flex items-center gap-2">
           {sim.status === "running" ? (
             <Button size="sm" variant="outline" onClick={() => setSim((s) => ({ ...s, status: "idle" }))}>
               <Pause className="w-3.5 h-3.5 mr-1" />
               일시정지
+            </Button>
+          ) : sim.status === "cooldown" ? (
+            <Button size="sm" variant="outline" disabled>
+              쿨다운 {sim.cooldownRemainingSec}초
             </Button>
           ) : (
             <Button size="sm" onClick={() => setSim((s) => ({ ...s, status: "running" }))}>
