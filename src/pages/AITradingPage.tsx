@@ -49,15 +49,15 @@ export default function AITradingPage() {
       {/* Server Status Banner */}
       <ServerStatusBanner />
 
-      <Tabs defaultValue="kpi" className="space-y-4">
+      <Tabs defaultValue="scalping" className="space-y-4">
         <TabsList className="w-full justify-start">
-          <TabsTrigger value="kpi" className="gap-1.5">
-            <Bot className="w-3.5 h-3.5" />
-            통합 KPI (자율 매매)
-          </TabsTrigger>
           <TabsTrigger value="scalping" className="gap-1.5">
             <Zap className="w-3.5 h-3.5" />
             가상머니 단타 실전
+          </TabsTrigger>
+          <TabsTrigger value="kpi" className="gap-1.5">
+            <Bot className="w-3.5 h-3.5" />
+            통합 KPI (자율 매매)
           </TabsTrigger>
         </TabsList>
 
