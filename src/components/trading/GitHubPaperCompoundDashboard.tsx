@@ -68,6 +68,14 @@ interface LogEntry {
   message: string;
 }
 
+interface RankedCandidate {
+  symbol: string;
+  now: number;
+  nowKrw: number;
+  momentumPct: number;
+  slopePct: number;
+}
+
 interface SimState {
   cursor: number;
   cashKrw: number;
@@ -238,8 +246,8 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
           const nowKrw = now * fxRate;
           return { symbol, now, nowKrw, momentumPct, slopePct };
         })
-        .filter(Boolean)
-        .sort((a: any, b: any) => b.momentumPct - a.momentumPct);
+        .filter((item): item is RankedCandidate => item !== null)
+        .sort((a, b) => b.momentumPct - a.momentumPct);
 
       if (ranked[0]) {
         logs = appendLog(
@@ -256,7 +264,7 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
           const updatedHighest = Math.max(position.highestPriceUsd, priceNow);
           let stopLossUsd = position.stopLossUsd;
           let takeProfitUsd = position.takeProfitUsd;
-          let barsHeld = position.barsHeld + 1;
+          const barsHeld = position.barsHeld + 1;
 
           if (priceNow >= position.entryPriceUsd * 1.005 && stopLossUsd < position.entryPriceUsd * 1.001) {
             stopLossUsd = position.entryPriceUsd * 1.001;
@@ -312,7 +320,7 @@ export function GitHubPaperCompoundDashboard({ fxRate = 1350 }: { fxRate?: numbe
         }
       }
 
-      const eligibleRanked = ranked.filter((item: any) => item.nowKrw < MAX_ENTRY_PRICE_KRW);
+      const eligibleRanked = ranked.filter((item) => item.nowKrw < MAX_ENTRY_PRICE_KRW);
       if (!position && ranked.length > 0 && eligibleRanked.length === 0) {
         logs = appendLog(
           logs,
