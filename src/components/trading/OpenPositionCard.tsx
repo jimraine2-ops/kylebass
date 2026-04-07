@@ -311,17 +311,17 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
         ) : null;
       })()}
       {/* ★ 변동성 구간 홀딩 상태 표시: 50~59점 */}
-      {!isProfit && unrealizedPnlPct > -10 && unrealizedPnlPct < -1 && score !== null && score >= 50 && score < 60 && (
+      {!isProfit && unrealizedPnlPct > -5 && unrealizedPnlPct < -1 && score !== null && score >= 50 && score < 60 && (
         <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-primary/10 border border-primary/20">
           <ShieldCheck className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="text-primary">[변동성 구간: 지표 기반 홀딩 중] 정상 흔들림 — 대시세 대기</span>
+          <span className="text-primary">[복리 홀딩] 정상 변동성 — 반등 대기</span>
         </div>
       )}
-      {/* -10% 근접 경고 */}
-      {!isProfit && unrealizedPnlPct <= -10 && score !== null && score >= 50 && (
+      {/* -5% 손절 근접 경고 (복리: -5% 엄격 손절) */}
+      {!isProfit && unrealizedPnlPct <= -5 && score !== null && score >= 50 && (
         <div className="flex items-center gap-2 text-[11px] font-semibold px-2 py-1 rounded bg-warning/10 border border-warning/20">
           <Shield className="w-3.5 h-3.5 text-warning shrink-0" />
-          <span className="text-warning">[⚠️ -10% 도달] 지표 {score}점(≥50) 양호 — 수급 기반 홀딩 유지 중</span>
+          <span className="text-warning">[⚠️ -5% 손절선 도달] 지표 {score}점(≥50) — 예외 홀딩 중</span>
         </div>
       )}
 

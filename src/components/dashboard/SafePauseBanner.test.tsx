@@ -23,10 +23,10 @@ describe("SafePauseBanner", () => {
     expect(getByText(/Day-Break/)).toBeInTheDocument();
   });
 
-  it("shows only Zero-Loss banner after KST 9:05", () => {
+  it("shows only defense banner after KST 9:05", () => {
     vi.setSystemTime(new Date("2026-04-02T00:10:00Z")); // KST 09:10
     const { getByText, queryByText } = render(<SafePauseBanner />);
-    expect(getByText(/Zero-Loss/)).toBeInTheDocument();
+    expect(getByText(/복리 방어/)).toBeInTheDocument();
     expect(queryByText(/Safe-Exit/)).not.toBeInTheDocument();
     expect(queryByText(/Day-Break/)).not.toBeInTheDocument();
   });

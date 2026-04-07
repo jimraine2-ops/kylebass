@@ -82,12 +82,12 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
   }, [liveScoreMap]);
 
   const handleReset = async () => {
-    if (!confirm('통합 지갑을 ₩1,000,000으로 초기화하시겠습니까? 모든 거래 기록이 삭제됩니다.')) return;
+    if (!confirm('복리매매 지갑을 ₩5,000,000으로 초기화하시겠습니까? 모든 거래 기록이 삭제됩니다.')) return;
     setResetting(true);
     try {
       await resetUnifiedWallet();
       await refetch();
-      toast.success('통합 지갑이 ₩1,000,000으로 초기화되었습니다.');
+      toast.success('복리매매 지갑이 ₩5,000,000으로 초기화되었습니다.');
     } catch {
       toast.error('초기화 실패');
     } finally {
@@ -105,8 +105,11 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
     }, []);
 
   // ★ 일일 수익 목표 체크 + 라운드 추적
-  const DAILY_TARGET_KRW = 500000;
-  const ROUND_RESET_BASE_KRW = 5000000;
+  // ★ [복리매매] 일일 목표: 잔고 기반 동적 (최소 ₩300k, 최대 ₩500k)
+  const currentBalance = wallet?.balance || 5000000;
+  const DAILY_TARGET_KRW_MIN = Math.max(300000, Math.round(currentBalance * 0.06));
+  const DAILY_TARGET_KRW_MAX = Math.max(500000, Math.round(currentBalance * 0.10));
+  const DAILY_TARGET_KRW = DAILY_TARGET_KRW_MIN; // 진행률 기준은 최소 목표
 
   // ★ 라운드 감지: agent_logs에서 Round 완료 로그 카운트
   const [currentRound, setCurrentRound] = useState(1);
@@ -198,20 +201,20 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
               🔥 현재 연속 익절: {winStreak}회 / 승률: {wins + losses > 0 ? ((wins / (wins + losses)) * 100).toFixed(0) : 0}%
             </Badge>
           )}
+          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
+            📈 복리매매 | 수익금 재투입 → 복리 가속
+          </Badge>
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🛡️ Iron-Defense | +1%→SL+0.2% | +3%→즉시 확정
+            🛡️ SL -5% 엄격 | +1%→SL+0.3% | +3%→즉시 확정
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🎯 Dynamic-Target | 체결강도별 2~3% 가변 익절
+            🌙 데이장 단타 | 데이장 매수 → 정규장 매도
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            📉 Adaptive-Exit | 고점-0.5% OR 체결강도 80%↓ → 즉시 익절
+            🎯 Alpha-Entry | 뉴스70%↑ + 익절확률85%↑
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            💎 ₩12,000↓ 저가주 호가 최적화 | 선제적 매도
-          </Badge>
-          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
-            💎 Value-Filter | 기업가치 A/B등급 → 익절확정 98%
+            💰 목표 ₩{DAILY_TARGET_KRW_MIN.toLocaleString()}~₩{DAILY_TARGET_KRW_MAX.toLocaleString()} | 손실 한도 10%
           </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
@@ -224,29 +227,28 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
           <RotateCcw className="w-3.5 h-3.5 mr-1" />
-          지갑 초기화 (₩100만)
+          지갑 초기화 (₩500만)
         </Button>
       </div>
 
-    <Card className="border-yellow-500/30 bg-yellow-500/5">
+    <Card className="border-emerald-500/30 bg-emerald-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🏆 Dynamic-Target + Adaptive-Exit 전략</p>
-          <p className="italic text-yellow-400/80">"시장은 생물이다. 3%가 목표지만, 힘이 2.5%에서 꺾인다면 그곳이 우리의 종착역이다."</p>
+          <p className="font-bold text-emerald-400 text-sm">📈 복리매매 + 데이장 단타 전략</p>
+          <p className="italic text-emerald-400/80">"수익이 쌓일수록 포지션이 커진다. 데이장에서 AI가 선점하고, 정규장에서 수확한다."</p>
+          <div className="border-l-2 border-emerald-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[복리매매] 수익금 자동 재투입</p>
+            <p>💰 라운드 완료 시 잔고 유지 → 수익금이 다음 원금에 합산 (복리 가속)</p>
+            <p>📊 목표 ₩{DAILY_TARGET_KRW_MIN.toLocaleString()}~₩{DAILY_TARGET_KRW_MAX.toLocaleString()} (잔고 대비 6~10% 동적)</p>
+          </div>
+          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[데이장 단타] 프리마켓 매수 → 정규장 매도</p>
+            <p>🌙 데이장(프리마켓/오버나이트): AI 분석으로 저가 선점 매수</p>
+            <p>☀️ 정규장(09:30~16:00 ET): 유동성 풍부한 시간대에 수익 실현</p>
+          </div>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Dynamic-Target] 종목별 맞춤 익절</p>
-            <p>🔥 체결강도 150%↑ → 3.0% 익절 (강력 홀딩)</p>
-            <p>📊 체결강도 100~150% → 2.5% 익절 (분할 대응)</p>
-            <p>⚡ 체결강도 100%↓ → 2.0% 익절 (빠른 회전)</p>
-          </div>
-          <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Adaptive-Exit] 힘의 균열 감지 즉시 익절</p>
-            <p>📉 고점 대비 -0.5% 하락 OR 체결강도 80% 미만 → 현재가 즉시 익절</p>
-            <p>🔒 어떤 경우에도 본절가(+0.2%) 아래 매도 금지</p>
-          </div>
-          <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[저가주 호가 최적화] ₩12,000↓</p>
-            <p>💎 호가창 얇아질 조짐 → AI 추천 구간에서 선제적 매도</p>
-            <p>🛡️ Iron-Defense: +1% → SL+0.2% | +3% → 즉시 확정</p>
+            <p className="font-semibold text-foreground">[리스크 관리] 엄격한 복리 방어</p>
+            <p>🔒 손절: -5% (R:R 1:1.4↑) | +1%→SL+0.3% 본절 | +3%→즉시 확정</p>
+            <p>🚨 일일 최대 손실 한도: 잔고의 10% 초과 시 매수 전면 중단</p>
           </div>
         </CardContent>
       </Card>
@@ -257,13 +259,13 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           <CardContent className="p-4 flex items-center gap-3">
             <span className="text-3xl">🏆🔄</span>
             <div>
-              <p className="text-lg font-bold text-stock-up">Round {currentRound > 1 ? currentRound - 1 : 1} 목표 달성! → Round {currentRound} 재공략 중 🎯</p>
+              <p className="text-lg font-bold text-stock-up">복리 Round {currentRound > 1 ? currentRound - 1 : 1} 달성! → Round {currentRound} 복리 재투입 🎯</p>
               <p className="text-sm text-muted-foreground">
-                현재 라운드 수익: <span className="font-bold font-mono text-stock-up">₩{currentRoundPnl.toLocaleString('ko-KR')}</span> / 목표 ₩{DAILY_TARGET_KRW.toLocaleString('ko-KR')}
+                현재 수익: <span className="font-bold font-mono text-stock-up">₩{currentRoundPnl.toLocaleString('ko-KR')}</span> / 목표 ₩{DAILY_TARGET_KRW.toLocaleString('ko-KR')}~₩{DAILY_TARGET_KRW_MAX.toLocaleString('ko-KR')}
               </p>
               {cumulativeProfit > 0 && (
                 <p className="text-sm text-muted-foreground">
-                  🏦 오늘 총 누적 수익 (안전 자산): <span className="font-bold font-mono text-stock-up">₩{totalDayProfit.toLocaleString('ko-KR')}</span>
+                  💰 복리 누적 수익: <span className="font-bold font-mono text-stock-up">₩{totalDayProfit.toLocaleString('ko-KR')}</span> (수익금 재투입!)
                 </p>
               )}
             </div>
@@ -288,7 +290,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             </div>
             {cumulativeProfit > 0 && (
               <p className="text-[10px] text-muted-foreground mt-1">
-                🏦 이전 라운드 누적 수익 (안전 자산): ₩{cumulativeProfit.toLocaleString('ko-KR')} | 오늘 총: ₩{totalDayProfit.toLocaleString('ko-KR')}
+                💰 복리 누적 수익: ₩{cumulativeProfit.toLocaleString('ko-KR')} | 오늘 총: ₩{totalDayProfit.toLocaleString('ko-KR')} (재투입!)
               </p>
             )}
           </CardContent>
@@ -320,7 +322,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             <p className="text-xl font-bold font-mono text-stock-up">
               ₩{Math.round(Math.max(0, confirmedBalance)).toLocaleString('ko-KR')}
             </p>
-            <p className="text-[10px] text-muted-foreground mt-1">종목당 최대: ₩{Math.round(Math.max(0, confirmedBalance) * 0.33).toLocaleString('ko-KR')} (33%)</p>
+            <p className="text-[10px] text-muted-foreground mt-1">종목당 최대: ₩{Math.round(Math.max(0, confirmedBalance) * 0.30).toLocaleString('ko-KR')} (30%)</p>
           </CardContent>
         </Card>
         <Card className="border-primary/30">

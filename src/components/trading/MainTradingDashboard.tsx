@@ -62,7 +62,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
     try {
       await resetAIWallet();
       await refetch();
-      toast.success('가상 지갑이 ₩1,000,000으로 초기화되었습니다.');
+      toast.success('복리매매 지갑이 ₩5,000,000으로 초기화되었습니다.');
     } catch {
       toast.error('초기화 실패');
     } finally {
@@ -104,17 +104,17 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
       <SafePauseBanner />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🛡️ Iron-Defense | +1%→SL+0.2% | +3%→즉시 확정
+          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
+            📈 복리매매 | 수익금 재투입 → 복리 가속
           </Badge>
-          <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🔥 체결강도 200%↑ = 트레일링(-1%) 극대화
+          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
+            🛡️ SL -5% 엄격 | +1%→SL+0.3% | +3%→즉시 확정
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
-            🎯 Alpha-Entry | 뉴스90%↑ + 익절확률95%↑ + 진공구간
+            🎯 Alpha-Entry | 뉴스70%↑ + 익절확률85%↑
           </Badge>
           <Badge className="bg-primary/20 text-primary border-primary/30 text-[10px]">
-            💎 ₩12,000↓ 저가주 5종목 | 3% 필수 수익 확정
+            💰 일일 목표 ₩30만~₩50만 | 손실 한도 잔고 10%
           </Badge>
         </div>
         <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
@@ -123,25 +123,25 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
         </Button>
       </div>
 
-      <Card className="border-yellow-500/30 bg-yellow-500/5">
+      <Card className="border-emerald-500/30 bg-emerald-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🏆 3% 익절 무조건 성공 — Iron-Defense 전략</p>
-          <p className="italic text-yellow-400/80">"1.0%는 생존을 위한 방어선이고, 3.0%는 승리를 위한 공격선이다."</p>
-          <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Alpha-Entry] 3% 진공구간 요격</p>
-            <p>📰 Finnhub 뉴스 90%↑ + Twelve Data 체결강도 상위 1%</p>
-            <p>🎯 매물대 없는 진공구간 포착 → 익절확률 95%↑ 종목만 5선 압축</p>
+          <p className="font-bold text-emerald-400 text-sm">📈 복리매매 전략 — 수익금 재투입으로 자산 가속 성장</p>
+          <p className="italic text-emerald-400/80">"수익이 쌓일수록 포지션이 커지고, 같은 3%가 더 큰 수익이 된다."</p>
+          <div className="border-l-2 border-emerald-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[복리 핵심] 수익금 자동 재투입</p>
+            <p>💰 라운드 완료 시 잔고 리셋 없음 → 수익금이 다음 원금에 합산</p>
+            <p>📊 일일 목표 ₩30만~₩50만 (잔고 대비 6~10% 동적 조절)</p>
           </div>
-          <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Iron-Defense] 2단계 방어 체계</p>
-            <p>🔒 1단계: +1.0% → SL 매수가+0.2% 고정 (패배 영구 소멸)</p>
-            <p>⚡ 2단계: +3.0% 터치 → 즉시 시장가 매도 수익 확정</p>
-            <p>🔥 예외: 체결강도 200%↑ 폭발 시 → 트레일링(고점-1%)으로 10~20% 극대화</p>
+          <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[리스크 관리] 엄격한 복리 방어</p>
+            <p>🔒 손절: -5% (기존 -10% → 절반으로 강화, R:R 1:1.4↑)</p>
+            <p>⚡ +1% → SL+0.3% 본절 | +3% → 즉시 수익 확정</p>
+            <p>🚨 일일 최대 손실 한도: 잔고의 10% 초과 시 매수 전면 중단</p>
           </div>
           <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[₩12,000↓ 저가주] 호가 최적화</p>
-            <p>💎 100만 원 대량매수 → 몇 호가 변동만으로 3% 달성</p>
-            <p>💧 3% 익절가 매수대기 잔량 ₩1,000만↑ 유동성 확보 필수</p>
+            <p className="font-semibold text-foreground">[진입 최적화] 매매 기회 확대</p>
+            <p>🎯 진입 조건 완화: 뉴스 70%↑ + 익절확률 85%↑ (기존 90/95%)</p>
+            <p>💎 포지션 분산: 최대 30% (기존 50%) — 과집중 위험 방지</p>
           </div>
         </CardContent>
       </Card>
@@ -172,7 +172,7 @@ export function MainTradingDashboard({ wsGetPrice, wsConnected, fxRate = 1350 }:
             <p className="text-xl font-bold font-mono text-stock-up">
               ₩{Math.round(Math.max(0, confirmedBalance)).toLocaleString('ko-KR')}
             </p>
-            <p className="text-[10px] text-muted-foreground mt-1">종목당 최대: ₩{Math.round(Math.max(0, confirmedBalance) * 0.15).toLocaleString('ko-KR')} (15%)</p>
+            <p className="text-[10px] text-muted-foreground mt-1">종목당 최대: ₩{Math.round(Math.max(0, confirmedBalance) * 0.30).toLocaleString('ko-KR')} (30%)</p>
           </CardContent>
         </Card>
         <Card className="border-primary/30">
