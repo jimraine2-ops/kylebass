@@ -1956,17 +1956,17 @@ Deno.serve(async (req) => {
           const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
           const isAccumEntry = isAccumCandidate;
           
-          // 최소 충족 조건: 필승 패턴 시 3개, 매집 시 3개, 예측형 3개, 일반 5개
-          const minMet = (hasCriticalPattern || isAccumEntry || isPredictiveEntry) ? 3 : 5;
+          // 최소 충족 조건: 필승 패턴 시 3개, 매집 시 3개, 예측형 3개, Dip-Buy 3개, 일반 5개
+          const minMet = (hasCriticalPattern || isAccumEntry || isPredictiveEntry || isDipBuyCandidate) ? 3 : 5;
           if (metCount < minMet) continue;
           
-          // ★ RVOL 완화: 필승 패턴/예측형 시 해제
-          if (!isAccumEntry && !hasCriticalPattern && !isPredictiveEntry && rvol < 1.0) continue;
+          // ★ RVOL 완화: 필승 패턴/예측형/Dip-Buy 시 해제 (Dip-Buy는 고유동성 이미 검증됨)
+          if (!isAccumEntry && !hasCriticalPattern && !isPredictiveEntry && !isDipBuyCandidate && rvol < 1.0) continue;
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          // ★ 체결강도 완화: 필승 패턴/예측형 시 40%
-          const minAggression = (isAccumEntry || hasCriticalPattern || isPredictiveEntry) ? 40 : 80;
+          // ★ 체결강도 완화: 필승 패턴/예측형/Dip-Buy 시 40%
+          const minAggression = (isAccumEntry || hasCriticalPattern || isPredictiveEntry || isDipBuyCandidate) ? 40 : 80;
           if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
