@@ -1924,7 +1924,7 @@ Deno.serve(async (req) => {
           const meetsHighLiquidityFloor = tradingVal >= HIGH_LIQUIDITY_FLOOR_USD;
           
           // ★ [Dip-Buying] 25개 봉 하락 구간 + RSI 과매도 반등 감지 (점수 필터 전에 실행!)
-          const dipSignal = r.data ? detectDipBuySignal(r.data.closes, r.data.highs, r.data.lows, r.data.volumes) : { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, details: '' };
+          const dipSignal = r.data ? detectDipBuySignal(r.data.closes, r.data.highs, r.data.lows, r.data.volumes, r.data.opens) : { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, isBearishCandle: false, details: '' };
           if (dipSignal.isDip) dipBuyScanned++;
           const isDipBuyCandidate = dipSignal.isDip && meetsHighLiquidityFloor;
           
