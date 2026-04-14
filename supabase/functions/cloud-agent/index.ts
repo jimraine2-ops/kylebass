@@ -2261,6 +2261,9 @@ Deno.serve(async (req) => {
       let takeProfit: number;
       if (isDipBuyEntry && dipSig) {
         stopLoss = +(adjustedPrice * 0.95).toFixed(4); // Dip-Buy: -5% SL (하락 추세이므로 넓게)
+        // ★ [지연보정] API 15분 지연 감안 → 현재가 -1.5% 아래에 매수 그물(Limit Order) 배치
+        adjustedPrice = +(adjustedPrice * (1 - DIP_LIMIT_OFFSET_PCT)).toFixed(4);
+        orderType = 'LIMIT(DipNet-1.5%)';
         takeProfit = +(adjustedPrice * (1 + dipSig.reboundTargetPct / 100)).toFixed(4); // 반등 목표 2~3%
       } else {
         stopLoss = +(adjustedPrice * 0.90).toFixed(4);
