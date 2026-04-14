@@ -213,6 +213,9 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
             💎 Value-Filter | 기업가치 A/B등급 → 익절확정 98%
           </Badge>
+          <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px]">
+            📉 Dip-Buy | 50억↑ 고유동성 + 25봉하락 RSI반등 → 2~3% 반등익절
+          </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
           </Badge>
@@ -247,6 +250,13 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             <p className="font-semibold text-foreground">[저가주 호가 최적화] ₩12,000↓</p>
             <p>💎 호가창 얇아질 조짐 → AI 추천 구간에서 선제적 매도</p>
             <p>🛡️ Iron-Defense: +1% → SL+0.2% | +3% → 즉시 확정</p>
+          </div>
+          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[📉 Dip-Buy] 고유동성 하락봉 매입</p>
+            <p>💰 거래대금 50억↑($3.7M) 대장주만 타격</p>
+            <p>📉 25개봉 하락 + RSI 30↓ 반등 포착 → ₩100만 투입</p>
+            <p>🎯 체결강도 120%↑ → 3.0% 트레일링 / 미만 → 2.0% 즉시 익절</p>
+            <p>🔒 수익권 즉시 본절보호(+0.2%) 최우선 가동</p>
           </div>
         </CardContent>
       </Card>

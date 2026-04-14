@@ -21,6 +21,7 @@ interface OpenPositionCardProps {
 
 function getStrategyTag(aiReason: string | null): { label: string; color: string } {
   if (!aiReason) return { label: 'Main', color: 'bg-primary/20 text-primary border-primary/30' };
+  if (aiReason.includes('Dip-Buy') || aiReason.includes('하락봉매입')) return { label: '📉Dip-Buy', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' };
   if (aiReason.includes('가치 기반 우량')) return { label: '💎가치우량', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' };
   if (aiReason.includes('동전주')) return { label: '🪙동전주', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' };
   if (aiReason.includes('선취매')) return { label: '📡선취매', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' };
@@ -141,9 +142,14 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
             {tag.label}
           </Badge>
           {/* ★ 선취매 완료 황금 배지 */}
-          {(pos.ai_reason || '').includes('선취매') && (
+          {(pos.ai_reason || '').includes('선취매') && !(pos.ai_reason || '').includes('Dip-Buy') && (
             <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-bold border-yellow-500/50 bg-yellow-500/20 text-yellow-400 shadow-[0_0_8px_rgba(234,179,8,0.3)]">
               📡 선취매 완료: 정규장 폭발 대기 중
+            </Badge>
+          )}
+          {(pos.ai_reason || '').includes('Dip-Buy') && (
+            <Badge variant="outline" className="text-[10px] px-2 py-0.5 font-bold border-blue-500/50 bg-blue-500/20 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.3)]">
+              📉 Dip-Buy: 25봉 하락 반등 매수 | 본절보호 가동
             </Badge>
           )}
           <span className="font-bold text-sm">{formatStockName(pos.symbol)}</span>
