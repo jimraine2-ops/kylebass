@@ -1921,7 +1921,7 @@ Deno.serve(async (req) => {
           const entryAmountKRW = balance * 0.20;
           const liquidityCheck = checkLiquidityGuard(tradingVal, entryAmountKRW);
 
-          // ★ [Liquidity-Filter] 고유동성 하한선: 거래대금 $3.7M(≈50억원) 이상만 허용
+          // ★ [Liquidity-Filter] 고유동성 하한선: 거래대금 $1.48M(≈20억원) 이상만 허용
           const meetsHighLiquidityFloor = tradingVal >= HIGH_LIQUIDITY_FLOOR_USD;
           
           // ★ [Dip-Buying] 25개 봉 하락 구간 + RSI 과매도 반등 감지 (점수 필터 전에 실행!)
@@ -1931,7 +1931,7 @@ Deno.serve(async (req) => {
           
           if (isDipBuyCandidate) {
             dipBuyDetected++;
-            await addLog('unified', 'scan', r.sym, `[📉Dip-Buy감지] ${r.sym} 고유동성($${(tradingVal/1e6).toFixed(1)}M≥$3.7M) + 25봉하락 | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, meetsHighLiquidityFloor });
+            await addLog('unified', 'scan', r.sym, `[📉Dip-Buy감지] ${r.sym} 고유동성($${(tradingVal/1e6).toFixed(1)}M≥$1.48M) + 25봉하락 | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, meetsHighLiquidityFloor });
           }
 
           // ★ 동전주 전용 진입 문턱: 70점 (일반: 65점)
@@ -2310,7 +2310,7 @@ Deno.serve(async (req) => {
       }
       // ★ [Dip-Buy] 하락봉 반등 매수 알림
       if (isDipBuyEntry) {
-        await addLog('unified', 'milestone', r.sym, `📉 [Dip-Buy 하락봉 매입 완료] ${r.sym} 고유동성($${((r as any).tradingValueUSD/1e6).toFixed(1)}M≥$3.7M) | 25봉 하락 구간 RSI${dipSig?.currentRSI?.toFixed(1)} 반등 포착! | ₩100만 투입 | 반등 목표: +${dipSig?.reboundTargetPct}% | 본절보호 +0.2% 즉시 가동`, { dipSignal: dipSig, tradingValue: (r as any).tradingValueUSD, score: r.scoring.totalScore });
+        await addLog('unified', 'milestone', r.sym, `📉 [Dip-Buy 하락봉 매입 완료] ${r.sym} 고유동성($${((r as any).tradingValueUSD/1e6).toFixed(1)}M≥$1.48M) | 25봉 하락 구간 RSI${dipSig?.currentRSI?.toFixed(1)} 반등 포착! | ₩100만 투입 | 반등 목표: +${dipSig?.reboundTargetPct}% | 본절보호 +0.2% 즉시 가동`, { dipSignal: dipSig, tradingValue: (r as any).tradingValueUSD, score: r.scoring.totalScore });
       }
       // ★ 슈퍼 패턴 알림
       if (isSuperEntry) {
