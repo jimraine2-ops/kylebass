@@ -2191,11 +2191,19 @@ Deno.serve(async (req) => {
       const isScoreSurge = (r as any).isScoreSurge;
       const isCriticalPatternEntry = (r as any).hasCriticalPattern;
       const isPennyEntry = (r as any).isPennyStock;
+      const isDipBuyEntry = (r as any).isDipBuyCandidate;
+      const dipSig = (r as any).dipSignal;
       
-      // ★ [Volatility Hunt] 집중 투자: 1순위 종목 50%+, 동전주 40%, 필승패턴 35%, 일반 20%
+      // ★ [Dip-Buying] 하락봉 저점 매수: 고정 ₩100만원 투입
+      // ★ [Volatility Hunt] 집중 투자: 1순위 종목 50%+, 동전주 40%, 필승패턴 35%, Dip-Buy 고정₩100만, 일반 20%
       const isTopRanked = topCandidates.indexOf(r) === 0; // 1순위 종목
-      const positionPct = isPyramiding ? 0.05 : isTopRanked ? 0.50 : isPennyEntry ? 0.40 : (isCriticalPatternEntry || isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
-      const maxKRW = balance * positionPct;
+      let maxKRW: number;
+      if (isDipBuyEntry) {
+        maxKRW = Math.min(DIP_BUY_AMOUNT_KRW, balance); // ★ Dip-Buy: 고정 ₩100만원
+      } else {
+        const positionPct = isPyramiding ? 0.05 : isTopRanked ? 0.50 : isPennyEntry ? 0.40 : (isCriticalPatternEntry || isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
+        maxKRW = balance * positionPct;
+      }
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
       const costKRW = Math.floor(qty * priceKRW);
