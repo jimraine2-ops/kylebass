@@ -2240,17 +2240,26 @@ Deno.serve(async (req) => {
         orderType = 'LIMIT(Aggressive)';
       }
 
-      // ★ [전략 동기화] 초기 SL -10% / TP +15% 통일
-      const stopLoss = +(adjustedPrice * 0.90).toFixed(4);
-      // ★ 선취매/예측형: TP +20% (정규장 폭발 대비), 일반: +15%
-      const tpMultiplier = (isAccumEntry || isCriticalPatternEntry || isPredictive) && isLowVolumeSession ? 1.20 : 1.15;
-      const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
+      // ★ [전략 동기화] 초기 SL / TP 설정
+      // ★ [Dip-Buying] 반등 매수: 본절+0.2% 즉시, TP는 반등목표(2~3%)
+      let stopLoss: number;
+      let takeProfit: number;
+      if (isDipBuyEntry && dipSig) {
+        stopLoss = +(adjustedPrice * 0.95).toFixed(4); // Dip-Buy: -5% SL (하락 추세이므로 넓게)
+        takeProfit = +(adjustedPrice * (1 + dipSig.reboundTargetPct / 100)).toFixed(4); // 반등 목표 2~3%
+      } else {
+        stopLoss = +(adjustedPrice * 0.90).toFixed(4);
+        // ★ 선취매/예측형: TP +20% (정규장 폭발 대비), 일반: +15%
+        const tpMultiplier = (isAccumEntry || isCriticalPatternEntry || isPredictive) && isLowVolumeSession ? 1.20 : 1.15;
+        takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
+      }
       const splitOrderNote = isAccumEntry ? ' | 📦분할잠입매집(5분할 조용히 체결)' : '';
       const tsGuardTag = tsGuard.isGuarded ? ` | ⏱️Timestamp Guard(${dataAge.toFixed(1)}s→${PASSIVE_FILL_TICKS}호가↓)` : '';
       const passiveTag = (isPredictive || isAccumEntry) ? ` | 🎯Passive Fill(호가알박기)` : '';
-      const predictiveTag = isPredictive ? ` | 🔮예측형선취매(뉴스전 지표수렴)` : '';
+      const predictiveTag = isPredictive ? ` | 🔮예측형선취매(뉴스전 지표수렴)' : '';
       const liqRatioTag = (r as any).liquidityRatio ? ` | 💧유동성×${((r as any).liquidityRatio).toFixed(1)}` : '';
-      const tier = isPyramiding ? 'PYRAMID' : isPennyEntry ? 'PENNY-🪙' : isCriticalPatternEntry ? 'CRITICAL-PATTERN' : isSuperEntry ? 'SUPER-15%' : isPredictive ? 'PREDICTIVE' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
+      const dipBuyTag = isDipBuyEntry ? ` | 📉Dip-Buy(25봉하락|RSI${dipSig?.currentRSI?.toFixed(1)}|반등${dipSig?.reboundTargetPct}%|거래대금$${((r as any).tradingValueUSD/1e6).toFixed(1)}M)` : '';
+      const tier = isPyramiding ? 'PYRAMID' : isDipBuyEntry ? 'DIP-BUY-📉' : isPennyEntry ? 'PENNY-🪙' : isCriticalPatternEntry ? 'CRITICAL-PATTERN' : isSuperEntry ? 'SUPER-15%' : isPredictive ? 'PREDICTIVE' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
       const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 ×${spreadMul}` : '';
