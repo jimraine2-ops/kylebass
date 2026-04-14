@@ -36,8 +36,8 @@ const HIGH_LIQUIDITY_FLOOR_USD = 3700000; // ★ [Liquidity-Filter] 거래대금
 const DIP_CANDLE_COUNT = 25; // ★ [Dip-Buying] 25개 봉 하락 구간 감지
 const DIP_RSI_THRESHOLD = 30; // ★ [Dip-Buying] RSI 과매도 30 이하에서 반등 포착
 const DIP_BUY_AMOUNT_KRW = 1000000; // ★ [Dip-Buying] 하락봉 저점 매수 ₩100만원 투입
-const REBOUND_TARGET_LOW = 2.0; // ★ [Rebound-Target] 기본 반등 익절 2.0%
-const REBOUND_TARGET_HIGH = 3.0; // ★ [Rebound-Target] 수급 강력 시 3.0% 트레일링
+const REBOUND_TARGET_LOW = 1.0; // ★ [Rebound-Target] 기본 반등 익절 1.0%
+const REBOUND_TARGET_HIGH = 1.5; // ★ [Rebound-Target] 수급 강력 시 1.5% 트레일링
 
 // ★ [Infinite Loop] 라운드 추적: 당일 몇 번째 무한 루프인지 기록
 let currentRound = 1;
@@ -1444,7 +1444,7 @@ Deno.serve(async (req) => {
         const aggrDetailStr = scoring?.indicators?.aggression?.details || '';
         const aggrMatch = aggrDetailStr.match(/(\d+)%/);
         const volumeIntensity = aggrMatch ? parseInt(aggrMatch[1]) : 0;
-        const dynamicTPPct = volumeIntensity >= 150 ? 3.0 : volumeIntensity >= 100 ? 2.5 : 2.0;
+        const dynamicTPPct = volumeIntensity >= 150 ? 1.5 : volumeIntensity >= 100 ? 1.3 : 1.0;
         const dynamicTPLabel = volumeIntensity >= 150 ? '강력 홀딩' : volumeIntensity >= 100 ? '분할 대응' : '빠른 회전';
         
         // ★ [Dynamic-Target] AI 추천 매도 구간 로그
@@ -1505,7 +1505,7 @@ Deno.serve(async (req) => {
           await supabase.from('unified_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
         }
 
-        // ===== [핵심] 익절 로직 — 3.0% 전까지 절대 매도 금지, 그 이후 고점-2.0% 트레일링만 =====
+        // ===== [핵심] 익절 로직 — 1.5% 전까지 절대 매도 금지, 그 이후 고점-2.0% 트레일링만 =====
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
@@ -1581,9 +1581,9 @@ Deno.serve(async (req) => {
               await addLog('unified', 'hold', sym, `[🔥폭발추격] ${sym} +${pnlPct.toFixed(2)}% | 체결강도 ${currentAggression}%(≥200%) 폭발! 고점-1.0% 트레일링으로 10~20% 극대화 추격 중`, { quantScore, pnlPct: +pnlPct.toFixed(2), aggression: currentAggression, drop });
             }
           } else {
-            // ★ [Iron-Defense 2단계 확정] 3% 터치 → 즉시 시장가 매도로 수익 확정
+            // ★ [Iron-Defense 2단계 확정] 1.5% 터치 → 즉시 시장가 매도로 수익 확정
             shouldClose = true;
-            closeReason = `[🎯3%확정익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% ≥ 3.0% Iron-Defense 2단계 → 즉시 수익 확정 (체결강도 ${currentAggression}%<200%)`;
+            closeReason = `[🎯1.5%확정익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% ≥ 1.5% Iron-Defense 2단계 → 즉시 수익 확정 (체결강도 ${currentAggression}%<200%)`;
             newStatus = 'iron_defense_profit';
           }
         } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER) {
@@ -1849,7 +1849,7 @@ Deno.serve(async (req) => {
     
     // ★ [Zero-Loss] 100% 익절 방어막 상시 가동 로그 (매 사이클)
     await addLog('system', 'defense', null, 
-      `[Zero-Loss] 🛡️ Iron-Defense 상시 가동 | +1.0%→SL+0.2% 본절보호 | 가변 익절 2%/2.5%/3% | 체결강도 200%↑→트레일링(-1%)`,
+      `[Zero-Loss] 🛡️ Iron-Defense 상시 가동 | +1.0%→SL+0.2% 본절보호 | 가변 익절 1.0%/1.3%/1.5% | 체결강도 200%↑→트레일링(-1%)`,
       { zeroLoss: true }
     );
 
