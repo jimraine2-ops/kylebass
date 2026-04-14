@@ -251,6 +251,13 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             <p>💎 호가창 얇아질 조짐 → AI 추천 구간에서 선제적 매도</p>
             <p>🛡️ Iron-Defense: +1% → SL+0.2% | +3% → 즉시 확정</p>
           </div>
+          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[📉 Dip-Buy] 고유동성 하락봉 매입</p>
+            <p>💰 거래대금 50억↑($3.7M) 대장주만 타격</p>
+            <p>📉 25개봉 하락 + RSI 30↓ 반등 포착 → ₩100만 투입</p>
+            <p>🎯 체결강도 120%↑ → 3.0% 트레일링 / 미만 → 2.0% 즉시 익절</p>
+            <p>🔒 수익권 즉시 본절보호(+0.2%) 최우선 가동</p>
+          </div>
         </CardContent>
       </Card>
 
