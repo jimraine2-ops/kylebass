@@ -152,6 +152,13 @@ export default function UnifiedScanPage() {
             <p>⏱️ Timestamp Guard: 1초↑ 지연 시 추격매수 차단 → Limit Order 자동 전환</p>
             <p>💧 Liquidity Guard: 진입금액 10배↑ 매수잔량 확인 → Passive Fill(호가 알박기)</p>
           </div>
+          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[📉 Dip-Buy] 고유동성 하락봉 매입</p>
+            <p>💰 거래대금 50억↑($3.7M) 대장주만 타격</p>
+            <p>📉 25개봉 하락 + RSI 30↓ 반등 포착 → ₩100만 투입</p>
+            <p>🎯 반등 2.0% 즉시 익절 | 체결강도 120%↑ 시 3.0% 트레일링 전환</p>
+            <p>🛡️ 수익권 즉시 본절보호(+0.2%) 최우선 활성화</p>
+          </div>
         </CardContent>
       </Card>
 
