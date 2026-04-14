@@ -131,7 +131,7 @@ export default function UnifiedScanPage() {
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
           <p className="font-bold text-yellow-400 text-sm">🏆 유동성 역추세 사냥 & 무한 루프 집행 전략</p>
-          <p className="italic text-yellow-400/80">"시장이 열리는 순간, 가장 차가운 시선으로 50억의 자금이 흐르는 하락 구간을 노린다. 500만 원은 무기가 되고, 3% 익절은 필연이 된다."</p>
+          <p className="italic text-yellow-400/80">"시장이 열리는 순간, 가장 차가운 시선으로 50억의 자금이 흐르는 하락 구간을 노린다. 500만 원은 무기가 되고, 1.5% 익절은 필연이 된다."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
             <p className="font-semibold text-foreground">[Start-Up] KST 09:00 사냥 가동</p>
             <p>⚡ 데이장 개시 즉시 Finnhub × Twelve Data 풀가동 | 원금 ₩500만 세팅</p>
@@ -142,16 +142,16 @@ export default function UnifiedScanPage() {
             <p>💰 거래대금 50억↑($3.7M) — 슬리피지 없이 즉시 청산 가능한 대장주만 필터</p>
             <p>📉 25개봉 하락추세 + 현재 음봉(🔴) + RSI 30↓ 반등 → ₩100만 투입</p>
             <p>🛡️ +1.0% → 본절보호(+0.2%) 즉시 | 패배 확률 0%로 동결</p>
-            <p>🎯 AI 추천 매도: 수급 강도별 2.0% / 2.5% / 3.0% 유연 익절</p>
+            <p>🎯 AI 추천 매도: 수급 강도별 1.0% / 1.3% / 1.5% 유연 익절</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
             <p className="font-semibold text-foreground">[🔄 Infinite-Loop] 수익 달성 즉시 무한 리셋</p>
-            <p>🔄 3% 익절 완료 → 0.1초 내 원금 리셋 → Round 2, 3... 무한 진입</p>
+            <p>🔄 1.5% 익절 완료 → 0.1초 내 원금 리셋 → Round 2, 3... 무한 진입</p>
             <p>💰 대시보드 최상단: 오늘 번 모든 수익 누적 표기 (라운드 리셋 후에도 영구 합산)</p>
           </div>
           <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
             <p className="font-semibold text-foreground">[Iron-Defense] 단계별 수익 보호</p>
-            <p>🛡️ Iron-Defense: +1% → SL+0.2% | +3% → 즉시 확정 | 200%↑ → 트레일링</p>
+            <p>🛡️ Iron-Defense: +1% → SL+0.2% | +1.5% → 즉시 확정 | 200%↑ → 트레일링</p>
           </div>
         </CardContent>
       </Card>
