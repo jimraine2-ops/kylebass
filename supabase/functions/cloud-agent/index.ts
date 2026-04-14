@@ -1507,7 +1507,7 @@ Deno.serve(async (req) => {
           await supabase.from('unified_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
         }
 
-        // ===== [핵심] 익절 로직 — 3% 전까지 절대 매도 금지, 그 이후 고점-2.0% 트레일링만 =====
+        // ===== [핵심] 익절 로직 — 1.5% 전까지 절대 매도 금지, 그 이후 고점-2.0% 트레일링만 =====
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
@@ -1559,7 +1559,7 @@ Deno.serve(async (req) => {
             }
           }
         } else if (pnlPct >= PROFIT_CHASE_TRIGGER) {
-          // ★ [Iron-Defense 2단계] 3% 도달 즉시 수익 확정 — 체결강도 200%+ 예외 시 트레일링 전환
+          // ★ [Iron-Defense 2단계] 1.5% 도달 즉시 수익 확정 — 체결강도 200%+ 예외 시 트레일링 전환
           const aggressionPct = scoring?.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const currentAggression = aggressionPct ? parseInt(aggressionPct) : 0;
           const isVolumeExplosion = currentAggression >= VOLUME_EXPLOSION_THRESHOLD;
@@ -1583,9 +1583,9 @@ Deno.serve(async (req) => {
               await addLog('unified', 'hold', sym, `[🔥폭발추격] ${sym} +${pnlPct.toFixed(2)}% | 체결강도 ${currentAggression}%(≥200%) 폭발! 고점-1.0% 트레일링으로 10~20% 극대화 추격 중`, { quantScore, pnlPct: +pnlPct.toFixed(2), aggression: currentAggression, drop });
             }
           } else {
-            // ★ [Iron-Defense 2단계 확정] 3% 터치 → 즉시 시장가 매도로 수익 확정
+            // ★ [Iron-Defense 2단계 확정] 1.5% 터치 → 즉시 시장가 매도로 수익 확정
             shouldClose = true;
-            closeReason = `[🎯3%확정익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% ≥ 3.0% Iron-Defense 2단계 → 즉시 수익 확정 (체결강도 ${currentAggression}%<200%)`;
+            closeReason = `[🎯1.5%확정익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% ≥ 1.5% Iron-Defense 2단계 → 즉시 수익 확정 (체결강도 ${currentAggression}%<200%)`;
             newStatus = 'iron_defense_profit';
           }
         } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER) {
