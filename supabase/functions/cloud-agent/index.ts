@@ -1919,9 +1919,11 @@ Deno.serve(async (req) => {
           
           // ★ [Dip-Buying] 25개 봉 하락 구간 + RSI 과매도 반등 감지 (점수 필터 전에 실행!)
           const dipSignal = r.data ? detectDipBuySignal(r.data.closes, r.data.highs, r.data.lows, r.data.volumes) : { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, details: '' };
+          if (dipSignal.isDip) dipBuyScanned++;
           const isDipBuyCandidate = dipSignal.isDip && meetsHighLiquidityFloor;
           
           if (isDipBuyCandidate) {
+            dipBuyDetected++;
             await addLog('unified', 'scan', r.sym, `[📉Dip-Buy감지] ${r.sym} 고유동성($${(tradingVal/1e6).toFixed(1)}M≥$3.7M) + 25봉하락 | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, meetsHighLiquidityFloor });
           }
 
