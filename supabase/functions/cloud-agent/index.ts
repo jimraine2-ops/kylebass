@@ -341,10 +341,14 @@ function detectVacuumZone(closes: number[], highs: number[], lows: number[], vol
   return { hasVacuum: isLowResistance && gapPct >= 3.0, vacuumPct: gapPct, resistance: recentHigh };
 }
 
-// ===== [Dip-Buying] 25개 봉 하락 구간 감지 + RSI 과매도 반등 포착 =====
-function detectDipBuySignal(closes: number[], highs: number[], lows: number[], volumes: number[]): { isDip: boolean; dipScore: number; rsiReversal: boolean; downCandles: number; currentRSI: number; reboundTargetPct: number; details: string } {
+// ===== [Dip-Buying] 25개 봉 하락 구간 감지 + 현재 음봉 확인 + RSI 과매도 반등 포착 =====
+function detectDipBuySignal(closes: number[], highs: number[], lows: number[], volumes: number[], opens?: number[]): { isDip: boolean; dipScore: number; rsiReversal: boolean; downCandles: number; currentRSI: number; reboundTargetPct: number; isBearishCandle: boolean; details: string } {
   const n = closes.length - 1;
-  if (n < DIP_CANDLE_COUNT + 5) return { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, details: '' };
+  if (n < DIP_CANDLE_COUNT + 5) return { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, isBearishCandle: false, details: '' };
+
+  // 0. 현재 봉이 음봉(하락봉)인지 확인: close < open
+  const currentOpen = opens ? opens[n] : closes[n - 1];
+  const isBearishCandle = closes[n] < currentOpen;
 
   // 1. 직전 25개 봉 중 음봉(하락봉) 비율 계산
   let downCount = 0;
@@ -380,18 +384,20 @@ function detectDipBuySignal(closes: number[], highs: number[], lows: number[], v
   // 체결강도 120%+ → 3.0% 트레일링, 미만 → 2.0% 즉시 익절
   const reboundTargetPct = volumeRatio >= 1.2 ? REBOUND_TARGET_HIGH : REBOUND_TARGET_LOW;
 
-  // 종합 판정
-  const isDip = trendDown && downRatio >= 0.5 && (rsiReversal || (currentRSI <= DIP_RSI_THRESHOLD + 5 && energyExhausted));
+  // 종합 판정: 하락 추세 + 음봉 비율 50%+ + (RSI 반등 OR 에너지 소진) + 현재 음봉
+  const isDip = trendDown && isBearishCandle && downRatio >= 0.5 && (rsiReversal || (currentRSI <= DIP_RSI_THRESHOLD + 5 && energyExhausted));
   let dipScore = 0;
-  if (trendDown) dipScore += 25;
+  if (trendDown) dipScore += 20;
+  if (isBearishCandle) dipScore += 10; // ★ 현재 음봉 가산점
   if (downRatio >= 0.6) dipScore += 25;
   else if (downRatio >= 0.5) dipScore += 15;
-  if (rsiReversal) dipScore += 30;
+  if (rsiReversal) dipScore += 25;
   else if (currentRSI <= DIP_RSI_THRESHOLD) dipScore += 15;
   if (energyExhausted) dipScore += 20;
 
-  const details = `25봉 하락${downCount}개(${(downRatio*100).toFixed(0)}%) | 추세-${trendDropPct.toFixed(1)}% | RSI ${currentRSI.toFixed(1)}${rsiReversal ? '↑반등' : ''} | 에너지${energyExhausted ? '소진' : '지속'} | 목표${reboundTargetPct}%`;
-  return { isDip, dipScore, rsiReversal, downCandles: downCount, currentRSI, reboundTargetPct, details };
+  const bearishTag = isBearishCandle ? '🔴음봉' : '🟢양봉';
+  const details = `25봉 하락${downCount}개(${(downRatio*100).toFixed(0)}%) | ${bearishTag} | 추세-${trendDropPct.toFixed(1)}% | RSI ${currentRSI.toFixed(1)}${rsiReversal ? '↑반등' : ''} | 에너지${energyExhausted ? '소진' : '지속'} | 목표${reboundTargetPct}%`;
+  return { isDip, dipScore, rsiReversal, downCandles: downCount, currentRSI, reboundTargetPct, isBearishCandle, details };
 }
 
 
