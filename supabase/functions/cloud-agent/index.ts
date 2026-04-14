@@ -2285,8 +2285,8 @@ Deno.serve(async (req) => {
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
       const roundTag = currentRound > 1 ? `[Round ${currentRound}] ` : '';
-      const preBuyLabel = isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
-      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: 3.0% (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const preBuyLabel = isDipBuyEntry ? '📉Dip-Buy하락봉매입' : isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
+      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${isDipBuyEntry ? `25봉하락 반등매수(₩100만)` : valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: ${isDipBuyEntry ? `${dipSig?.reboundTargetPct || 2.0}%` : '3.0%'} (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : isDipBuyEntry ? '반등 익절' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${dipBuyTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       // ★ 필승 패턴 알림
       if (isCriticalPatternEntry) {
@@ -2294,9 +2294,13 @@ Deno.serve(async (req) => {
         const newsTag = (r as any).newsSentiment >= 80 ? ` | 📰뉴스강세${(r as any).newsSentiment}%` : '';
         await addLog('unified', 'milestone', r.sym, `🎯 [필승 패턴 매수 완료] ${r.sym} [${(r as any).criticalPatterns.join('+')}] 익절확률 ${(r as any).criticalPatternConfidence}% | ${breakevenLabel} 도달 시 Zero-Risk Lock(매수가+0.1%) → 패배 기록 0 보장${newsTag}`, { criticalPatterns: r.scoring.criticalPatterns, score: r.scoring.totalScore, newsSentiment: (r as any).newsSentiment });
       }
+      // ★ [Dip-Buy] 하락봉 반등 매수 알림
+      if (isDipBuyEntry) {
+        await addLog('unified', 'milestone', r.sym, `📉 [Dip-Buy 하락봉 매입 완료] ${r.sym} 고유동성($${((r as any).tradingValueUSD/1e6).toFixed(1)}M≥$3.7M) | 25봉 하락 구간 RSI${dipSig?.currentRSI?.toFixed(1)} 반등 포착! | ₩100만 투입 | 반등 목표: +${dipSig?.reboundTargetPct}% | 본절보호 +0.2% 즉시 가동`, { dipSignal: dipSig, tradingValue: (r as any).tradingValueUSD, score: r.scoring.totalScore });
+      }
       // ★ 슈퍼 패턴 알림
       if (isSuperEntry) {
-        await addLog('unified', 'milestone', r.sym, `🎯 [15% 익절 보장형 슈퍼 패턴] ${r.sym} 매수 완료! [${(r as any).superPatternSignals.join('+')}] | 15% 목표까지 자율 주행 홀딩 개시.`, { superPattern: r.scoring.superPattern, score: r.scoring.totalScore, allocation: `${(positionPct*100).toFixed(0)}%` });
+        await addLog('unified', 'milestone', r.sym, `🎯 [15% 익절 보장형 슈퍼 패턴] ${r.sym} 매수 완료! [${(r as any).superPatternSignals.join('+')}] | 15% 목표까지 자율 주행 홀딩 개시.`, { superPattern: r.scoring.superPattern, score: r.scoring.totalScore });
       }
       // ★ 동전주 매수 알림
       if (isPennyEntry) {
