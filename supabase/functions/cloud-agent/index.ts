@@ -383,8 +383,8 @@ function detectDipBuySignal(closes: number[], highs: number[], lows: number[], v
   const avgVol5 = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
   const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, volumes.length);
   const volumeRatio = avgVol20 > 0 ? avgVol5 / avgVol20 : 1;
-  // 체결강도 120%+ → 3.0% 트레일링, 미만 → 2.0% 즉시 익절
-  const reboundTargetPct = volumeRatio >= 1.2 ? REBOUND_TARGET_HIGH : REBOUND_TARGET_LOW;
+  // 체결강도 90%+ → 3.0% 트레일링, 미만 → 2.0~2.5% 유연 익절
+  const reboundTargetPct = volumeRatio >= 1.2 ? REBOUND_TARGET_HIGH : volumeRatio >= 1.0 ? 2.5 : REBOUND_TARGET_LOW;
 
   // 종합 판정: 하락 추세 + 음봉 비율 50%+ + (RSI 반등 OR 에너지 소진) + 현재 음봉
   const isDip = trendDown && isBearishCandle && downRatio >= 0.5 && (rsiReversal || (currentRSI <= DIP_RSI_THRESHOLD + 5 && energyExhausted));
