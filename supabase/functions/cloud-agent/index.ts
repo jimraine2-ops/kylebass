@@ -2065,6 +2065,10 @@ Deno.serve(async (req) => {
     // Sort: critical pattern → score surge → super pattern → explosive → volume burst → liquidity → score
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY' || currentSession === 'OVERNIGHT') ? 'small' : 'large';
     candidates.sort((a, b) => {
+      // ★ Dip-Buy 후보 우선 (가치 우량 → 최우선)
+      const aDip = (a as any).isDipBuyCandidate ? 6 : 0;
+      const bDip = (b as any).isDipBuyCandidate ? 6 : 0;
+      if (aDip !== bDip) return bDip - aDip;
       // ★ 동전주($1 미만) 최우선
       const aPenny = (a as any).isPennyStock ? 5 : 0;
       const bPenny = (b as any).isPennyStock ? 5 : 0;
