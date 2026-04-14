@@ -26,7 +26,7 @@ const ZERO_RISK_SL_PCT = 1.002; // ★ Iron-Defense 1단계 SL: 매수가 +0.2% 
 const ALPHA_ENTRY_NEWS_MIN = 90; // ★ [Alpha-Entry] 뉴스 감성 90%+ 필수
 const ALPHA_ENTRY_WIN_PROB = 95; // ★ [Alpha-Entry] 익절 확률 95% 이상만 진입
 const VOLUME_EXPLOSION_THRESHOLD = 200; // ★ [Iron-Defense 예외] 체결강도 200%+ 시 트레일링 전환
-const EXIT_LIQUIDITY_MIN_KRW = 10000000; // ★ 3% 익절가 매수대기 잔량 ₩1,000만+ 필수
+const EXIT_LIQUIDITY_MIN_KRW = 10000000; // ★ 1.5% 익절가 매수대기 잔량 ₩1,000만+ 필수
 const PREDICTIVE_ENTRY_SCORE = 60; // ★ Anti-Latency: 뉴스 없이 지표 60점 돌파 시 선취매
 const LIQUIDITY_MULTIPLIER = 10; // ★ Liquidity Guard: 진입금액의 10배 이상 매수잔량 필요
 const PASSIVE_FILL_TICKS = 3; // ★ 호가 장악: 매수 1호가 알박기 (시장가 금지)
@@ -38,8 +38,8 @@ const DIP_CANDLE_COUNT = 25; // ★ [Dip-Buying] 25개 봉 하락 구간 감지
 const DIP_RSI_THRESHOLD = 30; // ★ [Dip-Buying] RSI 과매도 30 이하에서 반등 포착
 const DIP_BUY_AMOUNT_KRW = 1000000; // ★ [Dip-Buying] 하락봉 저점 매수 ₩100만원 투입
 const DIP_LIMIT_OFFSET_PCT = 0.015; // ★ [지연보정] API 15분 지연 → 현재가 -1~2% 아래에 매수 그물
-const REBOUND_TARGET_LOW = 2.0; // ★ [Rebound-Target] 기본 반등 익절 2.0%
-const REBOUND_TARGET_HIGH = 3.0; // ★ [Rebound-Target] 수급 강력(90%+) 시 3.0% 트레일링
+const REBOUND_TARGET_LOW = 1.0; // ★ [Rebound-Target] 기본 반등 익절 1.0%
+const REBOUND_TARGET_HIGH = 1.5; // ★ [Rebound-Target] 수급 강력(90%+) 시 1.5% 트레일링
 
 // ★ [Infinite Loop] 라운드 추적: 당일 몇 번째 무한 루프인지 기록
 let currentRound = 1;
@@ -1446,8 +1446,8 @@ Deno.serve(async (req) => {
         const aggrDetailStr = scoring?.indicators?.aggression?.details || '';
         const aggrMatch = aggrDetailStr.match(/(\d+)%/);
         const volumeIntensity = aggrMatch ? parseInt(aggrMatch[1]) : 0;
-        const dynamicTPPct = volumeIntensity >= 150 ? 3.0 : volumeIntensity >= 100 ? 2.5 : 2.0;
-        const dynamicTPLabel = volumeIntensity >= 150 ? '강력 홀딩(3%)' : volumeIntensity >= 100 ? '분할 대응(2.5%)' : '빠른 회전(2%)';
+        const dynamicTPPct = volumeIntensity >= 150 ? 1.5 : volumeIntensity >= 100 ? 1.3 : 1.0;
+        const dynamicTPLabel = volumeIntensity >= 150 ? '강력 홀딩(1.5%)' : volumeIntensity >= 100 ? '분할 대응(1.3%)' : '빠른 회전(1%)';
         
         // ★ [Dynamic-Target] AI 추천 매도 구간 로그
         if (pnlPct >= 0.5) {
