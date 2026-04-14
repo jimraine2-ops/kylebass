@@ -233,30 +233,23 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
     <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🏆 Dynamic-Target + Adaptive-Exit 전략</p>
-          <p className="italic text-yellow-400/80">"시장은 생물이다. 3%가 목표지만, 힘이 2.5%에서 꺾인다면 그곳이 우리의 종착역이다."</p>
+          <p className="font-bold text-yellow-400 text-sm">🏆 유동성 역추세 사냥 & 무한 루프 집행 전략</p>
+          <p className="italic text-yellow-400/80">"시장이 열리는 순간, 가장 차가운 시선으로 50억의 자금이 흐르는 하락 구간을 노린다. 500만 원은 무기가 되고, 3% 익절은 필연이 된다."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Dynamic-Target] 종목별 맞춤 익절</p>
-            <p>🔥 체결강도 150%↑ → 3.0% 익절 (강력 홀딩)</p>
-            <p>📊 체결강도 100~150% → 2.5% 익절 (분할 대응)</p>
-            <p>⚡ 체결강도 100%↓ → 2.0% 익절 (빠른 회전)</p>
-          </div>
-          <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Adaptive-Exit] 힘의 균열 감지 즉시 익절</p>
-            <p>📉 고점 대비 -0.5% 하락 OR 체결강도 80% 미만 → 현재가 즉시 익절</p>
-            <p>🔒 어떤 경우에도 본절가(+0.2%) 아래 매도 금지</p>
-          </div>
-          <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[저가주 호가 최적화] ₩12,000↓</p>
-            <p>💎 호가창 얇아질 조짐 → AI 추천 구간에서 선제적 매도</p>
-            <p>🛡️ Iron-Defense: +1% → SL+0.2% | +3% → 즉시 확정</p>
+            <p className="font-semibold text-foreground">[Start-Up] KST 09:00 사냥 가동</p>
+            <p>⚡ 데이장 개시 즉시 Finnhub × Twelve Data 풀가동 | 원금 ₩500만 세팅</p>
           </div>
           <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[📉 Dip-Buy] 고유동성 하락봉 매입</p>
-            <p>💰 거래대금 50억↑($3.7M) 대장주만 타격</p>
-            <p>📉 25개봉 하락 + RSI 30↓ 반등 포착 → ₩100만 투입</p>
-            <p>🎯 체결강도 120%↑ → 3.0% 트레일링 / 미만 → 2.0% 즉시 익절</p>
-            <p>🔒 수익권 즉시 본절보호(+0.2%) 최우선 가동</p>
+            <p className="font-semibold text-foreground">[📉 Execution] 50억 수급 & 25봉 음봉 정밀 타격</p>
+            <p>💰 거래대금 50억↑ 대장주 → 25봉 하락 + 현재 음봉(🔴) + RSI 30↓ 반등 포착</p>
+            <p>🛡️ +1.0% → 본절보호(+0.2%) | AI 추천 2.0/2.5/3.0% 유연 익절</p>
+          </div>
+          <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[🔄 Infinite-Loop] 3% 익절 → 0.1초 리셋 → 무한 진입</p>
+            <p>💰 수익 누적 영구 합산 | Round N 자동 진행</p>
+          </div>
+          <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[Iron-Defense] +1%→SL+0.2% | +3%→즉시 확정 | 200%↑→트레일링</p>
           </div>
         </CardContent>
       </Card>

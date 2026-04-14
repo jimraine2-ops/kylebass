@@ -130,34 +130,28 @@ export default function UnifiedScanPage() {
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🏆 Finnhub × Twelve Data 하이브리드 필승 전략</p>
-          <p className="italic text-yellow-400/80">"Finnhub로 사냥감을 식별하고, Twelve Data로 심장을 쏜다. 100% 익절이 보장되지 않으면 방아쇠를 당기지 마라."</p>
+          <p className="font-bold text-yellow-400 text-sm">🏆 유동성 역추세 사냥 & 무한 루프 집행 전략</p>
+          <p className="italic text-yellow-400/80">"시장이 열리는 순간, 가장 차가운 시선으로 50억의 자금이 흐르는 하락 구간을 노린다. 500만 원은 무기가 되고, 3% 익절은 필연이 된다."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Dual-Engine] 데이터 소스 역할 분담</p>
-            <p>📰 Finnhub: 뉴스 감성 85%↑ 'Extreme Bullish' + 섹터 모멘텀 주도주 리스트</p>
-            <p>📊 Twelve Data: 10대 지표(RSI·MACD·VWAP·볼린저) 0.1초 쿼리 + 호가·체결 감시</p>
+            <p className="font-semibold text-foreground">[Start-Up] KST 09:00 사냥 가동</p>
+            <p>⚡ 데이장 개시 즉시 Finnhub × Twelve Data 풀가동 | 원금 ₩500만 세팅</p>
+            <p>📊 [오늘의 총 수익] 실시간 합산 기록기 가동</p>
+          </div>
+          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[📉 Execution] 50억 수급 & 25봉 하락 정밀 타격</p>
+            <p>💰 거래대금 50억↑($3.7M) — 슬리피지 없이 즉시 청산 가능한 대장주만 필터</p>
+            <p>📉 25개봉 하락추세 + 현재 음봉(🔴) + RSI 30↓ 반등 → ₩100만 투입</p>
+            <p>🛡️ +1.0% → 본절보호(+0.2%) 즉시 | 패배 확률 0%로 동결</p>
+            <p>🎯 AI 추천 매도: 수급 강도별 2.0% / 2.5% / 3.0% 유연 익절</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Zero-Loss] The Golden Cross 진입</p>
-            <p>🔒 ₩12,000↓ + Extreme Bullish + 수렴→발산 + 익절확률 90%↑ → ₩100만 5종목 집중</p>
-            <p>🔒 +0.8% → SL 매수가+0.1% 강제 고정 (Zero-Risk Lock)</p>
+            <p className="font-semibold text-foreground">[🔄 Infinite-Loop] 수익 달성 즉시 무한 리셋</p>
+            <p>🔄 3% 익절 완료 → 0.1초 내 원금 리셋 → Round 2, 3... 무한 진입</p>
+            <p>💰 대시보드 최상단: 오늘 번 모든 수익 누적 표기 (라운드 리셋 후에도 영구 합산)</p>
           </div>
           <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Iron-Hold] 무패 & 30~50% 추격</p>
-            <p>🛡️ 익절확률 90%+ → 눌림목 매도 금지 | 점수 45점 미만 붕괴 시까지 무제한 홀딩</p>
-          </div>
-          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Anti-Latency] 데이터 시차 역이용 + 호가 장악</p>
-            <p>🔮 예측형 선취매: 뉴스 전 지표 60점 돌파 시 2~3호가 아래 지정가 대기</p>
-            <p>⏱️ Timestamp Guard: 1초↑ 지연 시 추격매수 차단 → Limit Order 자동 전환</p>
-            <p>💧 Liquidity Guard: 진입금액 10배↑ 매수잔량 확인 → Passive Fill(호가 알박기)</p>
-          </div>
-          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[📉 Dip-Buy] 고유동성 하락봉 매입</p>
-            <p>💰 거래대금 50억↑($3.7M) 대장주만 타격</p>
-            <p>📉 25개봉 하락 + RSI 30↓ 반등 포착 → ₩100만 투입</p>
-            <p>🎯 반등 2.0% 즉시 익절 | 체결강도 120%↑ 시 3.0% 트레일링 전환</p>
-            <p>🛡️ 수익권 즉시 본절보호(+0.2%) 최우선 활성화</p>
+            <p className="font-semibold text-foreground">[Iron-Defense] 단계별 수익 보호</p>
+            <p>🛡️ Iron-Defense: +1% → SL+0.2% | +3% → 즉시 확정 | 200%↑ → 트레일링</p>
           </div>
         </CardContent>
       </Card>
