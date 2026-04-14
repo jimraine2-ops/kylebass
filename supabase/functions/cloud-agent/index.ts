@@ -1985,7 +1985,9 @@ Deno.serve(async (req) => {
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
-
+          (r as any).isDipBuyCandidate = isDipBuyCandidate;
+          (r as any).dipSignal = dipSignal;
+          (r as any).meetsHighLiquidityFloor = meetsHighLiquidityFloor;
           // ★ 동전주 로그
           if (isPenny && r.scoring.totalScore >= PENNY_ENTRY_SCORE) {
             const rvolVal = r.scoring.indicators?.rvol?.rvol || 0;
