@@ -1924,11 +1924,22 @@ Deno.serve(async (req) => {
           const tradingVal = vlInfo?.tradingValue || 0;
           const entryAmountKRW = balance * 0.20; // 예상 진입 금액 (20%)
           const liquidityCheck = checkLiquidityGuard(tradingVal, entryAmountKRW);
+
+          // ★ [Liquidity-Filter] 고유동성 하한선: 거래대금 $3.7M(≈50억원) 이상만 허용
+          const meetsHighLiquidityFloor = tradingVal >= HIGH_LIQUIDITY_FLOOR_USD;
           
-          // ★ 필승 패턴/매집 패턴/Predictive Entry + Finnhub 뉴스 90점 시 유동성 필터 해제
-          if (!isAccumCandidate && !hasCriticalPattern) {
+          // ★ [Dip-Buying] 25개 봉 하락 구간 + RSI 과매도 반등 감지
+          const dipSignal = r.data ? detectDipBuySignal(r.data.closes, r.data.highs, r.data.lows, r.data.volumes) : { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, details: '' };
+          const isDipBuyCandidate = dipSignal.isDip && meetsHighLiquidityFloor;
+          
+          if (isDipBuyCandidate) {
+            await addLog('unified', 'scan', r.sym, `[📉Dip-Buy감지] ${r.sym} 고유동성($${(tradingVal/1e6).toFixed(1)}M≥$3.7M) + 25봉하락 | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, meetsHighLiquidityFloor });
+          }
+          
+          // ★ 필승 패턴/매집 패턴/Predictive Entry/Dip-Buy + Finnhub 뉴스 90점 시 유동성 필터 해제
+          if (!isAccumCandidate && !hasCriticalPattern && !isDipBuyCandidate) {
             if (!liquidityCheck.passed && !isPredictiveEntry) {
-              // 유동성 부족 → 차단 (필승 패턴/매집/예측형 제외)
+              // 유동성 부족 → 차단 (필승 패턴/매집/예측형/Dip-Buy 제외)
               if (vlInfo && vlInfo.tradingValue < 10000) continue;
               const sessionAvgTradingValue = volumeLeaders.length > 0 
                 ? volumeLeaders.reduce((sum, vl) => sum + vl.tradingValue, 0) / volumeLeaders.length 
