@@ -213,6 +213,9 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
             💎 Value-Filter | 기업가치 A/B등급 → 익절확정 98%
           </Badge>
+          <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px]">
+            📉 Dip-Buy | 50억↑ 고유동성 + 25봉하락 RSI반등 → 2~3% 반등익절
+          </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
           </Badge>
