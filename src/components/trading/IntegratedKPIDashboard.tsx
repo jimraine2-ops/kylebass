@@ -199,10 +199,10 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             </Badge>
           )}
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px]">
-            🛡️ Iron-Defense | +1%→SL+0.2% | +1.5%→즉시 확정
+            🛡️ Iron-Defense | +1%→SL+0.2% | +3%→즉시 확정
           </Badge>
           <Badge className="bg-stock-up/20 text-stock-up border-stock-up/30 text-[10px]">
-            🎯 Dynamic-Target | 체결강도별 1~1.5% 가변 익절
+            🎯 Dynamic-Target | 체결강도별 2~3% 가변 익절
           </Badge>
           <Badge className="bg-warning/20 text-warning border-warning/30 text-[10px]">
             📉 Adaptive-Exit | 고점-0.5% OR 체결강도 80%↓ → 즉시 익절
@@ -214,7 +214,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             💎 Value-Filter | 기업가치 A/B등급 → 익절확정 98%
           </Badge>
           <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px]">
-            📉 Dip-Buy | 20억↑ 체결강도85%↑ + 25봉하락 RSI반등 → 1~1.5% 반등익절
+            📉 Dip-Buy | 20억↑ 체결강도90%↑ + 25봉하락 → 2~3% 반등익절 | 지연보정 Limit
           </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
@@ -233,23 +233,23 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
     <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🏆 유동성 역추세 사냥 & 무한 루프 집행 전략</p>
-          <p className="italic text-yellow-400/80">"시장이 열리는 순간, 가장 차가운 시선으로 20억의 자금이 흐르는 하락 구간을 노린다. 500만 원은 무기가 되고, 1.5% 익절은 필연이 된다."</p>
+          <p className="font-bold text-yellow-400 text-sm">🏆 고유동성 역발상 그물망 타격 전략</p>
+          <p className="italic text-yellow-400/80">"자본이 없다면 지략으로 이겨라. 15분의 시차를 역이용해 가장 유리한 고지에서 100만 원의 화력을 집중하라."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Start-Up] KST 09:00 사냥 가동</p>
-            <p>⚡ 데이장 개시 즉시 Finnhub × Twelve Data 풀가동 | 원금 ₩500만 세팅</p>
+            <p className="font-semibold text-foreground">[Free-Scanner] 무료 API 맞춤형 종목 선별</p>
+            <p>⚡ 거래대금 20억↑ + 체결강도 90%↑ | 12,000원 미만 우량주 20개 순차 쿼리</p>
           </div>
           <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[📉 Execution] 20억 수급 & 25봉 음봉 정밀 타격</p>
-            <p>💰 거래대금 20억↑ + 체결강도 85%↑ 대장주 → 25봉 하락 + 현재 음봉(🔴) + RSI 30↓ 반등 포착</p>
-            <p>🛡️ +1.0% → 본절보호(+0.2%) | AI 추천 1.0/1.3/1.5% 유연 익절</p>
+            <p className="font-semibold text-foreground">[📉 Dip-Buying] 25봉 하락 & 음봉 타점 (지연 보정)</p>
+            <p>💰 25봉 하락 + 음봉 → 현재가 -1.5% 아래 매수 그물(Limit) 배치</p>
+            <p>🛡️ +1.0% → 본절보호(+0.2%) | AI 추천 2.0/2.5/3.0% 유연 익절</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[🔄 Infinite-Loop] 1.5% 익절 → 0.1초 리셋 → 무한 진입</p>
+            <p className="font-semibold text-foreground">[🔄 Infinite-Loop] 3% 익절 → 100만원 리셋 → 무한 진입</p>
             <p>💰 수익 누적 영구 합산 | Round N 자동 진행</p>
           </div>
           <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Iron-Defense] +1%→SL+0.2% | +1.5%→즉시 확정 | 200%↑→트레일링</p>
+            <p className="font-semibold text-foreground">[Iron-Defense] +1%→SL+0.2% | +3%→즉시 확정 | 200%↑→트레일링</p>
           </div>
         </CardContent>
       </Card>
