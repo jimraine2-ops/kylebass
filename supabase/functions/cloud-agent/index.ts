@@ -341,6 +341,59 @@ function detectVacuumZone(closes: number[], highs: number[], lows: number[], vol
   return { hasVacuum: isLowResistance && gapPct >= 3.0, vacuumPct: gapPct, resistance: recentHigh };
 }
 
+// ===== [Dip-Buying] 25개 봉 하락 구간 감지 + RSI 과매도 반등 포착 =====
+function detectDipBuySignal(closes: number[], highs: number[], lows: number[], volumes: number[]): { isDip: boolean; dipScore: number; rsiReversal: boolean; downCandles: number; currentRSI: number; reboundTargetPct: number; details: string } {
+  const n = closes.length - 1;
+  if (n < DIP_CANDLE_COUNT + 5) return { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, details: '' };
+
+  // 1. 직전 25개 봉 중 음봉(하락봉) 비율 계산
+  let downCount = 0;
+  const recentCloses = closes.slice(-(DIP_CANDLE_COUNT + 1));
+  for (let i = 1; i < recentCloses.length; i++) {
+    if (recentCloses[i] < recentCloses[i - 1]) downCount++;
+  }
+  const downRatio = downCount / DIP_CANDLE_COUNT;
+
+  // 2. 25봉 구간 추세 하락 여부: 시작가 > 현재가
+  const startPrice = recentCloses[0];
+  const endPrice = recentCloses[recentCloses.length - 1];
+  const trendDown = endPrice < startPrice;
+  const trendDropPct = startPrice > 0 ? ((startPrice - endPrice) / startPrice) * 100 : 0;
+
+  // 3. RSI 과매도 반등 감지: RSI ≤ 30에서 상향 전환
+  const rsi = calculateRSI(closes, 14);
+  const currentRSI = rsi[n] || 50;
+  const prevRSI = rsi[n - 1] || 50;
+  const rsiReversal = currentRSI <= DIP_RSI_THRESHOLD + 10 && currentRSI > prevRSI && prevRSI <= DIP_RSI_THRESHOLD;
+
+  // 4. 하락 에너지 소진 판단: 최근 3봉의 하락폭이 축소
+  const last3Changes = [];
+  for (let i = n - 2; i <= n; i++) {
+    if (i > 0) last3Changes.push(closes[i] - closes[i - 1]);
+  }
+  const energyExhausted = last3Changes.length >= 2 && last3Changes[last3Changes.length - 1] > last3Changes[0];
+
+  // 5. 체결강도 기반 반등 목표 산정
+  const avgVol5 = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, volumes.length);
+  const volumeRatio = avgVol20 > 0 ? avgVol5 / avgVol20 : 1;
+  // 체결강도 120%+ → 3.0% 트레일링, 미만 → 2.0% 즉시 익절
+  const reboundTargetPct = volumeRatio >= 1.2 ? REBOUND_TARGET_HIGH : REBOUND_TARGET_LOW;
+
+  // 종합 판정
+  const isDip = trendDown && downRatio >= 0.5 && (rsiReversal || (currentRSI <= DIP_RSI_THRESHOLD + 5 && energyExhausted));
+  let dipScore = 0;
+  if (trendDown) dipScore += 25;
+  if (downRatio >= 0.6) dipScore += 25;
+  else if (downRatio >= 0.5) dipScore += 15;
+  if (rsiReversal) dipScore += 30;
+  else if (currentRSI <= DIP_RSI_THRESHOLD) dipScore += 15;
+  if (energyExhausted) dipScore += 20;
+
+  const details = `25봉 하락${downCount}개(${(downRatio*100).toFixed(0)}%) | 추세-${trendDropPct.toFixed(1)}% | RSI ${currentRSI.toFixed(1)}${rsiReversal ? '↑반등' : ''} | 에너지${energyExhausted ? '소진' : '지속'} | 목표${reboundTargetPct}%`;
+  return { isDip, dipScore, rsiReversal, downCandles: downCount, currentRSI, reboundTargetPct, details };
+}
+
 
 function detectCriticalPatterns(closes: number[], highs: number[], lows: number[], opens: number[], volumes: number[], quote: any): { patternA: boolean; patternB: boolean; patternC: boolean; patterns: string[]; confidence: number; whaleTrace: ReturnType<typeof detectWhaleTrace>; energyCondensation: ReturnType<typeof detectEnergyCondensation> } {
   const n = closes.length - 1;
