@@ -1596,7 +1596,7 @@ Deno.serve(async (req) => {
             closeReason = `[🎯Adaptive-Exit] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 힘의 균열(${triggerDetail}) → 목표 ${dynamicTPPct}% 미도달이나 즉시 익절 (체결강도 ${volumeIntensity}%/${dynamicTPLabel})`;
             newStatus = 'adaptive_exit_profit';
           } else {
-            // ★ [Iron-Defense 1단계] 1~3% 구간: SL→매수가+0.2% 고정, 목표까지 인내
+            // ★ [Iron-Defense 1단계] 1~1.5% 구간: SL→매수가+0.2% 고정, 목표까지 인내
             if (pos.stop_loss < pos.price * ZERO_RISK_SL_PCT) {
               const ironSL = +(pos.price * ZERO_RISK_SL_PCT).toFixed(4);
               await supabase.from('unified_trades').update({ stop_loss: ironSL }).eq('id', pos.id);
