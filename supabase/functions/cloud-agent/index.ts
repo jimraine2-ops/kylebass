@@ -1446,8 +1446,8 @@ Deno.serve(async (req) => {
         const aggrDetailStr = scoring?.indicators?.aggression?.details || '';
         const aggrMatch = aggrDetailStr.match(/(\d+)%/);
         const volumeIntensity = aggrMatch ? parseInt(aggrMatch[1]) : 0;
-        const dynamicTPPct = volumeIntensity >= 150 ? 1.5 : volumeIntensity >= 100 ? 1.3 : 1.0;
-        const dynamicTPLabel = volumeIntensity >= 150 ? '강력 홀딩' : volumeIntensity >= 100 ? '분할 대응' : '빠른 회전';
+        const dynamicTPPct = volumeIntensity >= 150 ? 3.0 : volumeIntensity >= 100 ? 2.5 : 2.0;
+        const dynamicTPLabel = volumeIntensity >= 150 ? '강력 홀딩(3%)' : volumeIntensity >= 100 ? '분할 대응(2.5%)' : '빠른 회전(2%)';
         
         // ★ [Dynamic-Target] AI 추천 매도 구간 로그
         if (pnlPct >= 0.5) {
