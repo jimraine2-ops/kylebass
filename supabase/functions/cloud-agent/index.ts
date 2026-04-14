@@ -1902,39 +1902,39 @@ Deno.serve(async (req) => {
             r.scoring.totalScore < (isPenny ? PENNY_ENTRY_SCORE : adaptedEntryThreshold) &&
             !hasCriticalPattern;
 
-          // ★ 동전주 전용 진입 문턱: 70점 (일반: 65점)
-          const pennyEntryThreshold = PENNY_ENTRY_SCORE;
-          const effectiveThreshold = isPenny ? Math.max(pennyEntryThreshold, adaptedEntryThreshold) : adaptedEntryThreshold;
-          
-          // 점수 필터: 일반 진입은 effectiveThreshold, 필승 패턴 시 50점까지 완화, 예측형 진입 60점
-          if (!hasCriticalPattern && !isPredictiveEntry && r.scoring.totalScore < effectiveThreshold) continue;
-          if (hasCriticalPattern && r.scoring.totalScore < 50) continue; // 패턴 있어도 최소 50점
-          
-          const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
-          const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
-          if (alreadyHolding && !isPyramiding) continue;
-          if (openCount >= MAX_POSITIONS) continue;
-
-          // ★ 유동성 하한선 & 수급 동기화
+          // ★ 유동성 하한선 & 수급 동기화 (Dip-Buy 판정을 위해 점수 필터보다 먼저 실행)
           const vlInfo = volumeLeaders.find(vl => vl.symbol === r.sym);
           const accumPattern = r.scoring.accumulation;
           const isAccumCandidate = isLowVolumeSession && accumPattern?.isAccumulating;
           
-          // ★ [Liquidity Guard] 매수잔량 절대 법칙: 진입금액의 10배 이상 유동성 확보된 종목만 진입
+          // ★ [Liquidity Guard] 매수잔량 절대 법칙
           const tradingVal = vlInfo?.tradingValue || 0;
-          const entryAmountKRW = balance * 0.20; // 예상 진입 금액 (20%)
+          const entryAmountKRW = balance * 0.20;
           const liquidityCheck = checkLiquidityGuard(tradingVal, entryAmountKRW);
 
           // ★ [Liquidity-Filter] 고유동성 하한선: 거래대금 $3.7M(≈50억원) 이상만 허용
           const meetsHighLiquidityFloor = tradingVal >= HIGH_LIQUIDITY_FLOOR_USD;
           
-          // ★ [Dip-Buying] 25개 봉 하락 구간 + RSI 과매도 반등 감지
+          // ★ [Dip-Buying] 25개 봉 하락 구간 + RSI 과매도 반등 감지 (점수 필터 전에 실행!)
           const dipSignal = r.data ? detectDipBuySignal(r.data.closes, r.data.highs, r.data.lows, r.data.volumes) : { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, details: '' };
           const isDipBuyCandidate = dipSignal.isDip && meetsHighLiquidityFloor;
           
           if (isDipBuyCandidate) {
             await addLog('unified', 'scan', r.sym, `[📉Dip-Buy감지] ${r.sym} 고유동성($${(tradingVal/1e6).toFixed(1)}M≥$3.7M) + 25봉하락 | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, meetsHighLiquidityFloor });
           }
+
+          // ★ 동전주 전용 진입 문턱: 70점 (일반: 65점)
+          const pennyEntryThreshold = PENNY_ENTRY_SCORE;
+          const effectiveThreshold = isPenny ? Math.max(pennyEntryThreshold, adaptedEntryThreshold) : adaptedEntryThreshold;
+          
+          // 점수 필터: Dip-Buy 후보는 점수 필터 면제 (고유동성 + 25봉 하락 이미 검증됨)
+          if (!hasCriticalPattern && !isPredictiveEntry && !isDipBuyCandidate && r.scoring.totalScore < effectiveThreshold) continue;
+          if (hasCriticalPattern && !isDipBuyCandidate && r.scoring.totalScore < 50) continue;
+          
+          const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
+          const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
+          if (alreadyHolding && !isPyramiding) continue;
+          if (openCount >= MAX_POSITIONS) continue;
           
           // ★ 필승 패턴/매집 패턴/Predictive Entry/Dip-Buy + Finnhub 뉴스 90점 시 유동성 필터 해제
           if (!isAccumCandidate && !hasCriticalPattern && !isDipBuyCandidate) {
