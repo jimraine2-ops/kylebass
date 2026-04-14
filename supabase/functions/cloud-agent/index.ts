@@ -1976,9 +1976,8 @@ Deno.serve(async (req) => {
           
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          // ★ 체결강도 완화: 필승 패턴/예측형/Dip-Buy 시 40%
-          const minAggression = (isAccumEntry || hasCriticalPattern || isPredictiveEntry || isDipBuyCandidate) ? 40 : 80;
-          if (aggrVal < minAggression) continue;
+          // ★ [Aggression-Filter] 체결강도 85% 이상 강제: 모든 진입에 적용
+          if (aggrVal < MIN_ENTRY_AGGRESSION) continue;
 
           if (isOpeningRush) continue;
 
