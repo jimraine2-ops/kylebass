@@ -134,7 +134,7 @@ export default function UnifiedScanPage() {
           <p className="italic text-yellow-400/80">"데이터가 늦다면 우리는 미래의 가격을 계산한다. 가격이 우리를 찾아오게 만들고, 체결되는 순간 이미 3%의 수익권을 확보하라."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
             <p className="font-semibold text-foreground">[Hard-Criteria] 4대 AND 게이트</p>
-            <p>① 수급 30억↑ ② EMA25 이격 -5%↑ ③ 25봉↓+음봉 ④ 체결강도 90%↑</p>
+            <p>① 수급 30억↑ ② EMA25 이격 -5%↑ ③ 5봉↓+음봉 ④ 체결강도 90%↑</p>
           </div>
           <div className="border-l-2 border-cyan-500/40 pl-2 space-y-0.5">
             <p className="font-semibold text-foreground">[Pre-Calculation] P_Target = EMA₂₅ × (1 - 5~7%)</p>

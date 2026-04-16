@@ -245,7 +245,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             <p className="font-semibold text-foreground">[Hard-Criteria] 4대 AND 게이트 (교차 통과 필수)</p>
             <p>① 수급검증: 20거래일 평균 거래대금 30억↑($2.2M) 유지 종목</p>
             <p>② 이격확정: 현재가 &lt; EMA25 × 0.95 (이격도 -5%↑)</p>
-            <p>③ 추세확정: 25봉 연속 하락 + 현재 음봉(하락봉)</p>
+            <p>③ 추세확정: 5봉 연속 하락 + 현재 음봉(하락봉)</p>
             <p>④ 에너지확정: 실시간 체결강도 90%↑</p>
           </div>
           <div className="border-l-2 border-cyan-500/40 pl-2 space-y-0.5">
@@ -260,7 +260,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           </div>
           <div className="border-l-2 border-purple-500/40 pl-2 space-y-0.5">
             <p className="font-semibold text-foreground">[Bridge-Logic] US 정규장 마감 동기화</p>
-            <p>🌉 정규장 마감 시 25봉↓+EMA 5%↑ 완성 종목 → KST 09:00:01 즉시 매수 예약</p>
+            <p>🌉 정규장 마감 시 5봉↓+EMA 5%↑ 완성 종목 → KST 09:00:01 즉시 매수 예약</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
             <p className="font-semibold text-foreground">[Infinite-Gain] 3% 익절 → ₩100만 리셋 → 무한 루프</p>
