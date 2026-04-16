@@ -1933,17 +1933,32 @@ Deno.serve(async (req) => {
           const entryAmountKRW = balance * 0.20;
           const liquidityCheck = checkLiquidityGuard(tradingVal, entryAmountKRW);
 
-          // ★ [Liquidity-Filter] 고유동성 하한선: 거래대금 $1.48M(≈20억원) 이상만 허용
+          // ★ [Liquidity-Filter] 고유동성 하한선: 거래대금 $2.22M(≈30억원) 이상만 허용
           const meetsHighLiquidityFloor = tradingVal >= HIGH_LIQUIDITY_FLOOR_USD;
           
-          // ★ [Dip-Buying] 25개 봉 하락 구간 + RSI 과매도 반등 감지 (점수 필터 전에 실행!)
-          const dipSignal = r.data ? detectDipBuySignal(r.data.closes, r.data.highs, r.data.lows, r.data.volumes, r.data.opens) : { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, isBearishCandle: false, details: '' };
+          // ★ [Historical-Volume] 과거 5~10일 평균 거래대금도 30억+ 유지 검증
+          let historicalVolOk = false;
+          if (r.data && r.data.volumes && r.data.closes && r.data.volumes.length >= 10) {
+            const recentDays = Math.min(10, r.data.volumes.length);
+            let avgTradingVal = 0;
+            for (let vi = r.data.volumes.length - recentDays; vi < r.data.volumes.length; vi++) {
+              avgTradingVal += (r.data.volumes[vi] || 0) * (r.data.closes[vi] || 0);
+            }
+            avgTradingVal /= recentDays;
+            historicalVolOk = avgTradingVal >= HIGH_LIQUIDITY_FLOOR_USD;
+          } else {
+            historicalVolOk = meetsHighLiquidityFloor; // 데이터 부족 시 실시간으로 대체
+          }
+          const meetsLiquidityAll = meetsHighLiquidityFloor && historicalVolOk;
+          
+          // ★ [Dip-Buying] 25개 봉 하락 구간 + RSI 과매도 반등 + EMA25 이격도 감지
+          const dipSignal = r.data ? detectDipBuySignal(r.data.closes, r.data.highs, r.data.lows, r.data.volumes, r.data.opens) : { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, isBearishCandle: false, ema25GapPct: 0, details: '' };
           if (dipSignal.isDip) dipBuyScanned++;
-          const isDipBuyCandidate = dipSignal.isDip && meetsHighLiquidityFloor;
+          const isDipBuyCandidate = dipSignal.isDip && meetsLiquidityAll;
           
           if (isDipBuyCandidate) {
             dipBuyDetected++;
-            await addLog('unified', 'scan', r.sym, `[📉Dip-Buy감지] ${r.sym} 고유동성($${(tradingVal/1e6).toFixed(1)}M≥$1.48M) + 25봉하락 | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, meetsHighLiquidityFloor });
+            await addLog('unified', 'scan', r.sym, `[📉EMA25-DipBuy] ${r.sym} 30억수급($${(tradingVal/1e6).toFixed(1)}M≥$2.2M) + EMA25이격${(dipSignal as any).ema25GapPct?.toFixed(1) || '?'}% + 25봉하락 | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, historicalVolOk, meetsLiquidityAll });
           }
 
           // ★ 동전주 전용 진입 문턱: 70점 (일반: 65점)
