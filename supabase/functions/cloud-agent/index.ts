@@ -2028,7 +2028,8 @@ Deno.serve(async (req) => {
           
           // 점수 필터: Dip-Buy 후보는 점수 필터 면제 (고유동성 + 25봉 하락 이미 검증됨)
           if (!hasCriticalPattern && !isPredictiveEntry && !isDipBuyCandidate && r.scoring.totalScore < effectiveThreshold) continue;
-          if (hasCriticalPattern && !isDipBuyCandidate && r.scoring.totalScore < 50) continue;
+          // ★ [점수 기반 진입 강화] 필승패턴이어도 최소 65점 이상 필수 (50점 우회 차단)
+          if (hasCriticalPattern && !isDipBuyCandidate && r.scoring.totalScore < effectiveThreshold) continue;
           
           const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
           const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
