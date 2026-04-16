@@ -2022,51 +2022,28 @@ Deno.serve(async (req) => {
             await addLog('unified', 'scan', r.sym, `[Hard-Criteria 불통과] ${r.sym} 하락봉감지→AND게이트실패: ${failReasons.join(' | ')}`, { dipSignal, failReasons, historicalAvgTradingVal });
           }
 
-          // ★ 동전주 전용 진입 문턱: 70점 (일반: 65점)
-          const pennyEntryThreshold = PENNY_ENTRY_SCORE;
-          const effectiveThreshold = isPenny ? Math.max(pennyEntryThreshold, adaptedEntryThreshold) : adaptedEntryThreshold;
-          
-          // 점수 필터: Dip-Buy 후보는 점수 필터 면제 (고유동성 + 25봉 하락 이미 검증됨)
-          if (!hasCriticalPattern && !isPredictiveEntry && !isDipBuyCandidate && r.scoring.totalScore < effectiveThreshold) continue;
-          // ★ [점수 기반 진입 강화] 필승패턴이어도 최소 65점 이상 필수 (50점 우회 차단)
-          if (hasCriticalPattern && !isDipBuyCandidate && r.scoring.totalScore < effectiveThreshold) continue;
-          
-          const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
-          const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
-          if (alreadyHolding && !isPyramiding) continue;
-          if (openCount >= MAX_POSITIONS) continue;
-          
-          // ★ 필승 패턴/매집 패턴/Predictive Entry/Dip-Buy + Finnhub 뉴스 90점 시 유동성 필터 해제
-          if (!isAccumCandidate && !hasCriticalPattern && !isDipBuyCandidate) {
-            if (!liquidityCheck.passed && !isPredictiveEntry) {
-              // 유동성 부족 → 차단 (필승 패턴/매집/예측형/Dip-Buy 제외)
-              if (vlInfo && vlInfo.tradingValue < 10000) continue;
-              const sessionAvgTradingValue = volumeLeaders.length > 0 
-                ? volumeLeaders.reduce((sum, vl) => sum + vl.tradingValue, 0) / volumeLeaders.length 
-                : 0;
-              if (vlInfo && sessionAvgTradingValue > 0 && vlInfo.tradingValue < sessionAvgTradingValue * 0.5) {
-                continue;
-              }
-            }
+          // ★★★ [Hard-Criteria ONLY] 4대 AND 게이트 통과 종목만 매수 진행
+          // 점수 기반, 필승패턴, 예측형, 매집 패턴 등 모든 우회 경로 차단
+          if (!isDipBuyCandidate) {
+            // Hard-Criteria 4-AND 게이트 미통과 → 매수 불가
+            continue;
           }
-
-          // ★ 엔진 개편: 10대 지표 점수 + 충족 수 + 필승 패턴으로 진입 판단
-          const metCount = r.scoring.metCount || 0;
-          const rvol = r.scoring.indicators.rvol?.rvol || 0;
-          const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
-          const isAccumEntry = isAccumCandidate;
           
-          // 최소 충족 조건: 필승 패턴 시 3개, 매집 시 3개, 예측형 3개, Dip-Buy 3개, 일반 5개
-          const minMet = (hasCriticalPattern || isAccumEntry || isPredictiveEntry || isDipBuyCandidate) ? 3 : 5;
-          if (metCount < minMet) continue;
-          
-          // ★ RVOL 완화: 필승 패턴/예측형/Dip-Buy 시 해제 (Dip-Buy는 고유동성 이미 검증됨)
-          if (!isAccumEntry && !hasCriticalPattern && !isPredictiveEntry && !isDipBuyCandidate && rvol < 1.0) continue;
-          
+          // ★ 4번째 조건: 체결강도 90%+ (Hard-Criteria 에너지 확정)
           const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          // ★ [Aggression-Filter] 체결강도 85% 이상 강제: 모든 진입에 적용
-          if (aggrVal < MIN_ENTRY_AGGRESSION) continue;
+          if (aggrVal < 90) {
+            await addLog('unified', 'scan', r.sym, `[Hard-Criteria 4AND 체결강도 미달] ${r.sym} 수급✅ 이격✅ 추세✅ BUT 체결강도 ${aggrVal}% < 90% → 진입 차단`, { aggrVal });
+            continue;
+          }
+
+          const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
+          if (alreadyHolding) continue; // 중복 보유 차단 (피라미딩도 제거)
+          if (openCount >= MAX_POSITIONS) continue;
+
+          const metCount = r.scoring.metCount || 0;
+          const rvol = r.scoring.indicators.rvol?.rvol || 0;
+          const isAccumEntry = false; // 매집 우회 비활성화
 
           if (isOpeningRush) continue;
 
