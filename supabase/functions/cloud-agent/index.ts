@@ -1936,15 +1936,17 @@ Deno.serve(async (req) => {
           // ★ [Liquidity-Filter] 고유동성 하한선: 거래대금 $2.22M(≈30억원) 이상만 허용
           const meetsHighLiquidityFloor = tradingVal >= HIGH_LIQUIDITY_FLOOR_USD;
           
-          // ★ [Historical-Volume] 과거 5~10일 평균 거래대금도 30억+ 유지 검증
+          // ★ [Historical-Volume] 과거 20거래일 평균 거래대금 30억+ 유지 검증 (Hard-Criteria)
           let historicalVolOk = false;
+          let historicalAvgTradingVal = 0;
           if (r.data && r.data.volumes && r.data.closes && r.data.volumes.length >= 10) {
-            const recentDays = Math.min(10, r.data.volumes.length);
+            const recentDays = Math.min(20, r.data.volumes.length); // ★ 20거래일 기준
             let avgTradingVal = 0;
             for (let vi = r.data.volumes.length - recentDays; vi < r.data.volumes.length; vi++) {
               avgTradingVal += (r.data.volumes[vi] || 0) * (r.data.closes[vi] || 0);
             }
             avgTradingVal /= recentDays;
+            historicalAvgTradingVal = avgTradingVal;
             historicalVolOk = avgTradingVal >= HIGH_LIQUIDITY_FLOOR_USD;
           } else {
             historicalVolOk = meetsHighLiquidityFloor; // 데이터 부족 시 실시간으로 대체
@@ -1954,11 +1956,29 @@ Deno.serve(async (req) => {
           // ★ [Dip-Buying] 25개 봉 하락 구간 + RSI 과매도 반등 + EMA25 이격도 감지
           const dipSignal = r.data ? detectDipBuySignal(r.data.closes, r.data.highs, r.data.lows, r.data.volumes, r.data.opens) : { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, isBearishCandle: false, ema25GapPct: 0, details: '' };
           if (dipSignal.isDip) dipBuyScanned++;
-          const isDipBuyCandidate = dipSignal.isDip && meetsLiquidityAll;
+          
+          // ★★★ [Hard-Criteria] 기계적 직결 진입: 4대 조건 AND 게이트
+          // 1. 수급 검증: 20거래일 평균 거래대금 30억원+ (historicalVolOk && meetsHighLiquidityFloor)
+          // 2. 이격도 확정: EMA25 대비 -5%+ 이격 (dipSignal.ema25GapPct >= 5)
+          // 3. 추세 확정: 25봉 하락 + 현재 음봉 (dipSignal.isDip with bearish candle)
+          // 4. 에너지 확정: 체결강도 90%+ (aggrVal >= 90 — 아래 필터에서 검증)
+          const hardCriteria_liquidity = meetsLiquidityAll; // 조건1: 20일 평균 30억+ AND 실시간 30억+
+          const hardCriteria_emaGap = (dipSignal as any).ema25GapPct >= EMA25_GAP_MIN_PCT; // 조건2: EMA25 이격 5%+
+          const hardCriteria_trend = dipSignal.isDip && dipSignal.isBearishCandle; // 조건3: 25봉 하락 + 음봉
+          const hardCriteriaAllPassed = hardCriteria_liquidity && hardCriteria_emaGap && hardCriteria_trend;
+          
+          const isDipBuyCandidate = hardCriteriaAllPassed; // ★ 4대 AND 게이트 통과 시에만 Dip-Buy
           
           if (isDipBuyCandidate) {
             dipBuyDetected++;
-            await addLog('unified', 'scan', r.sym, `[📉EMA25-DipBuy] ${r.sym} 30억수급($${(tradingVal/1e6).toFixed(1)}M≥$2.2M) + EMA25이격${(dipSignal as any).ema25GapPct?.toFixed(1) || '?'}% + 25봉하락 | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, historicalVolOk, meetsLiquidityAll });
+            await addLog('unified', 'scan', r.sym, `[🎯Hard-Criteria 4AND통과] ${r.sym} ✅수급(20일평균$${(historicalAvgTradingVal/1e6).toFixed(1)}M≥$2.2M) ✅이격(EMA25-${(dipSignal as any).ema25GapPct?.toFixed(1)}%≥5%) ✅추세(25봉↓+음봉) | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, historicalVolOk, historicalAvgTradingVal, meetsLiquidityAll, hardCriteriaAllPassed });
+          } else if (dipSignal.isDip && !hardCriteriaAllPassed) {
+            // AND 게이트 불통과 사유 로그
+            const failReasons = [];
+            if (!hardCriteria_liquidity) failReasons.push(`수급미달(20일$${(historicalAvgTradingVal/1e6).toFixed(1)}M<$2.2M)`);
+            if (!hardCriteria_emaGap) failReasons.push(`이격부족(${(dipSignal as any).ema25GapPct?.toFixed(1)}%<5%)`);
+            if (!hardCriteria_trend) failReasons.push(`추세미충족(음봉:${dipSignal.isBearishCandle})`);
+            await addLog('unified', 'scan', r.sym, `[Hard-Criteria 불통과] ${r.sym} 하락봉감지→AND게이트실패: ${failReasons.join(' | ')}`, { dipSignal, failReasons, historicalAvgTradingVal });
           }
 
           // ★ 동전주 전용 진입 문턱: 70점 (일반: 65점)
