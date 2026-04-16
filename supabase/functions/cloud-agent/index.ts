@@ -2348,9 +2348,25 @@ Deno.serve(async (req) => {
       let takeProfit: number;
       if (isDipBuyEntry && dipSig) {
         stopLoss = +(adjustedPrice * 0.95).toFixed(4); // Dip-Buy: -5% SL (하락 추세이므로 넓게)
-        // ★ [지연보정] API 15분 지연 감안 → 현재가 -1.5% 아래에 매수 그물(Limit Order) 배치
-        adjustedPrice = +(adjustedPrice * (1 - DIP_LIMIT_OFFSET_PCT)).toFixed(4);
-        orderType = 'LIMIT(DipNet-1.5%)';
+        
+        // ★ [Pre-Calculation] EMA25 기반 선제적 타겟가 산출: P_Target = EMA25 × (1 - Margin)
+        const dipData = (r as any).data;
+        if (dipData && dipData.closes && dipData.closes.length >= 26) {
+          const ema25Arr = calculateEMA(dipData.closes, 25);
+          const currentEMA25 = ema25Arr[ema25Arr.length - 1];
+          const margin = PRE_CALC_MARGIN_MIN + ((dipSig as any).ema25GapPct >= 7 ? 0.02 : ((dipSig as any).ema25GapPct >= 6 ? 0.01 : 0));
+          const preCalcTarget = +(currentEMA25 * (1 - margin)).toFixed(4);
+          // ★ [Liquidity-Trap] 30억+ 수급주: 지연 저점 대비 -1.5% 알박기 (시장가 절대 금지)
+          const liquidityTrapPrice = +(r.price * (1 - LIQUIDITY_TRAP_OFFSET_PCT)).toFixed(4);
+          // 더 낮은 가격 채택 (최대한 바닥에 그물 배치)
+          adjustedPrice = Math.min(preCalcTarget, liquidityTrapPrice);
+          orderType = `LIMIT(PreCalc=${fmtKRW(preCalcTarget)}|Trap=${fmtKRW(liquidityTrapPrice)})`;
+          await addLog('unified', 'scan', r.sym, `[🎯Pre-Calculation] ${r.sym} EMA25=${fmtKRW(currentEMA25)} × (1-${(margin*100).toFixed(1)}%) = P_Target=${fmtKRW(preCalcTarget)} | Liquidity-Trap=${fmtKRW(liquidityTrapPrice)} | 최종매수가=${fmtKRW(adjustedPrice)}`, { ema25: currentEMA25, margin, preCalcTarget, liquidityTrapPrice, adjustedPrice });
+        } else {
+          // 데이터 부족 시 기존 로직 유지
+          adjustedPrice = +(adjustedPrice * (1 - DIP_LIMIT_OFFSET_PCT)).toFixed(4);
+          orderType = 'LIMIT(DipNet-2%)';
+        }
         takeProfit = +(adjustedPrice * (1 + dipSig.reboundTargetPct / 100)).toFixed(4); // 반등 목표 2~3%
       } else {
         stopLoss = +(adjustedPrice * 0.90).toFixed(4);
