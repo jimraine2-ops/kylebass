@@ -233,20 +233,20 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
     <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🏆 고유동성 역발상 그물망 타격 전략</p>
-          <p className="italic text-yellow-400/80">"자본이 없다면 지략으로 이겨라. 15분의 시차를 역이용해 가장 유리한 고지에서 100만 원의 화력을 집중하라."</p>
+          <p className="font-bold text-yellow-400 text-sm">📐 25일 EMA × 역추세 그물망 필승 전략</p>
+          <p className="italic text-yellow-400/80">"주가는 평균에서 멀어지면 반드시 돌아온다. 25일 EMA가 위에서 기다릴 때, 바닥에서 3%의 수익을 낚아챈다."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Free-Scanner] 무료 API 맞춤형 종목 선별</p>
-            <p>⚡ 거래대금 20억↑ + 체결강도 90%↑ | 12,000원 미만 우량주 20개 순차 쿼리</p>
+            <p className="font-semibold text-foreground">[Free-Scanner] 무료 API 최적화</p>
+            <p>⚡ 거래대금 20억↑ + 체결강도 90%↑ | ₩10,000 미만 저가주 전용</p>
           </div>
           <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[📉 Dip-Buying] 25봉 하락 & 음봉 타점 (지연 보정)</p>
-            <p>💰 25봉 하락 + 음봉 → 현재가 -1.5% 아래 매수 그물(Limit) 배치</p>
-            <p>🛡️ +1.0% → 본절보호(+0.2%) | AI 추천 2.0/2.5/3.0% 유연 익절</p>
+            <p className="font-semibold text-foreground">[📉 EMA25 Gap] 이격도 5%↑ + 25봉 하락 + 음봉 타점</p>
+            <p>📐 현재가 &lt; EMA25 × 0.95 (이격 5%+) → 반등 탄성 극대화</p>
+            <p>💰 현재가 -1.5~2% 아래 매수 그물(Limit) | 목표 3% (EMA 회귀)</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
             <p className="font-semibold text-foreground">[🔄 Infinite-Loop] 3% 익절 → 100만원 리셋 → 무한 진입</p>
-            <p>💰 수익 누적 영구 합산 | Round N 자동 진행</p>
+            <p>🛡️ +1% → 본절보호(+0.2%) | 수급 둔화 시 2~2.5% 유연 익절</p>
           </div>
           <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
             <p className="font-semibold text-foreground">[Iron-Defense] +1%→SL+0.2% | +3%→즉시 확정 | 200%↑→트레일링</p>
