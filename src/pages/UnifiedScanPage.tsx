@@ -130,26 +130,26 @@ export default function UnifiedScanPage() {
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">📐 25일 EMA × 30억 수급 역추세 필승 전략</p>
-          <p className="italic text-yellow-400/80">"돈이 마르지 않는 곳에서만 낚시하라. 30억의 유동성이 3% 수익을 챙겨 나올 때 등을 떠밀어줄 우군이다."</p>
+          <p className="font-bold text-yellow-400 text-sm">🎯 [기계적 직결 진입] 30억 수급 × EMA 역추세 최종 집행</p>
+          <p className="italic text-yellow-400/80">"모호한 점수는 필요 없다. 오직 숫자가 증명하는 데이터가 일치할 때, 시스템은 망설임 없이 100만 원의 탄환을 쏜다."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Historical-Volume] 30억 유지 필터</p>
-            <p>⚡ 실시간 + 과거 5~10일 평균 거래대금 30억↑($2.2M) + 체결강도 90%↑</p>
-            <p>📊 슬리피지 제로: 100만 원 시드 = 30억 호가창에서 모래 한 알 수준</p>
+            <p className="font-semibold text-foreground">[Hard-Criteria] 4대 AND 게이트 (교차 통과 필수)</p>
+            <p>① 수급검증: 20거래일 평균 거래대금 30억↑($2.2M) 유지 종목</p>
+            <p>② 이격확정: 현재가 &lt; EMA25 × 0.95 (이격도 -5%↑)</p>
+            <p>③ 추세확정: 25봉 연속 하락 + 현재 음봉(하락봉)</p>
+            <p>④ 에너지확정: 실시간 체결강도 90%↑</p>
           </div>
           <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[📉 EMA25 Gap] 이격도 5%↑ + 25봉 하락 + 음봉</p>
-            <p>📐 EMA25 이격도 ≥5%: 30억 수급이 실린 하락 = '의도된 눌림' → 반등 탄성 극대화</p>
-            <p>💰 현재가 -2% 아래 매수 그물(Limit) 배치 | 목표 3% (EMA 회귀)</p>
-            <p>🛡️ +1.0% → 본절보호(+0.2%) | 수급 둔화(100%↓) 시 2~2.5% 유연 확정</p>
+            <p className="font-semibold text-foreground">[Free-Tier Hack] 15분 시차 극복 그물망</p>
+            <p>📐 P_buy = P_delayed × (1 - 1.5~2%) → 실제 저점에 미리 그물 배치</p>
+            <p>🎯 목표 3% (EMA25 회귀) | 수급 둔화 시 2~2.5% 유연 익절</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[🔄 Infinite-Loop] 3% 익절 → 100만원 리셋 → 무한 진입</p>
-            <p>🔄 수익 실현 즉시 ₩100만 원금으로 리셋 → Round N 무한 진입</p>
+            <p className="font-semibold text-foreground">[Infinite-Gain] 3% 익절 → ₩100만 리셋 → 무한 루프</p>
+            <p>🛡️ 매수 즉시 본절보호(+0.2%) 가동 | 패배 원천 차단</p>
           </div>
           <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Iron-Defense] 단계별 수익 보호</p>
-            <p>🛡️ +1% → SL+0.2% | +3% → 즉시 확정 (EMA25 회귀) | 200%↑ → 트레일링</p>
+            <p className="font-semibold text-foreground">[Iron-Defense] +1%→SL+0.2% | +3%→즉시 확정 | 200%↑→트레일링</p>
           </div>
         </CardContent>
       </Card>
