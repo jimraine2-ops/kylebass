@@ -2213,10 +2213,10 @@ Deno.serve(async (req) => {
       // ★ [Volatility Hunt] 집중 투자: 1순위 종목 50%+, 동전주 40%, 필승패턴 35%, Dip-Buy 고정₩100만, 일반 20%
       const isTopRanked = topCandidates.indexOf(r) === 0; // 1순위 종목
       let maxKRW: number;
+      const positionPct = isPyramiding ? 0.05 : isTopRanked ? 0.50 : isPennyEntry ? 0.40 : (isCriticalPatternEntry || isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
       if (isDipBuyEntry) {
         maxKRW = Math.min(DIP_BUY_AMOUNT_KRW, balance); // ★ Dip-Buy: 고정 ₩100만원
       } else {
-        const positionPct = isPyramiding ? 0.05 : isTopRanked ? 0.50 : isPennyEntry ? 0.40 : (isCriticalPatternEntry || isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
         maxKRW = balance * positionPct;
       }
       const priceKRW = toKRW(r.price);
