@@ -1840,8 +1840,11 @@ Deno.serve(async (req) => {
       );
     }
     
-    // ★ [Day-Break] KST 9:00:01 도달 → 매수 제한 해제 + ₩1,000,000 원금 재세팅 + 공격 모드 전환
+    // ★ [Day-Break + Bridge-Logic] KST 9:00:01 도달 → 매수 제한 해제 + ₩1,000,000 원금 재세팅 + 공격 모드 전환
+    // ★ [Bridge-Logic] US 정규장 마감 시 25봉 하락 + EMA25 이격 5%+ 완성 종목을 데이장 개시와 동시에 매수 예약
     const isDayBreakWindow = kstTimeMinutes >= 540 && kstTimeMinutes < 545; // KST 9:00~9:05
+    const bridgeTargets: { sym: string; targetPrice: number; ema25: number; gapPct: number }[] = [];
+    
     if (isDayBreakWindow && currentOpenCountForPause === 0) {
       // ★ 원금 ₩1,000,000 리셋 (라운드 시작)
       const DAY_BREAK_CAPITAL = 1000000;
@@ -1854,12 +1857,47 @@ Deno.serve(async (req) => {
         balance = DAY_BREAK_CAPITAL;
       }
       
+      // ★ [Bridge-Logic] US 정규장 마감 데이터 동기화: 30억+ 수급주 중 EMA25 이격 5%+ 완성 종목 스캔
+      const bridgeScanSymbols = [...Array.from(LARGE_SET).slice(0, 20), ...Array.from(SMALL_SET).slice(0, 15)];
+      for (let bi = 0; bi < bridgeScanSymbols.length; bi += 5) {
+        const batch = bridgeScanSymbols.slice(bi, bi + 5);
+        const bResults = await Promise.all(batch.map(sym => getQuoteAndCandles(sym).catch(() => null)));
+        for (let bj = 0; bj < bResults.length; bj++) {
+          const bData = bResults[bj];
+          if (!bData || !bData.closes || bData.closes.length < 30) continue;
+          const bSym = batch[bj];
+          const bn = bData.closes.length - 1;
+          const bEma25 = calculateEMA(bData.closes, 25);
+          const bCurrentEMA = bEma25[bn] || bData.closes[bn];
+          const bGapPct = bCurrentEMA > 0 ? ((bCurrentEMA - bData.closes[bn]) / bCurrentEMA) * 100 : 0;
+          
+          // 조건: EMA25 이격 5%+ AND 25봉 하락 추세
+          if (bGapPct >= EMA25_GAP_MIN_PCT) {
+            const bDip = detectDipBuySignal(bData.closes, bData.highs, bData.lows, bData.volumes, bData.opens);
+            if (bDip.isDip && bDip.isBearishCandle) {
+              // ★ [Pre-Calculation] 매수 타겟가: EMA25 × (1 - Margin)
+              const margin = PRE_CALC_MARGIN_MIN + Math.random() * (PRE_CALC_MARGIN_MAX - PRE_CALC_MARGIN_MIN);
+              const targetPrice = +(bCurrentEMA * (1 - margin)).toFixed(4);
+              bridgeTargets.push({ sym: bSym, targetPrice, ema25: bCurrentEMA, gapPct: bGapPct });
+              await addLog('system', 'bridge', bSym, 
+                `[Bridge-Logic] 🌉 ${bSym} US 정규장 마감 데이터 동기화 | EMA25=${fmtKRW(bCurrentEMA)} 이격-${bGapPct.toFixed(1)}% | ` +
+                `25봉↓+음봉 완성 → 데이장 매수 타겟: P_Target=${fmtKRW(targetPrice)} (EMA25×${(1-margin).toFixed(3)}) | ` +
+                `KST 09:00:01 즉시 매수 예약 투입`,
+                { sym: bSym, ema25: bCurrentEMA, gapPct: bGapPct, margin, targetPrice }
+              );
+            }
+          }
+        }
+        if (bi + 5 < bridgeScanSymbols.length) await new Promise(r => setTimeout(r, 100));
+      }
+      
       await addLog('system', 'day-break', null, 
         `[Day-Break] 🟢 오전 9시 데이장 사냥 강제 재개! Round ${currentRound} 공격 모드 전환 | ` +
         `원금 ${fmtKRWRaw(DAY_BREAK_CAPITAL)} 세팅 완료 | 누적 수익 유지: ${fmtKRWRaw(dailyPnl)} | ` +
+        `Bridge-Logic 타겟: ${bridgeTargets.length}개 (${bridgeTargets.map(b => `${b.sym}@${fmtKRW(b.targetPrice)}`).join(', ') || '없음'}) | ` +
         `₩12,000↓ 저가주 중 익절확률 95%↑ + AI 추천 2~3% 구간 확보 종목 즉시 투입 | ` +
         `아시아 세션 수급 + Finnhub 최신 뉴스 결합 종목 최우선 요격`,
-        { dayBreak: true, round: currentRound, balance: DAY_BREAK_CAPITAL, dailyPnl }
+        { dayBreak: true, round: currentRound, balance: DAY_BREAK_CAPITAL, dailyPnl, bridgeTargets }
       );
     }
     
