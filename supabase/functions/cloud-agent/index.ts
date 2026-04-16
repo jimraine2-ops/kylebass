@@ -347,7 +347,7 @@ function detectVacuumZone(closes: number[], highs: number[], lows: number[], vol
   return { hasVacuum: isLowResistance && gapPct >= 3.0, vacuumPct: gapPct, resistance: recentHigh };
 }
 
-// ===== [Dip-Buying] 25개 봉 하락 구간 감지 + 현재 음봉 확인 + RSI 과매도 반등 포착 =====
+// ===== [Dip-Buying] 5개 봉 하락 구간 감지 + 현재 음봉 확인 + RSI 과매도 반등 포착 =====
 function detectDipBuySignal(closes: number[], highs: number[], lows: number[], volumes: number[], opens?: number[]): { isDip: boolean; dipScore: number; rsiReversal: boolean; downCandles: number; currentRSI: number; reboundTargetPct: number; isBearishCandle: boolean; details: string } {
   const n = closes.length - 1;
   if (n < DIP_CANDLE_COUNT + 5) return { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, isBearishCandle: false, details: '' };
@@ -364,7 +364,7 @@ function detectDipBuySignal(closes: number[], highs: number[], lows: number[], v
   }
   const downRatio = downCount / DIP_CANDLE_COUNT;
 
-  // 2. 25봉 구간 추세 하락 여부: 시작가 > 현재가
+  // 2. 5봉 구간 추세 하락 여부: 시작가 > 현재가
   const startPrice = recentCloses[0];
   const endPrice = recentCloses[recentCloses.length - 1];
   const trendDown = endPrice < startPrice;
@@ -412,7 +412,7 @@ function detectDipBuySignal(closes: number[], highs: number[], lows: number[], v
 
   const bearishTag = isBearishCandle ? '🔴음봉' : '🟢양봉';
   const ema25Tag = hasEMA25Gap ? `✅EMA25이격${ema25GapPct.toFixed(1)}%` : `⚠️이격${ema25GapPct.toFixed(1)}%(<5%)`;
-  const details = `25봉 하락${downCount}개(${(downRatio*100).toFixed(0)}%) | ${bearishTag} | 추세-${trendDropPct.toFixed(1)}% | RSI ${currentRSI.toFixed(1)}${rsiReversal ? '↑반등' : ''} | ${ema25Tag} | 에너지${energyExhausted ? '소진' : '지속'} | 목표${reboundTargetPct}%`;
+  const details = `5봉 하락${downCount}개(${(downRatio*100).toFixed(0)}%) | ${bearishTag} | 추세-${trendDropPct.toFixed(1)}% | RSI ${currentRSI.toFixed(1)}${rsiReversal ? '↑반등' : ''} | ${ema25Tag} | 에너지${energyExhausted ? '소진' : '지속'} | 목표${reboundTargetPct}%`;
   return { isDip, dipScore, rsiReversal, downCandles: downCount, currentRSI, reboundTargetPct, isBearishCandle, ema25GapPct, details };
 }
 
@@ -1841,7 +1841,7 @@ Deno.serve(async (req) => {
     }
     
     // ★ [Day-Break + Bridge-Logic] KST 9:00:01 도달 → 매수 제한 해제 + ₩1,000,000 원금 재세팅 + 공격 모드 전환
-    // ★ [Bridge-Logic] US 정규장 마감 시 25봉 하락 + EMA25 이격 5%+ 완성 종목을 데이장 개시와 동시에 매수 예약
+    // ★ [Bridge-Logic] US 정규장 마감 시 5봉 하락 + EMA25 이격 5%+ 완성 종목을 데이장 개시와 동시에 매수 예약
     const isDayBreakWindow = kstTimeMinutes >= 540 && kstTimeMinutes < 545; // KST 9:00~9:05
     const bridgeTargets: { sym: string; targetPrice: number; ema25: number; gapPct: number }[] = [];
     
@@ -1871,7 +1871,7 @@ Deno.serve(async (req) => {
           const bCurrentEMA = bEma25[bn] || bData.closes[bn];
           const bGapPct = bCurrentEMA > 0 ? ((bCurrentEMA - bData.closes[bn]) / bCurrentEMA) * 100 : 0;
           
-          // 조건: EMA25 이격 5%+ AND 25봉 하락 추세
+          // 조건: EMA25 이격 5%+ AND 5봉 하락 추세
           if (bGapPct >= EMA25_GAP_MIN_PCT) {
             const bDip = detectDipBuySignal(bData.closes, bData.highs, bData.lows, bData.volumes, bData.opens);
             if (bDip.isDip && bDip.isBearishCandle) {
@@ -1881,7 +1881,7 @@ Deno.serve(async (req) => {
               bridgeTargets.push({ sym: bSym, targetPrice, ema25: bCurrentEMA, gapPct: bGapPct });
               await addLog('system', 'bridge', bSym, 
                 `[Bridge-Logic] 🌉 ${bSym} US 정규장 마감 데이터 동기화 | EMA25=${fmtKRW(bCurrentEMA)} 이격-${bGapPct.toFixed(1)}% | ` +
-                `25봉↓+음봉 완성 → 데이장 매수 타겟: P_Target=${fmtKRW(targetPrice)} (EMA25×${(1-margin).toFixed(3)}) | ` +
+                `5봉↓+음봉 완성 → 데이장 매수 타겟: P_Target=${fmtKRW(targetPrice)} (EMA25×${(1-margin).toFixed(3)}) | ` +
                 `KST 09:00:01 즉시 매수 예약 투입`,
                 { sym: bSym, ema25: bCurrentEMA, gapPct: bGapPct, margin, targetPrice }
               );
@@ -1994,25 +1994,25 @@ Deno.serve(async (req) => {
           }
           const meetsLiquidityAll = meetsHighLiquidityFloor && historicalVolOk;
           
-          // ★ [Dip-Buying] 25개 봉 하락 구간 + RSI 과매도 반등 + EMA25 이격도 감지
+          // ★ [Dip-Buying] 5개 봉 하락 구간 + RSI 과매도 반등 + EMA25 이격도 감지
           const dipSignal = r.data ? detectDipBuySignal(r.data.closes, r.data.highs, r.data.lows, r.data.volumes, r.data.opens) : { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, isBearishCandle: false, ema25GapPct: 0, details: '' };
           if (dipSignal.isDip) dipBuyScanned++;
           
           // ★★★ [Hard-Criteria] 기계적 직결 진입: 4대 조건 AND 게이트
           // 1. 수급 검증: 20거래일 평균 거래대금 30억원+ (historicalVolOk && meetsHighLiquidityFloor)
           // 2. 이격도 확정: EMA25 대비 -5%+ 이격 (dipSignal.ema25GapPct >= 5)
-          // 3. 추세 확정: 25봉 하락 + 현재 음봉 (dipSignal.isDip with bearish candle)
+          // 3. 추세 확정: 5봉 하락 + 현재 음봉 (dipSignal.isDip with bearish candle)
           // 4. 에너지 확정: 체결강도 90%+ (aggrVal >= 90 — 아래 필터에서 검증)
           const hardCriteria_liquidity = meetsLiquidityAll; // 조건1: 20일 평균 30억+ AND 실시간 30억+
           const hardCriteria_emaGap = (dipSignal as any).ema25GapPct >= EMA25_GAP_MIN_PCT; // 조건2: EMA25 이격 5%+
-          const hardCriteria_trend = dipSignal.isDip && dipSignal.isBearishCandle; // 조건3: 25봉 하락 + 음봉
+          const hardCriteria_trend = dipSignal.isDip && dipSignal.isBearishCandle; // 조건3: 5봉 하락 + 음봉
           const hardCriteriaAllPassed = hardCriteria_liquidity && hardCriteria_emaGap && hardCriteria_trend;
           
           const isDipBuyCandidate = hardCriteriaAllPassed; // ★ 4대 AND 게이트 통과 시에만 Dip-Buy
           
           if (isDipBuyCandidate) {
             dipBuyDetected++;
-            await addLog('unified', 'scan', r.sym, `[🎯Hard-Criteria 4AND통과] ${r.sym} ✅수급(20일평균$${(historicalAvgTradingVal/1e6).toFixed(1)}M≥$2.2M) ✅이격(EMA25-${(dipSignal as any).ema25GapPct?.toFixed(1)}%≥5%) ✅추세(25봉↓+음봉) | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, historicalVolOk, historicalAvgTradingVal, meetsLiquidityAll, hardCriteriaAllPassed });
+            await addLog('unified', 'scan', r.sym, `[🎯Hard-Criteria 4AND통과] ${r.sym} ✅수급(20일평균$${(historicalAvgTradingVal/1e6).toFixed(1)}M≥$2.2M) ✅이격(EMA25-${(dipSignal as any).ema25GapPct?.toFixed(1)}%≥5%) ✅추세(5봉↓+음봉) | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, historicalVolOk, historicalAvgTradingVal, meetsLiquidityAll, hardCriteriaAllPassed });
           } else if (dipSignal.isDip && !hardCriteriaAllPassed) {
             // AND 게이트 불통과 사유 로그
             const failReasons = [];
@@ -2357,7 +2357,7 @@ Deno.serve(async (req) => {
       const passiveTag = (isPredictive || isAccumEntry) ? ` | 🎯Passive Fill(호가알박기)` : '';
       const predictiveTag = isPredictive ? ` | 🔮예측형선취매(뉴스전 지표수렴)` : '';
       const liqRatioTag = (r as any).liquidityRatio ? ` | 💧유동성×${((r as any).liquidityRatio).toFixed(1)}` : '';
-      const dipBuyTag = isDipBuyEntry ? ` | 📉Dip-Buy(25봉하락|RSI${dipSig?.currentRSI?.toFixed(1)}|반등${dipSig?.reboundTargetPct}%|거래대금$${((r as any).tradingValueUSD/1e6).toFixed(1)}M)` : '';
+      const dipBuyTag = isDipBuyEntry ? ` | 📉Dip-Buy(5봉하락|RSI${dipSig?.currentRSI?.toFixed(1)}|반등${dipSig?.reboundTargetPct}%|거래대금$${((r as any).tradingValueUSD/1e6).toFixed(1)}M)` : '';
       const tier = isPyramiding ? 'PYRAMID' : isDipBuyEntry ? 'DIP-BUY-📉' : isPennyEntry ? 'PENNY-🪙' : isCriticalPatternEntry ? 'CRITICAL-PATTERN' : isSuperEntry ? 'SUPER-15%' : isPredictive ? 'PREDICTIVE' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
@@ -2385,7 +2385,7 @@ Deno.serve(async (req) => {
         .join('|');
       const roundTag = currentRound > 1 ? `[Round ${currentRound}] ` : '';
       const preBuyLabel = isDipBuyEntry ? '📉Dip-Buy하락봉매입' : isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
-      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${isDipBuyEntry ? `25봉하락 반등매수(₩100만)` : valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: ${isDipBuyEntry ? `${dipSig?.reboundTargetPct || 2.0}%` : '3.0%'} (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : isDipBuyEntry ? '반등 익절' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${dipBuyTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${isDipBuyEntry ? `5봉하락 반등매수(₩100만)` : valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: ${isDipBuyEntry ? `${dipSig?.reboundTargetPct || 2.0}%` : '3.0%'} (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : isDipBuyEntry ? '반등 익절' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${dipBuyTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       // ★ 필승 패턴 알림
       if (isCriticalPatternEntry) {
@@ -2395,7 +2395,7 @@ Deno.serve(async (req) => {
       }
       // ★ [Dip-Buy] 하락봉 반등 매수 알림
       if (isDipBuyEntry) {
-        await addLog('unified', 'milestone', r.sym, `📉 [Dip-Buy 하락봉 매입 완료] ${r.sym} 고유동성($${((r as any).tradingValueUSD/1e6).toFixed(1)}M≥$1.48M) | 25봉 하락 구간 RSI${dipSig?.currentRSI?.toFixed(1)} 반등 포착! | ₩100만 투입 | 반등 목표: +${dipSig?.reboundTargetPct}% | 본절보호 +0.2% 즉시 가동`, { dipSignal: dipSig, tradingValue: (r as any).tradingValueUSD, score: r.scoring.totalScore });
+        await addLog('unified', 'milestone', r.sym, `📉 [Dip-Buy 하락봉 매입 완료] ${r.sym} 고유동성($${((r as any).tradingValueUSD/1e6).toFixed(1)}M≥$1.48M) | 5봉 하락 구간 RSI${dipSig?.currentRSI?.toFixed(1)} 반등 포착! | ₩100만 투입 | 반등 목표: +${dipSig?.reboundTargetPct}% | 본절보호 +0.2% 즉시 가동`, { dipSignal: dipSig, tradingValue: (r as any).tradingValueUSD, score: r.scoring.totalScore });
       }
       // ★ 슈퍼 패턴 알림
       if (isSuperEntry) {
