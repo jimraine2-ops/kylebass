@@ -1410,7 +1410,27 @@ Deno.serve(async (req) => {
     for (const s of currentSmall) capTypeMap.set(s, 'small');
     let targetUniverse: TargetUniverseEntry[] = [];
     try {
-      targetUniverse = await buildTargetUniverse(SCAN_SYMBOLS, capTypeMap, addLog);
+      // ★ Phase1 풀 확장: 활성 30개 대신 LARGE+SMALL 전체 풀 상위 200개를 점진 스캔
+      // (Polygon 호출량은 그대로 — SAMPLES_PER_CYCLE=4 유지, 전체를 사이클 순환으로 누적 스캔)
+      const phase1Pool: string[] = [];
+      const phase1Seen = new Set<string>();
+      const addToPool = (sym: string, type: 'large' | 'small') => {
+        if (phase1Seen.has(sym) || phase1Pool.length >= 200) return;
+        phase1Seen.add(sym);
+        phase1Pool.push(sym);
+        if (!capTypeMap.has(sym)) capTypeMap.set(sym, type);
+      };
+      // 거래대금 상위(volumeLeaders)부터 우선 채우기
+      for (const vl of volumeLeaders) {
+        if (phase1Pool.length >= 200) break;
+        const sym = vl.symbol;
+        const type = LARGE_SET.has(sym) ? 'large' : 'small';
+        addToPool(sym, type);
+      }
+      // 부족하면 LARGE_SET, SMALL_SET 순차 보강
+      for (const s of LARGE_SET) { if (phase1Pool.length >= 200) break; addToPool(s, 'large'); }
+      for (const s of SMALL_SET) { if (phase1Pool.length >= 200) break; addToPool(s, 'small'); }
+      targetUniverse = await buildTargetUniverse(phase1Pool, capTypeMap, addLog);
     } catch (e) {
       await addLog('system', 'error', null, `[Phase1] 타겟 유니버스 빌드 실패: ${(e as Error).message}`, {});
     }
