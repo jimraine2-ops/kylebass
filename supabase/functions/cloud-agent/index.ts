@@ -683,25 +683,33 @@ interface TargetUniverseEntry {
 }
 
 let cachedTargetUniverse: { ts: number; list: TargetUniverseEntry[] } | null = null;
-const TARGET_UNIVERSE_TTL_MS = 30 * 60 * 1000; // 30분
+const TARGET_UNIVERSE_TTL_MS = 6 * 60 * 60 * 1000; // 6시간 (성공 시에만 캐시)
+let polygonRateLimitedUntil = 0; // 429 발생 시 대기
 
-async function polygonFetch(path: string): Promise<any> {
+async function polygonFetch(path: string): Promise<{ data: any; status: number }> {
   const key = Deno.env.get('POLYGON_API_KEY');
-  if (!key) return null;
+  if (!key) return { data: null, status: 0 };
+  if (Date.now() < polygonRateLimitedUntil) return { data: null, status: 429 };
   const sep = path.includes('?') ? '&' : '?';
   try {
     const res = await fetch(`${POLYGON_BASE}${path}${sep}apiKey=${key}`);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch { return null; }
+    if (res.status === 429) {
+      polygonRateLimitedUntil = Date.now() + 60 * 1000; // 1분 백오프
+      return { data: null, status: 429 };
+    }
+    if (!res.ok) return { data: null, status: res.status };
+    return { data: await res.json(), status: 200 };
+  } catch { return { data: null, status: -1 }; }
 }
 
 // Polygon: 최근 30거래일 일봉 → EMA25 + 평균 거래대금 산출
-async function polygonDailyMetrics(symbol: string): Promise<{ ema25: number; avgDollarVolUSD: number; lastClose: number } | null> {
+async function polygonDailyMetrics(symbol: string): Promise<{ ema25: number; avgDollarVolUSD: number; lastClose: number; status: number } | null> {
   const to = new Date().toISOString().split('T')[0];
   const fromDate = new Date(Date.now() - 60 * 86400000).toISOString().split('T')[0];
-  const data = await polygonFetch(`/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${fromDate}/${to}?adjusted=true&sort=asc&limit=120`);
-  if (!data?.results || data.results.length < 25) return null;
+  const { data, status } = await polygonFetch(`/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${fromDate}/${to}?adjusted=true&sort=asc&limit=120`);
+  if (status !== 200 || !data?.results || data.results.length < 25) {
+    return status !== 200 ? { ema25: 0, avgDollarVolUSD: 0, lastClose: 0, status } as any : null;
+  }
   const bars = data.results.slice(-30);
   const closes = bars.map((b: any) => b.c);
   // EMA25
@@ -711,7 +719,7 @@ async function polygonDailyMetrics(symbol: string): Promise<{ ema25: number; avg
   // 20일 평균 거래대금 (USD)
   const last20 = bars.slice(-20);
   const avgDollarVolUSD = last20.reduce((s: number, b: any) => s + (b.c * b.v), 0) / last20.length;
-  return { ema25: +ema.toFixed(4), avgDollarVolUSD, lastClose: closes[closes.length - 1] };
+  return { ema25: +ema.toFixed(4), avgDollarVolUSD, lastClose: closes[closes.length - 1], status: 200 };
 }
 
 async function buildTargetUniverse(
@@ -719,20 +727,36 @@ async function buildTargetUniverse(
   capTypeMap: Map<string, 'large' | 'small'>,
   addLog: (s: string, a: string, sym: string | null, msg: string, det: any) => Promise<void>,
 ): Promise<TargetUniverseEntry[]> {
-  // Cache hit
-  if (cachedTargetUniverse && Date.now() - cachedTargetUniverse.ts < TARGET_UNIVERSE_TTL_MS) {
+  // Cache hit (성공한 결과만 캐시되므로 빈 배열은 즉시 재시도)
+  if (cachedTargetUniverse && cachedTargetUniverse.list.length > 0 && Date.now() - cachedTargetUniverse.ts < TARGET_UNIVERSE_TTL_MS) {
+    await addLog('system', 'scan', null, `[Phase1] ♻️ 캐시된 타겟 유니버스 사용 (${cachedTargetUniverse.list.length}개, ${Math.round((Date.now() - cachedTargetUniverse.ts)/60000)}분 전 빌드)`, {});
     return cachedTargetUniverse.list;
+  }
+
+  // Rate-limited 상태면 빌드 시도조차 하지 않음 (다음 사이클 대기)
+  if (Date.now() < polygonRateLimitedUntil) {
+    const waitSec = Math.ceil((polygonRateLimitedUntil - Date.now()) / 1000);
+    await addLog('system', 'scan', null, `[Phase1] ⏳ Polygon 한도 초과 — ${waitSec}초 후 재시도`, {});
+    return cachedTargetUniverse?.list || [];
   }
 
   await addLog('system', 'scan', null, `[Phase1] 🎯 타겟 유니버스 빌드 시작 — Polygon.io 정밀 EMA25 산출 (풀: ${candidatePool.length}개)`, {});
 
   const results: TargetUniverseEntry[] = [];
-  // ★ 호출수 절약: 후보 풀을 30개로 제한 (Polygon 무료 = 5 req/min)
-  const sliced = candidatePool.slice(0, 30);
+  // ★ Polygon 무료 = 5 req/min → 사이클당 4개만 호출 (60초 한도 내 안전)
+  // 풀이 크면 매 사이클 다른 슬라이스를 점진적으로 스캔
+  const SAMPLES_PER_CYCLE = 4;
+  const startIdx = Math.floor(Date.now() / 60000) % Math.max(1, Math.ceil(candidatePool.length / SAMPLES_PER_CYCLE));
+  const sliced = candidatePool.slice(startIdx * SAMPLES_PER_CYCLE, startIdx * SAMPLES_PER_CYCLE + SAMPLES_PER_CYCLE);
 
+  let okCount = 0;
+  let rateLimited = false;
   for (const sym of sliced) {
     const m = await polygonDailyMetrics(sym);
     if (!m) continue;
+    if (m.status === 429) { rateLimited = true; break; }
+    if (m.status !== 200) continue;
+    okCount++;
     // 필터2: 저가주 ($9 이하)
     if (m.lastClose > MAX_PRICE_USD || m.lastClose < MIN_PRICE_USD) continue;
     // 필터1: 20일 평균 거래대금 ≥ ₩30억
@@ -750,24 +774,27 @@ async function buildTargetUniverse(
       limitPriceUSD: +(m.ema25 * (1 + TARGET_PHASE2_GAP_PCT)).toFixed(4),
       capType: capTypeMap.get(sym) || 'small',
     });
-
-    // Polygon 무료: 12초/req → 짧게 대기
-    await new Promise(r => setTimeout(r, 250));
+    // 13초 간격 (5 req/min 안전 마진)
+    await new Promise(r => setTimeout(r, 13000));
   }
 
-  // EMA 갭이 가장 깊은 (즉 가장 oversold) Top 5
-  results.sort((a, b) => a.emaGapPct - b.emaGapPct);
-  const top5 = results.slice(0, 5);
+  // 기존 캐시와 머지 (점진적 누적)
+  const merged = new Map<string, TargetUniverseEntry>();
+  for (const e of (cachedTargetUniverse?.list || [])) merged.set(e.symbol, e);
+  for (const e of results) merged.set(e.symbol, e);
+  const all = Array.from(merged.values()).sort((a, b) => a.emaGapPct - b.emaGapPct);
+  const top5 = all.slice(0, 5);
 
-  cachedTargetUniverse = { ts: Date.now(), list: top5 };
-
+  // 성공 결과만 캐시 (빈 배열이면 캐시 갱신 X)
   if (top5.length > 0) {
+    cachedTargetUniverse = { ts: Date.now(), list: top5 };
     const summary = top5.map((t, i) =>
       `${i+1}.${t.symbol}($${t.price.toFixed(2)}/EMA25:$${t.ema25.toFixed(2)}/${(t.emaGapPct*100).toFixed(1)}%/마중가:$${t.limitPriceUSD.toFixed(2)})`
     ).join(', ');
-    await addLog('system', 'scan', null, `[Phase1] ✅ 타겟 유니버스 확정 (Top ${top5.length}): ${summary}`, { targets: top5 });
+    await addLog('system', 'scan', null, `[Phase1] ✅ 타겟 유니버스 (Top ${top5.length}/스캔 ${okCount}성공): ${summary}`, { targets: top5 });
   } else {
-    await addLog('system', 'scan', null, `[Phase1] ⚠️ 필터 통과 종목 없음 — 기존 SCAN_SYMBOLS 유지`, {});
+    const reason = rateLimited ? 'Polygon 429 한도 초과' : `${okCount}/${sliced.length}건 조회 성공·필터 통과 0`;
+    await addLog('system', 'scan', null, `[Phase1] ⚠️ 타겟 미확정 (${reason}) — 다음 사이클 점진 누적`, {});
   }
 
   return top5;
