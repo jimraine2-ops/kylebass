@@ -755,13 +755,15 @@ async function getQuoteAndCandles(symbol: string) {
 // ★★★ [Phase 1] 정적 타겟 유니버스 빌더 (Polygon.io 정밀 EMA)
 // "장중에 종목을 찾지 말고, 장 시작 전에 사냥감을 확정하라"
 // 필터1: 20거래일 평균 거래대금 ≥ ₩30억
-// 필터2: 현재가 ≤ ₩12,000 ($9)
-// 필터3: 현재가 ≤ EMA25 × 0.95 (-5% 이하)
+// 필터2: 현재가 ≤ $50 (대형주 포함, 후보 풀 확보)
+// 필터3: 현재가 ≤ EMA25 × 0.98 (-2% 이하, 완화)
 // ============================================================
 const POLYGON_BASE = 'https://api.polygon.io';
 const TARGET_AVG_DOLLAR_VOLUME_USD = 3_000_000_000 / KRW_RATE; // ₩30억 ≈ $2.22M
-const TARGET_EMA_GAP_PCT = -0.05; // -5%
-const TARGET_PHASE2_GAP_PCT = -0.07; // 매수 마중가: EMA25 × 0.93
+const PHASE1_MAX_PRICE_USD = 50; // ★ 완화: 대형주 후보까지 포함 ($50 이하)
+const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
+const TARGET_EMA_GAP_PCT = -0.02; // ★ 완화: -2% (기존 -5%)
+const TARGET_PHASE2_GAP_PCT = -0.04; // 매수 마중가: EMA25 × 0.96
 
 interface TargetUniverseEntry {
   symbol: string;
@@ -855,11 +857,11 @@ async function buildTargetUniverse(
 
     // 상태별 상세 로그
     if (m.status === 200) {
-      const priceOk = m.lastClose <= MAX_PRICE_USD && m.lastClose >= MIN_PRICE_USD;
+      const priceOk = m.lastClose <= PHASE1_MAX_PRICE_USD && m.lastClose >= PHASE1_MIN_PRICE_USD;
       const volOk = m.avgDollarVolUSD >= TARGET_AVG_DOLLAR_VOLUME_USD;
       const gap = (m.lastClose - m.ema25) / m.ema25;
       const gapOk = gap <= TARGET_EMA_GAP_PCT;
-      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)}≤$${MAX_PRICE_USD})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M≥$${(TARGET_AVG_DOLLAR_VOLUME_USD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%≤${(TARGET_EMA_GAP_PCT*100).toFixed(0)}%)`;
+      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)}≤$${PHASE1_MAX_PRICE_USD})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M≥$${(TARGET_AVG_DOLLAR_VOLUME_USD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%≤${(TARGET_EMA_GAP_PCT*100).toFixed(0)}%)`;
       await addLog('system', 'scan', sym, `[Phase1·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk });
       okCount++;
       if (priceOk && volOk && gapOk) {
