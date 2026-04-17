@@ -67,6 +67,9 @@ export default function Dashboard() {
       <ServerStatusBanner />
       <SafePauseBanner />
 
+      {/* 실전 체결률 KPI */}
+      <FillRateCard />
+
       {/* Phase 1 타겟 유니버스 */}
       <Phase1TargetCard />
 
