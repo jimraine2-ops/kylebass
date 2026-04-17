@@ -1228,28 +1228,6 @@ Deno.serve(async (req) => {
 
     let SCAN_SYMBOLS = Array.from(activeUnifiedList);
 
-    // ============================================================
-    // ★★★ [Phase 1] 데이장 선제 타격 — 정적 타겟 유니버스 적용
-    // Polygon.io로 EMA25 정밀 산출 → 3-필터 통과 Top 5만 집중 타격
-    // ============================================================
-    const capTypeMap = new Map<string, 'large' | 'small'>();
-    for (const s of currentLarge) capTypeMap.set(s, 'large');
-    for (const s of currentSmall) capTypeMap.set(s, 'small');
-    let targetUniverse: TargetUniverseEntry[] = [];
-    try {
-      targetUniverse = await buildTargetUniverse(SCAN_SYMBOLS, capTypeMap, addLog);
-    } catch (e) {
-      await addLog('system', 'error', null, `[Phase1] 타겟 유니버스 빌드 실패: ${(e as Error).message}`, {});
-    }
-    const targetSet = new Set(targetUniverse.map(t => t.symbol));
-    const targetMap = new Map(targetUniverse.map(t => [t.symbol, t]));
-    if (targetUniverse.length > 0) {
-      // Top 5 + 보유 포지션만 스캔 (호출 수 절약)
-      const heldSet = new Set((openPos || []).map((p: any) => p.symbol));
-      SCAN_SYMBOLS = Array.from(new Set([...targetSet, ...heldSet]));
-      await addLog('system', 'scan', null, `[Phase1] 🎯 스캔 범위 축소 → 타겟 ${targetSet.size}개 + 보유 ${heldSet.size}개 = ${SCAN_SYMBOLS.length}개 집중 타격`, { targets: Array.from(targetSet) });
-    }
-    
     // Build volume rank map for UI/logging
     const volumeRankMap: Map<string, number> = new Map();
     volumeLeaders.forEach((vl, idx) => volumeRankMap.set(vl.symbol, idx + 1));
@@ -1275,6 +1253,27 @@ Deno.serve(async (req) => {
     const heldSymbols = (openPos || []).map((p: any) => p.symbol);
     for (const s of heldSymbols) {
       if (!SCAN_SYMBOLS.includes(s)) SCAN_SYMBOLS.push(s);
+    }
+
+    // ============================================================
+    // ★★★ [Phase 1] 데이장 선제 타격 — 정적 타겟 유니버스 적용
+    // Polygon.io로 EMA25 정밀 산출 → 3-필터 통과 Top 5만 집중 타격
+    // ============================================================
+    const capTypeMap = new Map<string, 'large' | 'small'>();
+    for (const s of currentLarge) capTypeMap.set(s, 'large');
+    for (const s of currentSmall) capTypeMap.set(s, 'small');
+    let targetUniverse: TargetUniverseEntry[] = [];
+    try {
+      targetUniverse = await buildTargetUniverse(SCAN_SYMBOLS, capTypeMap, addLog);
+    } catch (e) {
+      await addLog('system', 'error', null, `[Phase1] 타겟 유니버스 빌드 실패: ${(e as Error).message}`, {});
+    }
+    const targetSet = new Set(targetUniverse.map(t => t.symbol));
+    const targetMap = new Map(targetUniverse.map(t => [t.symbol, t]));
+    if (targetUniverse.length > 0) {
+      const heldSet = new Set(heldSymbols);
+      SCAN_SYMBOLS = Array.from(new Set([...targetSet, ...heldSet]));
+      await addLog('system', 'scan', null, `[Phase1] 🎯 스캔 범위 축소 → 타겟 ${targetSet.size}개 + 보유 ${heldSet.size}개 = ${SCAN_SYMBOLS.length}개 집중 타격 | 마중가 알박기 적용`, { targets: targetUniverse.map(t => ({ symbol: t.symbol, ema25: t.ema25, gap: t.emaGapPct, limit: t.limitPriceUSD })) });
     }
 
     // ★★★ [통합 잔고 검증 Reconciliation]
