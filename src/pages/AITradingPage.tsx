@@ -3,6 +3,7 @@ import { IntegratedKPIDashboard } from "@/components/trading/IntegratedKPIDashbo
 import { SessionIndicator } from "@/components/trading/SessionIndicator";
 import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
+import { Phase1TargetCard } from "@/components/trading/Phase1TargetCard";
 import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
@@ -46,6 +47,9 @@ export default function AITradingPage() {
 
       {/* Server Status Banner */}
       <ServerStatusBanner />
+
+      {/* Phase 1 Target Universe — 그물망 알박기 Top 5 */}
+      <Phase1TargetCard />
 
       {/* Strategy Card */}
       <Card className="border-yellow-500/30 bg-yellow-500/5">
