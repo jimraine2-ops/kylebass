@@ -2251,7 +2251,8 @@ Deno.serve(async (req) => {
         const surgeTag = (c as any).isScoreSurge ? '🚨급상승' : '';
         const cpTag = (c as any).hasCriticalPattern ? `🎯[${(c as any).criticalPatterns.join('+')}]` : '';
         const pennyTag = (c as any).isPennyStock ? '🪙' : '';
-        return `${i+1}.${pennyTag}${burstTag}${surgeTag}${cpTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
+        const phase1Tag = (c as any).isPhase1Target ? `🎯[Phase1 마중가:$${(c as any).phase1Limit?.toFixed(2)}]` : '';
+        return `${i+1}.${phase1Tag}${pennyTag}${burstTag}${surgeTag}${cpTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
       }).join(', ');
       // ★ 동전주 개수 표시
       const pennyCount = topCandidates.filter(c => (c as any).isPennyStock).length;
