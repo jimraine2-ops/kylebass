@@ -660,6 +660,119 @@ async function getQuoteAndCandles(symbol: string) {
   return { quote, closes, highs, lows, opens, volumes };
 }
 
+// ============================================================
+// ★★★ [Phase 1] 정적 타겟 유니버스 빌더 (Polygon.io 정밀 EMA)
+// "장중에 종목을 찾지 말고, 장 시작 전에 사냥감을 확정하라"
+// 필터1: 20거래일 평균 거래대금 ≥ ₩30억
+// 필터2: 현재가 ≤ ₩12,000 ($9)
+// 필터3: 현재가 ≤ EMA25 × 0.95 (-5% 이하)
+// ============================================================
+const POLYGON_BASE = 'https://api.polygon.io';
+const TARGET_AVG_DOLLAR_VOLUME_USD = 3_000_000_000 / KRW_RATE; // ₩30억 ≈ $2.22M
+const TARGET_EMA_GAP_PCT = -0.05; // -5%
+const TARGET_PHASE2_GAP_PCT = -0.07; // 매수 마중가: EMA25 × 0.93
+
+interface TargetUniverseEntry {
+  symbol: string;
+  price: number;
+  ema25: number;
+  emaGapPct: number;        // (price - ema25) / ema25
+  avgDollarVolUSD: number;  // 20일 평균 거래대금 USD
+  limitPriceUSD: number;    // EMA25 × 0.93 = 그물망 알박기 가격
+  capType: 'large' | 'small';
+}
+
+let cachedTargetUniverse: { ts: number; list: TargetUniverseEntry[] } | null = null;
+const TARGET_UNIVERSE_TTL_MS = 30 * 60 * 1000; // 30분
+
+async function polygonFetch(path: string): Promise<any> {
+  const key = Deno.env.get('POLYGON_API_KEY');
+  if (!key) return null;
+  const sep = path.includes('?') ? '&' : '?';
+  try {
+    const res = await fetch(`${POLYGON_BASE}${path}${sep}apiKey=${key}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+// Polygon: 최근 30거래일 일봉 → EMA25 + 평균 거래대금 산출
+async function polygonDailyMetrics(symbol: string): Promise<{ ema25: number; avgDollarVolUSD: number; lastClose: number } | null> {
+  const to = new Date().toISOString().split('T')[0];
+  const fromDate = new Date(Date.now() - 60 * 86400000).toISOString().split('T')[0];
+  const data = await polygonFetch(`/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${fromDate}/${to}?adjusted=true&sort=asc&limit=120`);
+  if (!data?.results || data.results.length < 25) return null;
+  const bars = data.results.slice(-30);
+  const closes = bars.map((b: any) => b.c);
+  // EMA25
+  const k = 2 / (25 + 1);
+  let ema = closes.slice(0, 25).reduce((s: number, v: number) => s + v, 0) / 25;
+  for (let i = 25; i < closes.length; i++) ema = closes[i] * k + ema * (1 - k);
+  // 20일 평균 거래대금 (USD)
+  const last20 = bars.slice(-20);
+  const avgDollarVolUSD = last20.reduce((s: number, b: any) => s + (b.c * b.v), 0) / last20.length;
+  return { ema25: +ema.toFixed(4), avgDollarVolUSD, lastClose: closes[closes.length - 1] };
+}
+
+async function buildTargetUniverse(
+  candidatePool: string[],
+  capTypeMap: Map<string, 'large' | 'small'>,
+  addLog: (s: string, a: string, sym: string | null, msg: string, det: any) => Promise<void>,
+): Promise<TargetUniverseEntry[]> {
+  // Cache hit
+  if (cachedTargetUniverse && Date.now() - cachedTargetUniverse.ts < TARGET_UNIVERSE_TTL_MS) {
+    return cachedTargetUniverse.list;
+  }
+
+  await addLog('system', 'scan', null, `[Phase1] 🎯 타겟 유니버스 빌드 시작 — Polygon.io 정밀 EMA25 산출 (풀: ${candidatePool.length}개)`, {});
+
+  const results: TargetUniverseEntry[] = [];
+  // ★ 호출수 절약: 후보 풀을 30개로 제한 (Polygon 무료 = 5 req/min)
+  const sliced = candidatePool.slice(0, 30);
+
+  for (const sym of sliced) {
+    const m = await polygonDailyMetrics(sym);
+    if (!m) continue;
+    // 필터2: 저가주 ($9 이하)
+    if (m.lastClose > MAX_PRICE_USD || m.lastClose < MIN_PRICE_USD) continue;
+    // 필터1: 20일 평균 거래대금 ≥ ₩30억
+    if (m.avgDollarVolUSD < TARGET_AVG_DOLLAR_VOLUME_USD) continue;
+    // 필터3: 현재가 ≤ EMA25 × 0.95
+    const gap = (m.lastClose - m.ema25) / m.ema25;
+    if (gap > TARGET_EMA_GAP_PCT) continue;
+
+    results.push({
+      symbol: sym,
+      price: m.lastClose,
+      ema25: m.ema25,
+      emaGapPct: gap,
+      avgDollarVolUSD: m.avgDollarVolUSD,
+      limitPriceUSD: +(m.ema25 * (1 + TARGET_PHASE2_GAP_PCT)).toFixed(4),
+      capType: capTypeMap.get(sym) || 'small',
+    });
+
+    // Polygon 무료: 12초/req → 짧게 대기
+    await new Promise(r => setTimeout(r, 250));
+  }
+
+  // EMA 갭이 가장 깊은 (즉 가장 oversold) Top 5
+  results.sort((a, b) => a.emaGapPct - b.emaGapPct);
+  const top5 = results.slice(0, 5);
+
+  cachedTargetUniverse = { ts: Date.now(), list: top5 };
+
+  if (top5.length > 0) {
+    const summary = top5.map((t, i) =>
+      `${i+1}.${t.symbol}($${t.price.toFixed(2)}/EMA25:$${t.ema25.toFixed(2)}/${(t.emaGapPct*100).toFixed(1)}%/마중가:$${t.limitPriceUSD.toFixed(2)})`
+    ).join(', ');
+    await addLog('system', 'scan', null, `[Phase1] ✅ 타겟 유니버스 확정 (Top ${top5.length}): ${summary}`, { targets: top5 });
+  } else {
+    await addLog('system', 'scan', null, `[Phase1] ⚠️ 필터 통과 종목 없음 — 기존 SCAN_SYMBOLS 유지`, {});
+  }
+
+  return top5;
+}
+
 // ===== UNIFIED UNIVERSE (대형주 + 소형주 통합) =====
 // ★ 대형주 풀 (300+)
 const LARGE_CAP_UNIVERSE = [
@@ -1113,8 +1226,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    const SCAN_SYMBOLS = Array.from(activeUnifiedList);
-    
+    let SCAN_SYMBOLS = Array.from(activeUnifiedList);
+
     // Build volume rank map for UI/logging
     const volumeRankMap: Map<string, number> = new Map();
     volumeLeaders.forEach((vl, idx) => volumeRankMap.set(vl.symbol, idx + 1));
@@ -1140,6 +1253,27 @@ Deno.serve(async (req) => {
     const heldSymbols = (openPos || []).map((p: any) => p.symbol);
     for (const s of heldSymbols) {
       if (!SCAN_SYMBOLS.includes(s)) SCAN_SYMBOLS.push(s);
+    }
+
+    // ============================================================
+    // ★★★ [Phase 1] 데이장 선제 타격 — 정적 타겟 유니버스 적용
+    // Polygon.io로 EMA25 정밀 산출 → 3-필터 통과 Top 5만 집중 타격
+    // ============================================================
+    const capTypeMap = new Map<string, 'large' | 'small'>();
+    for (const s of currentLarge) capTypeMap.set(s, 'large');
+    for (const s of currentSmall) capTypeMap.set(s, 'small');
+    let targetUniverse: TargetUniverseEntry[] = [];
+    try {
+      targetUniverse = await buildTargetUniverse(SCAN_SYMBOLS, capTypeMap, addLog);
+    } catch (e) {
+      await addLog('system', 'error', null, `[Phase1] 타겟 유니버스 빌드 실패: ${(e as Error).message}`, {});
+    }
+    const targetSet = new Set(targetUniverse.map(t => t.symbol));
+    const targetMap = new Map(targetUniverse.map(t => [t.symbol, t]));
+    if (targetUniverse.length > 0) {
+      const heldSet = new Set(heldSymbols);
+      SCAN_SYMBOLS = Array.from(new Set([...targetSet, ...heldSet]));
+      await addLog('system', 'scan', null, `[Phase1] 🎯 스캔 범위 축소 → 타겟 ${targetSet.size}개 + 보유 ${heldSet.size}개 = ${SCAN_SYMBOLS.length}개 집중 타격 | 마중가 알박기 적용`, { targets: targetUniverse.map(t => ({ symbol: t.symbol, ema25: t.ema25, gap: t.emaGapPct, limit: t.limitPriceUSD })) });
     }
 
     // ★★★ [통합 잔고 검증 Reconciliation]
@@ -1943,6 +2077,15 @@ Deno.serve(async (req) => {
           (r as any).newsSentiment = 50;
           (r as any).newsCount = 0;
 
+          // ★ [Phase 1] 타겟 유니버스 마킹 — 마중가/EMA25 정보 첨부
+          const tgt = targetMap.get(r.sym);
+          if (tgt) {
+            (r as any).isPhase1Target = true;
+            (r as any).phase1Limit = tgt.limitPriceUSD;
+            (r as any).phase1Ema25 = tgt.ema25;
+            (r as any).phase1EmaGapPct = tgt.emaGapPct;
+          }
+
           candidates.push(r);
         }
         if (i + 5 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 150)); // ★ 300→150ms
@@ -1983,7 +2126,11 @@ Deno.serve(async (req) => {
     // Sort: critical pattern → score surge → super pattern → explosive → volume burst → liquidity → score
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY' || currentSession === 'OVERNIGHT') ? 'small' : 'large';
     candidates.sort((a, b) => {
-      // ★ 동전주($1 미만) 최우선
+      // ★ [Phase 1] 타겟 유니버스 최우선 (마중가 알박기 종목)
+      const aTgt = (a as any).isPhase1Target ? 10 : 0;
+      const bTgt = (b as any).isPhase1Target ? 10 : 0;
+      if (aTgt !== bTgt) return bTgt - aTgt;
+      // ★ 동전주($1 미만) 차순위
       const aPenny = (a as any).isPennyStock ? 5 : 0;
       const bPenny = (b as any).isPennyStock ? 5 : 0;
       if (aPenny !== bPenny) return bPenny - aPenny;
@@ -2104,7 +2251,8 @@ Deno.serve(async (req) => {
         const surgeTag = (c as any).isScoreSurge ? '🚨급상승' : '';
         const cpTag = (c as any).hasCriticalPattern ? `🎯[${(c as any).criticalPatterns.join('+')}]` : '';
         const pennyTag = (c as any).isPennyStock ? '🪙' : '';
-        return `${i+1}.${pennyTag}${burstTag}${surgeTag}${cpTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
+        const phase1Tag = (c as any).isPhase1Target ? `🎯[Phase1 마중가:$${(c as any).phase1Limit?.toFixed(2)}]` : '';
+        return `${i+1}.${phase1Tag}${pennyTag}${burstTag}${surgeTag}${cpTag}${c.sym}(${c.scoring.totalScore}점/${c.scoring.metCount}충족/${c.capType}${volTag})`;
       }).join(', ');
       // ★ 동전주 개수 표시
       const pennyCount = topCandidates.filter(c => (c as any).isPennyStock).length;
@@ -2196,8 +2344,10 @@ Deno.serve(async (req) => {
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
       const roundTag = currentRound > 1 ? `[Round ${currentRound}] ` : '';
-      const preBuyLabel = isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
-      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: 3.0% (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const isPhase1 = (r as any).isPhase1Target === true;
+      const phase1Tag = isPhase1 ? ` | 🎯Phase1 그물망(EMA25:$${(r as any).phase1Ema25?.toFixed(2)}/마중가:$${(r as any).phase1Limit?.toFixed(2)}/-${Math.abs((r as any).phase1EmaGapPct*100).toFixed(1)}%)` : '';
+      const preBuyLabel = isPhase1 ? '🎯Phase1마중가체결' : isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
+      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${isPhase1 ? 'Phase1 그물망 알박기 매수' : valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: 3.0% (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${phase1Tag}${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       // ★ 필승 패턴 알림
       if (isCriticalPatternEntry) {
