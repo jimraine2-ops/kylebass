@@ -213,6 +213,9 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
             💎 Value-Filter | 기업가치 A/B등급 → 익절확정 98%
           </Badge>
+          <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30 text-[10px] font-bold">
+            🎯 Phase1 그물망 | Polygon EMA25 마중가 알박기 (Top 5)
+          </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
           </Badge>
@@ -247,6 +250,12 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
             <p className="font-semibold text-foreground">[저가주 호가 최적화] ₩12,000↓</p>
             <p>💎 호가창 얇아질 조짐 → AI 추천 구간에서 선제적 매도</p>
             <p>🛡️ Iron-Defense: +1% → SL+0.2% | +3% → 즉시 확정</p>
+          </div>
+          <div className="border-l-2 border-cyan-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-cyan-400">[Phase 1] 데이장 선제 타격 — 그물망 알박기</p>
+            <p>🎯 Polygon.io 정밀 EMA25 산출 → 3-필터(거래대금 30억+ / 가격 ₩12,000↓ / EMA-5%↓)</p>
+            <p>🪤 EMA25 × 0.93 마중가 알박기 → 가격이 닿는 순간 즉시 체결</p>
+            <p>♾️ 익절 후 Top 5 재계산 → 무한 루프</p>
           </div>
         </CardContent>
       </Card>
