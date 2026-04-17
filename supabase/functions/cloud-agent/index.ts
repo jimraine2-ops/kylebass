@@ -2077,6 +2077,15 @@ Deno.serve(async (req) => {
           (r as any).newsSentiment = 50;
           (r as any).newsCount = 0;
 
+          // ★ [Phase 1] 타겟 유니버스 마킹 — 마중가/EMA25 정보 첨부
+          const tgt = targetMap.get(r.sym);
+          if (tgt) {
+            (r as any).isPhase1Target = true;
+            (r as any).phase1Limit = tgt.limitPriceUSD;
+            (r as any).phase1Ema25 = tgt.ema25;
+            (r as any).phase1EmaGapPct = tgt.emaGapPct;
+          }
+
           candidates.push(r);
         }
         if (i + 5 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 150)); // ★ 300→150ms
