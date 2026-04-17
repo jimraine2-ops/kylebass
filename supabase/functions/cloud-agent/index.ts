@@ -1955,27 +1955,64 @@ Deno.serve(async (req) => {
         }
 
         if (shouldClose) {
-          await addLog('unified', 'exit_attempt', sym, `[매도시도] ${sym} ${newStatus}`, { price, pnlPct: +pnlPct.toFixed(2), newStatus, quantScore });
-          const saleProceeds = Math.floor(price * pos.quantity * KRW_RATE);
-          const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
-          const pnlKRW = saleProceeds - buyCost;
-          const balanceBefore = balance;
-          const newBalance = balance + saleProceeds;
-          await supabase.from('unified_trades').update({
-            status: newStatus, close_price: price, pnl: pnlKRW,
-            closed_at: now.toISOString(),
-            ai_reason: `${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`,
-          }).eq('id', pos.id);
-          await supabase.from('unified_wallet').update({ balance: newBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
-          balance = newBalance;
-          // ★ 누적 수익 계산
-          const { data: allClosedToday } = await supabase
-            .from('unified_trades')
-            .select('pnl')
-            .neq('status', 'open')
-            .gte('closed_at', todayStart2.toISOString());
-          const cumulPnl = (allClosedToday || []).reduce((s, t) => s + (t.pnl || 0), 0);
-          await addLog('unified', 'exit', sym, `[Round ${currentRound}] ${closeReason} | PnL: ${fmtKRWRaw(pnlKRW)} | 오늘의 총 누적 수익: ${fmtKRWRaw(cumulPnl)} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}]`, { pnl: pnlKRW, pnlPct: +pnlPct.toFixed(2), cumulativePnl: cumulPnl, round: currentRound });
+          // ★★★ [실전 보정] 가짜 익절 방어 — 3중 체결 확정 가드 ★★★
+          // 익절성(수익) 매도일 때만 검증. 손절·방어성·본절은 즉시 처리.
+          const isProfitExit = pnlPct > 0 && (
+            newStatus === 'iron_defense_profit' ||
+            newStatus === 'adaptive_exit_profit' ||
+            newStatus === 'trailing_profit' ||
+            newStatus === 'mega_profit' ||
+            newStatus === 'explosion_profit' ||
+            newStatus === 'profit_taken' ||
+            newStatus === 'breakeven_exit'
+          );
+          const lastBarVol = data.volumes[data.volumes.length - 1] || 0;
+          const lastBarClose = data.closes[data.closes.length - 1] || price;
+          const fillCheck = await verifyRealFill({
+            symbol: sym,
+            price,
+            entryPrice: pos.price,
+            pnlPct,
+            isProfitExit,
+            lastBarVolume: lastBarVol,
+            lastBarClose,
+          });
+
+          if (!fillCheck.fillable) {
+            // 미체결 처리 — 포지션 유지하고 다음 사이클 재시도
+            await addLog('unified', 'fill_failed', sym, `[미체결] ${sym} ${newStatus} 시도 → ${fillCheck.reason} | 포지션 유지, 다음 사이클 재검증`, {
+              attemptedStatus: newStatus,
+              pnlPct: +pnlPct.toFixed(2),
+              barValueKRW: fillCheck.barValueKRW,
+              tdVol: fillCheck.tdVol,
+              priceUSD: price,
+            });
+            shouldClose = false; // 매도 취소
+          } else {
+            await addLog('unified', 'exit_attempt', sym, `[매도시도] ${sym} ${newStatus} | 체결 확정: ${fillCheck.reason}`, { price, pnlPct: +pnlPct.toFixed(2), newStatus, quantScore, fillCheck: fillCheck.reason });
+            // 슬리피지 보정 매도가 — 익절성 매도는 -0.2% 슬리피지 차감하여 실체결가로 기록
+            const fillPrice = isProfitExit ? +(price * (1 - 0.002)).toFixed(4) : price;
+            const saleProceeds = Math.floor(fillPrice * pos.quantity * KRW_RATE);
+            const buyCost = Math.floor(pos.price * pos.quantity * KRW_RATE);
+            const pnlKRW = saleProceeds - buyCost;
+            const balanceBefore = balance;
+            const newBalance = balance + saleProceeds;
+            await supabase.from('unified_trades').update({
+              status: newStatus, close_price: fillPrice, pnl: pnlKRW,
+              closed_at: now.toISOString(),
+              ai_reason: `${closeReason} | 실체결가 $${fillPrice} (슬리피지 -0.2%) | PnL: ${fmtKRWRaw(pnlKRW)} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}] | ${fillCheck.reason}`,
+            }).eq('id', pos.id);
+            await supabase.from('unified_wallet').update({ balance: newBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
+            balance = newBalance;
+            // ★ 누적 수익 계산
+            const { data: allClosedToday } = await supabase
+              .from('unified_trades')
+              .select('pnl')
+              .neq('status', 'open')
+              .gte('closed_at', todayStart2.toISOString());
+            const cumulPnl = (allClosedToday || []).reduce((s, t) => s + (t.pnl || 0), 0);
+            await addLog('unified', 'exit', sym, `[Round ${currentRound}] ${closeReason} | 실체결 PnL: ${fmtKRWRaw(pnlKRW)} | 오늘 총 수익: ${fmtKRWRaw(cumulPnl)} | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBalance)}] | ${fillCheck.reason}`, { pnl: pnlKRW, pnlPct: +pnlPct.toFixed(2), cumulativePnl: cumulPnl, round: currentRound, fillReason: fillCheck.reason });
+          }
         }
       }
       await new Promise(r => setTimeout(r, 200));
