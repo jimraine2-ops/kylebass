@@ -1769,7 +1769,8 @@ Deno.serve(async (req) => {
               await addLog('unified', 'hold', sym, `[🎯15%→30%추격] ${sym} +${pnlPct.toFixed(2)}% | 고점-${drop.toFixed(2)}% → 트레일링 유지`, { quantScore, pnlPct: +pnlPct.toFixed(2) });
             }
           }
-        } else if (pnlPct >= PROFIT_CHASE_TRIGGER) {
+        } else if (pnlPct >= PROFIT_CHASE_TRIGGER + SLIPPAGE_BUFFER_PCT) {
+          // ★ [Slippage-Filter] 3.0% 익절 인정 → 실제 +3.3%(=3.0+0.3 버퍼) 도달 시에만 체결 (호가 스프레드 보정)
           // ★ [Iron-Defense 2단계] 3% 도달 즉시 수익 확정 — 체결강도 200%+ 예외 시 트레일링 전환
           const aggressionPct = scoring?.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const currentAggression = aggressionPct ? parseInt(aggressionPct) : 0;
