@@ -130,25 +130,27 @@ export default function UnifiedScanPage() {
 
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🎯 [선제적 체결] 30억 수급 × EMA 역추세 × 데이장 스나이핑</p>
-          <p className="italic text-yellow-400/80">"데이터가 늦다면 우리는 미래의 가격을 계산한다. 가격이 우리를 찾아오게 만들고, 체결되는 순간 이미 3%의 수익권을 확보하라."</p>
+          <p className="font-bold text-yellow-400 text-sm">🏆 Finnhub × Twelve Data 하이브리드 필승 전략</p>
+          <p className="italic text-yellow-400/80">"Finnhub로 사냥감을 식별하고, Twelve Data로 심장을 쏜다. 100% 익절이 보장되지 않으면 방아쇠를 당기지 마라."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Hard-Criteria] 4대 AND 게이트</p>
-            <p>① 수급 30억↑ ② EMA25 이격 -5%↑ ③ 5봉↓+음봉 ④ 체결강도 90%↑</p>
-          </div>
-          <div className="border-l-2 border-cyan-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Pre-Calculation] P_Target = EMA₂₅ × (1 - 5~7%)</p>
-            <p>📐 반등 절대가격 선제 산출 → 데이장 전 매수 예약 배치</p>
-          </div>
-          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Liquidity-Trap] 30억↑ 수급주 저점 -1.5% 알박기</p>
-            <p>🕸️ 시장가 금지 | 호가 두꺼운 종목 하방 경직성 역이용</p>
-          </div>
-          <div className="border-l-2 border-purple-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Bridge-Logic] US 마감 → KST 09:00 즉시 투입</p>
+            <p className="font-semibold text-foreground">[Dual-Engine] 데이터 소스 역할 분담</p>
+            <p>📰 Finnhub: 뉴스 감성 85%↑ 'Extreme Bullish' + 섹터 모멘텀 주도주 리스트</p>
+            <p>📊 Twelve Data: 10대 지표(RSI·MACD·VWAP·볼린저) 0.1초 쿼리 + 호가·체결 감시</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Infinite-Gain] 3% 익절 → ₩100만 리셋 → 무한 루프</p>
+            <p className="font-semibold text-foreground">[Zero-Loss] The Golden Cross 진입</p>
+            <p>🔒 ₩12,000↓ + Extreme Bullish + 수렴→발산 + 익절확률 90%↑ → ₩100만 5종목 집중</p>
+            <p>🔒 +0.8% → SL 매수가+0.1% 강제 고정 (Zero-Risk Lock)</p>
+          </div>
+          <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[Iron-Hold] 무패 & 30~50% 추격</p>
+            <p>🛡️ 익절확률 90%+ → 눌림목 매도 금지 | 점수 45점 미만 붕괴 시까지 무제한 홀딩</p>
+          </div>
+          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[Anti-Latency] 데이터 시차 역이용 + 호가 장악</p>
+            <p>🔮 예측형 선취매: 뉴스 전 지표 60점 돌파 시 2~3호가 아래 지정가 대기</p>
+            <p>⏱️ Timestamp Guard: 1초↑ 지연 시 추격매수 차단 → Limit Order 자동 전환</p>
+            <p>💧 Liquidity Guard: 진입금액 10배↑ 매수잔량 확인 → Passive Fill(호가 알박기)</p>
           </div>
         </CardContent>
       </Card>

@@ -9,8 +9,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 100; // ★ 동전주: 최저 100원까지 허용
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_KRW = 10000; // ★ ₩10,000 미만 = $7.4 미만 저가주 전용 (자산 회전율 극대화)
-const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $7.4
+const MAX_PRICE_KRW = 12000; // ★ ₩12,000 미만 = $9 미만 저가주 전용 (자산 회전율 극대화)
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $9
 const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
 const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
 const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
@@ -18,32 +18,20 @@ const PENNY_BREAKEVEN_PCT = 1.0; // ★ 동전주 본절보호: +1.0% (강화)
 const PENNY_IRON_HOLD_SCORE = 65; // ★ 동전주 철갑 홀딩: 65점
 const PENNY_MAX_POSITIONS = 3; // ★ 동전주 최대 3종목 집중
 const GHOST_BREAKEVEN_PCT = 1.0; // ★ Zero-Risk Lock: +1.0% 돌파 시 즉시 SL→매수가+0.2% (Iron-Defense 1단계)
-const PROFIT_CHASE_TRIGGER = 3.0; // ★ 3% 익절 확정 트리거 (EMA25 회귀 전략)
-const PROFIT_CHASE_SL_PCT = 1.03; // ★ 수익 추격 SL: 매수가 +3%
+const PROFIT_CHASE_TRIGGER = 3.0; // ★ 3% 익절 확정 트리거: +3.0% 터치 즉시 시장가 매도 (Iron-Defense 2단계)
+const PROFIT_CHASE_SL_PCT = 1.015; // ★ 수익 추격 SL: 매수가 +1.5%
 const TRAILING_DROP_PCT = 2.0; // ★ 추격 매도: 고점 대비 2.0% 하락 시에만 전량 매도
 const DAILY_TARGET_KRW_CONST = 500000; // ★ 일일 목표: ₩500,000 (일당 50만 원 탈취)
-const ZERO_RISK_SL_PCT = 1.002; // ★ Iron-Defense 1단계 SL: 매수가 +0.2%
+const ZERO_RISK_SL_PCT = 1.002; // ★ Iron-Defense 1단계 SL: 매수가 +0.2% (기존 +0.1% → 강화)
 const ALPHA_ENTRY_NEWS_MIN = 90; // ★ [Alpha-Entry] 뉴스 감성 90%+ 필수
 const ALPHA_ENTRY_WIN_PROB = 95; // ★ [Alpha-Entry] 익절 확률 95% 이상만 진입
 const VOLUME_EXPLOSION_THRESHOLD = 200; // ★ [Iron-Defense 예외] 체결강도 200%+ 시 트레일링 전환
-const EXIT_LIQUIDITY_MIN_KRW = 10000000; // ★ 1.5% 익절가 매수대기 잔량 ₩1,000만+ 필수
+const EXIT_LIQUIDITY_MIN_KRW = 10000000; // ★ 3% 익절가 매수대기 잔량 ₩1,000만+ 필수
 const PREDICTIVE_ENTRY_SCORE = 60; // ★ Anti-Latency: 뉴스 없이 지표 60점 돌파 시 선취매
 const LIQUIDITY_MULTIPLIER = 10; // ★ Liquidity Guard: 진입금액의 10배 이상 매수잔량 필요
 const PASSIVE_FILL_TICKS = 3; // ★ 호가 장악: 매수 1호가 알박기 (시장가 금지)
 const LATENCY_GUARD_SEC = 1.0; // ★ Timestamp Guard: 1초 이상 지연 시 2~3호가 아래 지정가
-const ROUND_RESET_BASE_KRW = 1000000; // ★ [Infinite Loop] 라운드 리셋 원금: ₩1,000,000
-const HIGH_LIQUIDITY_FLOOR_USD = 2220000; // ★ [Liquidity-Filter] 거래대금 $2.22M(≈30억원) 이상만 허용
-const MIN_ENTRY_AGGRESSION = 90; // ★ [Aggression-Filter] 체결강도 90% 이상만 매수 허용
-const DIP_CANDLE_COUNT = 5; // ★ [Dip-Buying] 5개 봉 하락 구간 감지
-const DIP_RSI_THRESHOLD = 30; // ★ [Dip-Buying] RSI 과매도 30 이하에서 반등 포착
-const DIP_BUY_AMOUNT_KRW = 1000000; // ★ [Dip-Buying] 하락봉 저점 매수 ₩100만원 투입
-const DIP_LIMIT_OFFSET_PCT = 0.02; // ★ [지연보정] API 15분 지연 → 현재가 -1.5~2% 아래에 매수 그물
-const REBOUND_TARGET_LOW = 2.0; // ★ [EMA25 회귀] 기본 반등 익절 2.0%
-const REBOUND_TARGET_HIGH = 3.0; // ★ [EMA25 회귀] 수급 강력(90%+) 시 3.0% 트레일링
-const EMA25_GAP_MIN_PCT = 5.0; // ★ [EMA25 이격도] 현재가가 EMA25보다 최소 5% 이상 아래
-const PRE_CALC_MARGIN_MIN = 0.05; // ★ [Pre-Calculation] EMA25 기준 최소 마진 5%
-const PRE_CALC_MARGIN_MAX = 0.07; // ★ [Pre-Calculation] EMA25 기준 최대 마진 7%
-const LIQUIDITY_TRAP_OFFSET_PCT = 0.015; // ★ [Liquidity-Trap] 지연 저점 대비 -1.5% 알박기
+const ROUND_RESET_BASE_KRW = 5000000; // ★ [Infinite Loop] 라운드 리셋 원금: ₩5,000,000
 
 // ★ [Infinite Loop] 라운드 추적: 당일 몇 번째 무한 루프인지 기록
 let currentRound = 1;
@@ -345,75 +333,6 @@ function detectVacuumZone(closes: number[], highs: number[], lows: number[], vol
   const avgVol = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
   const isLowResistance = candlesInZone <= 3 || (avgVol > 0 && volumeInZone / (candlesInZone || 1) < avgVol * 0.3);
   return { hasVacuum: isLowResistance && gapPct >= 3.0, vacuumPct: gapPct, resistance: recentHigh };
-}
-
-// ===== [Dip-Buying] 5개 봉 하락 구간 감지 + 현재 음봉 확인 + RSI 과매도 반등 포착 =====
-function detectDipBuySignal(closes: number[], highs: number[], lows: number[], volumes: number[], opens?: number[]): { isDip: boolean; dipScore: number; rsiReversal: boolean; downCandles: number; currentRSI: number; reboundTargetPct: number; isBearishCandle: boolean; details: string } {
-  const n = closes.length - 1;
-  if (n < DIP_CANDLE_COUNT + 5) return { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, isBearishCandle: false, details: '' };
-
-  // 0. 현재 봉이 음봉(하락봉)인지 확인: close < open
-  const currentOpen = opens ? opens[n] : closes[n - 1];
-  const isBearishCandle = closes[n] < currentOpen;
-
-  // 1. 직전 25개 봉 중 음봉(하락봉) 비율 계산
-  let downCount = 0;
-  const recentCloses = closes.slice(-(DIP_CANDLE_COUNT + 1));
-  for (let i = 1; i < recentCloses.length; i++) {
-    if (recentCloses[i] < recentCloses[i - 1]) downCount++;
-  }
-  const downRatio = downCount / DIP_CANDLE_COUNT;
-
-  // 2. 5봉 구간 추세 하락 여부: 시작가 > 현재가
-  const startPrice = recentCloses[0];
-  const endPrice = recentCloses[recentCloses.length - 1];
-  const trendDown = endPrice < startPrice;
-  const trendDropPct = startPrice > 0 ? ((startPrice - endPrice) / startPrice) * 100 : 0;
-
-  // 3. RSI 과매도 반등 감지: RSI ≤ 30에서 상향 전환
-  const rsi = calculateRSI(closes, 14);
-  const currentRSI = rsi[n] || 50;
-  const prevRSI = rsi[n - 1] || 50;
-  const rsiReversal = currentRSI <= DIP_RSI_THRESHOLD + 10 && currentRSI > prevRSI && prevRSI <= DIP_RSI_THRESHOLD;
-
-  // 4. 하락 에너지 소진 판단: 최근 3봉의 하락폭이 축소
-  const last3Changes = [];
-  for (let i = n - 2; i <= n; i++) {
-    if (i > 0) last3Changes.push(closes[i] - closes[i - 1]);
-  }
-  const energyExhausted = last3Changes.length >= 2 && last3Changes[last3Changes.length - 1] > last3Changes[0];
-
-  // 5. 체결강도 기반 반등 목표 산정 + EMA25 이격도 검증
-  const avgVol5 = volumes.slice(-5).reduce((a, b) => a + b, 0) / 5;
-  const avgVol20 = volumes.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, volumes.length);
-  const volumeRatio = avgVol20 > 0 ? avgVol5 / avgVol20 : 1;
-  
-  // ★ [EMA25 이격도] 현재가가 25일 EMA 대비 5% 이상 아래인지 확인
-  const ema25 = calculateEMA(closes, 25);
-  const currentEMA25 = ema25[n] || closes[n];
-  const ema25GapPct = currentEMA25 > 0 ? ((currentEMA25 - closes[n]) / currentEMA25) * 100 : 0;
-  const hasEMA25Gap = ema25GapPct >= EMA25_GAP_MIN_PCT; // 5%+ 이격
-
-  // 체결강도 90%+ → 3.0% (EMA 회귀), 미만 → 2.0~2.5% 유연 익절
-  const reboundTargetPct = volumeRatio >= 1.2 ? REBOUND_TARGET_HIGH : volumeRatio >= 1.0 ? 2.5 : REBOUND_TARGET_LOW;
-
-  // ★ EMA25 이격도가 5% 미만이면 Dip-Buy 비활성화 (반등 여력 부족)
-  const isDip = trendDown && isBearishCandle && downRatio >= 0.5 && hasEMA25Gap && (rsiReversal || (currentRSI <= DIP_RSI_THRESHOLD + 5 && energyExhausted));
-  let dipScore = 0;
-  if (trendDown) dipScore += 15;
-  if (isBearishCandle) dipScore += 10;
-  if (hasEMA25Gap) dipScore += 25; // ★ EMA25 이격도 5%+ 가산점
-  else if (ema25GapPct >= 3) dipScore += 10;
-  if (downRatio >= 0.6) dipScore += 20;
-  else if (downRatio >= 0.5) dipScore += 10;
-  if (rsiReversal) dipScore += 20;
-  else if (currentRSI <= DIP_RSI_THRESHOLD) dipScore += 10;
-  if (energyExhausted) dipScore += 15;
-
-  const bearishTag = isBearishCandle ? '🔴음봉' : '🟢양봉';
-  const ema25Tag = hasEMA25Gap ? `✅EMA25이격${ema25GapPct.toFixed(1)}%` : `⚠️이격${ema25GapPct.toFixed(1)}%(<5%)`;
-  const details = `5봉 하락${downCount}개(${(downRatio*100).toFixed(0)}%) | ${bearishTag} | 추세-${trendDropPct.toFixed(1)}% | RSI ${currentRSI.toFixed(1)}${rsiReversal ? '↑반등' : ''} | ${ema25Tag} | 에너지${energyExhausted ? '소진' : '지속'} | 목표${reboundTargetPct}%`;
-  return { isDip, dipScore, rsiReversal, downCandles: downCount, currentRSI, reboundTargetPct, isBearishCandle, ema25GapPct, details };
 }
 
 
@@ -1461,7 +1380,7 @@ Deno.serve(async (req) => {
         const aggrMatch = aggrDetailStr.match(/(\d+)%/);
         const volumeIntensity = aggrMatch ? parseInt(aggrMatch[1]) : 0;
         const dynamicTPPct = volumeIntensity >= 150 ? 3.0 : volumeIntensity >= 100 ? 2.5 : 2.0;
-        const dynamicTPLabel = volumeIntensity >= 150 ? 'EMA회귀 홀딩(3%)' : volumeIntensity >= 100 ? '분할 대응(2.5%)' : '빠른 회전(2%)';
+        const dynamicTPLabel = volumeIntensity >= 150 ? '강력 홀딩' : volumeIntensity >= 100 ? '분할 대응' : '빠른 회전';
         
         // ★ [Dynamic-Target] AI 추천 매도 구간 로그
         if (pnlPct >= 0.5) {
@@ -1486,7 +1405,7 @@ Deno.serve(async (req) => {
         }
 
         // ★ [저가주 최적화] ₩12,000 미만: 호가 얇아질 때 선제적 매도
-        const isLowPriceStock = toKRW(price) < 10000;
+        const isLowPriceStock = toKRW(price) < 12000;
         if (isLowPriceStock && pnlPct >= 2.0 && pnlPct < 3.0 && volumeIntensity < 100) {
           await addLog('unified', 'info', sym, `[저가주 호가 최적화] ${sym} ₩${Math.round(toKRW(price)).toLocaleString()} 저가주 | 체결강도 ${volumeIntensity}%(<100%) + ${pnlPct.toFixed(1)}% → 선제적 ${dynamicTPPct}% 구간 매도 권장`, { volumeIntensity, pnlPct: +pnlPct.toFixed(2), priceKRW: Math.round(toKRW(price)) });
         }
@@ -1521,7 +1440,7 @@ Deno.serve(async (req) => {
           await supabase.from('unified_trades').update({ peak_price: peakPrice }).eq('id', pos.id);
         }
 
-        // ===== [핵심] 익절 로직 — 3% 전까지 절대 매도 금지, 그 이후 고점-2.0% 트레일링만 =====
+        // ===== [핵심] 익절 로직 — 3.0% 전까지 절대 매도 금지, 그 이후 고점-2.0% 트레일링만 =====
         let shouldClose = false;
         let closeReason = '';
         let newStatus = 'closed';
@@ -1597,9 +1516,9 @@ Deno.serve(async (req) => {
               await addLog('unified', 'hold', sym, `[🔥폭발추격] ${sym} +${pnlPct.toFixed(2)}% | 체결강도 ${currentAggression}%(≥200%) 폭발! 고점-1.0% 트레일링으로 10~20% 극대화 추격 중`, { quantScore, pnlPct: +pnlPct.toFixed(2), aggression: currentAggression, drop });
             }
           } else {
-           // ★ [Iron-Defense 2단계 확정] 3% 터치 → 즉시 시장가 매도로 수익 확정 (EMA25 회귀)
+            // ★ [Iron-Defense 2단계 확정] 3% 터치 → 즉시 시장가 매도로 수익 확정
             shouldClose = true;
-            closeReason = `[🎯3%확정익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% ≥ 3% EMA25회귀 Iron-Defense 2단계 → 즉시 수익 확정 (체결강도 ${currentAggression}%<200%)`;
+            closeReason = `[🎯3%확정익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% ≥ 3.0% Iron-Defense 2단계 → 즉시 수익 확정 (체결강도 ${currentAggression}%<200%)`;
             newStatus = 'iron_defense_profit';
           }
         } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER) {
@@ -1610,7 +1529,7 @@ Deno.serve(async (req) => {
             closeReason = `[🎯Adaptive-Exit] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% 힘의 균열(${triggerDetail}) → 목표 ${dynamicTPPct}% 미도달이나 즉시 익절 (체결강도 ${volumeIntensity}%/${dynamicTPLabel})`;
             newStatus = 'adaptive_exit_profit';
           } else {
-            // ★ [Iron-Defense 1단계] 1~1.5% 구간: SL→매수가+0.2% 고정, 목표까지 인내
+            // ★ [Iron-Defense 1단계] 1~3% 구간: SL→매수가+0.2% 고정, 목표까지 인내
             if (pos.stop_loss < pos.price * ZERO_RISK_SL_PCT) {
               const ironSL = +(pos.price * ZERO_RISK_SL_PCT).toFixed(4);
               await supabase.from('unified_trades').update({ stop_loss: ironSL }).eq('id', pos.id);
@@ -1840,11 +1759,8 @@ Deno.serve(async (req) => {
       );
     }
     
-    // ★ [Day-Break + Bridge-Logic] KST 9:00:01 도달 → 매수 제한 해제 + ₩1,000,000 원금 재세팅 + 공격 모드 전환
-    // ★ [Bridge-Logic] US 정규장 마감 시 5봉 하락 + EMA25 이격 5%+ 완성 종목을 데이장 개시와 동시에 매수 예약
+    // ★ [Day-Break] KST 9:00:01 도달 → 매수 제한 해제 + ₩1,000,000 원금 재세팅 + 공격 모드 전환
     const isDayBreakWindow = kstTimeMinutes >= 540 && kstTimeMinutes < 545; // KST 9:00~9:05
-    const bridgeTargets: { sym: string; targetPrice: number; ema25: number; gapPct: number }[] = [];
-    
     if (isDayBreakWindow && currentOpenCountForPause === 0) {
       // ★ 원금 ₩1,000,000 리셋 (라운드 시작)
       const DAY_BREAK_CAPITAL = 1000000;
@@ -1857,53 +1773,18 @@ Deno.serve(async (req) => {
         balance = DAY_BREAK_CAPITAL;
       }
       
-      // ★ [Bridge-Logic] US 정규장 마감 데이터 동기화: 30억+ 수급주 중 EMA25 이격 5%+ 완성 종목 스캔
-      const bridgeScanSymbols = [...Array.from(LARGE_SET).slice(0, 20), ...Array.from(SMALL_SET).slice(0, 15)];
-      for (let bi = 0; bi < bridgeScanSymbols.length; bi += 5) {
-        const batch = bridgeScanSymbols.slice(bi, bi + 5);
-        const bResults = await Promise.all(batch.map(sym => getQuoteAndCandles(sym).catch(() => null)));
-        for (let bj = 0; bj < bResults.length; bj++) {
-          const bData = bResults[bj];
-          if (!bData || !bData.closes || bData.closes.length < 30) continue;
-          const bSym = batch[bj];
-          const bn = bData.closes.length - 1;
-          const bEma25 = calculateEMA(bData.closes, 25);
-          const bCurrentEMA = bEma25[bn] || bData.closes[bn];
-          const bGapPct = bCurrentEMA > 0 ? ((bCurrentEMA - bData.closes[bn]) / bCurrentEMA) * 100 : 0;
-          
-          // 조건: EMA25 이격 5%+ AND 5봉 하락 추세
-          if (bGapPct >= EMA25_GAP_MIN_PCT) {
-            const bDip = detectDipBuySignal(bData.closes, bData.highs, bData.lows, bData.volumes, bData.opens);
-            if (bDip.isDip && bDip.isBearishCandle) {
-              // ★ [Pre-Calculation] 매수 타겟가: EMA25 × (1 - Margin)
-              const margin = PRE_CALC_MARGIN_MIN + Math.random() * (PRE_CALC_MARGIN_MAX - PRE_CALC_MARGIN_MIN);
-              const targetPrice = +(bCurrentEMA * (1 - margin)).toFixed(4);
-              bridgeTargets.push({ sym: bSym, targetPrice, ema25: bCurrentEMA, gapPct: bGapPct });
-              await addLog('system', 'bridge', bSym, 
-                `[Bridge-Logic] 🌉 ${bSym} US 정규장 마감 데이터 동기화 | EMA25=${fmtKRW(bCurrentEMA)} 이격-${bGapPct.toFixed(1)}% | ` +
-                `5봉↓+음봉 완성 → 데이장 매수 타겟: P_Target=${fmtKRW(targetPrice)} (EMA25×${(1-margin).toFixed(3)}) | ` +
-                `KST 09:00:01 즉시 매수 예약 투입`,
-                { sym: bSym, ema25: bCurrentEMA, gapPct: bGapPct, margin, targetPrice }
-              );
-            }
-          }
-        }
-        if (bi + 5 < bridgeScanSymbols.length) await new Promise(r => setTimeout(r, 100));
-      }
-      
       await addLog('system', 'day-break', null, 
         `[Day-Break] 🟢 오전 9시 데이장 사냥 강제 재개! Round ${currentRound} 공격 모드 전환 | ` +
         `원금 ${fmtKRWRaw(DAY_BREAK_CAPITAL)} 세팅 완료 | 누적 수익 유지: ${fmtKRWRaw(dailyPnl)} | ` +
-        `Bridge-Logic 타겟: ${bridgeTargets.length}개 (${bridgeTargets.map(b => `${b.sym}@${fmtKRW(b.targetPrice)}`).join(', ') || '없음'}) | ` +
         `₩12,000↓ 저가주 중 익절확률 95%↑ + AI 추천 2~3% 구간 확보 종목 즉시 투입 | ` +
         `아시아 세션 수급 + Finnhub 최신 뉴스 결합 종목 최우선 요격`,
-        { dayBreak: true, round: currentRound, balance: DAY_BREAK_CAPITAL, dailyPnl, bridgeTargets }
+        { dayBreak: true, round: currentRound, balance: DAY_BREAK_CAPITAL, dailyPnl }
       );
     }
     
     // ★ [Zero-Loss] 100% 익절 방어막 상시 가동 로그 (매 사이클)
     await addLog('system', 'defense', null, 
-      `[Zero-Loss] 🛡️ Iron-Defense 상시 가동 | +1.0%→SL+0.2% 본절보호 | 가변 익절 1.0%/1.3%/1.5% | 체결강도 200%↑→트레일링(-1%)`,
+      `[Zero-Loss] 🛡️ Iron-Defense 상시 가동 | +1.0%→SL+0.2% 본절보호 | 가변 익절 2%/2.5%/3% | 체결강도 200%↑→트레일링(-1%)`,
       { zeroLoss: true }
     );
 
@@ -1923,8 +1804,6 @@ Deno.serve(async (req) => {
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
     const MAX_POSITIONS = 5; // ★ 정예 1~5선: 100만 원을 최대 5개에 분산 투입
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
-    let dipBuyScanned = 0; // Dip-Buy 감지 카운터
-    let dipBuyDetected = 0;
 
     if (!marketBuyHalt && !isOpeningRush && !safePauseActive) {
       for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
@@ -1964,86 +1843,61 @@ Deno.serve(async (req) => {
             r.scoring.totalScore < (isPenny ? PENNY_ENTRY_SCORE : adaptedEntryThreshold) &&
             !hasCriticalPattern;
 
-          // ★ 유동성 하한선 & 수급 동기화 (Dip-Buy 판정을 위해 점수 필터보다 먼저 실행)
+          // ★ 동전주 전용 진입 문턱: 70점 (일반: 65점)
+          const pennyEntryThreshold = PENNY_ENTRY_SCORE;
+          const effectiveThreshold = isPenny ? Math.max(pennyEntryThreshold, adaptedEntryThreshold) : adaptedEntryThreshold;
+          
+          // 점수 필터: 일반 진입은 effectiveThreshold, 필승 패턴 시 50점까지 완화, 예측형 진입 60점
+          if (!hasCriticalPattern && !isPredictiveEntry && r.scoring.totalScore < effectiveThreshold) continue;
+          if (hasCriticalPattern && r.scoring.totalScore < 50) continue; // 패턴 있어도 최소 50점
+          
+          const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
+          const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
+          if (alreadyHolding && !isPyramiding) continue;
+          if (openCount >= MAX_POSITIONS) continue;
+
+          // ★ 유동성 하한선 & 수급 동기화
           const vlInfo = volumeLeaders.find(vl => vl.symbol === r.sym);
           const accumPattern = r.scoring.accumulation;
           const isAccumCandidate = isLowVolumeSession && accumPattern?.isAccumulating;
           
-          // ★ [Liquidity Guard] 매수잔량 절대 법칙
+          // ★ [Liquidity Guard] 매수잔량 절대 법칙: 진입금액의 10배 이상 유동성 확보된 종목만 진입
           const tradingVal = vlInfo?.tradingValue || 0;
-          const entryAmountKRW = balance * 0.20;
+          const entryAmountKRW = balance * 0.20; // 예상 진입 금액 (20%)
           const liquidityCheck = checkLiquidityGuard(tradingVal, entryAmountKRW);
-
-          // ★ [Liquidity-Filter] 고유동성 하한선: 거래대금 $2.22M(≈30억원) 이상만 허용
-          const meetsHighLiquidityFloor = tradingVal >= HIGH_LIQUIDITY_FLOOR_USD;
           
-          // ★ [Historical-Volume] 과거 20거래일 평균 거래대금 30억+ 유지 검증 (Hard-Criteria)
-          let historicalVolOk = false;
-          let historicalAvgTradingVal = 0;
-          if (r.data && r.data.volumes && r.data.closes && r.data.volumes.length >= 10) {
-            const recentDays = Math.min(20, r.data.volumes.length); // ★ 20거래일 기준
-            let avgTradingVal = 0;
-            for (let vi = r.data.volumes.length - recentDays; vi < r.data.volumes.length; vi++) {
-              avgTradingVal += (r.data.volumes[vi] || 0) * (r.data.closes[vi] || 0);
+          // ★ 필승 패턴/매집 패턴/Predictive Entry + Finnhub 뉴스 90점 시 유동성 필터 해제
+          if (!isAccumCandidate && !hasCriticalPattern) {
+            if (!liquidityCheck.passed && !isPredictiveEntry) {
+              // 유동성 부족 → 차단 (필승 패턴/매집/예측형 제외)
+              if (vlInfo && vlInfo.tradingValue < 10000) continue;
+              const sessionAvgTradingValue = volumeLeaders.length > 0 
+                ? volumeLeaders.reduce((sum, vl) => sum + vl.tradingValue, 0) / volumeLeaders.length 
+                : 0;
+              if (vlInfo && sessionAvgTradingValue > 0 && vlInfo.tradingValue < sessionAvgTradingValue * 0.5) {
+                continue;
+              }
             }
-            avgTradingVal /= recentDays;
-            historicalAvgTradingVal = avgTradingVal;
-            historicalVolOk = avgTradingVal >= HIGH_LIQUIDITY_FLOOR_USD;
-          } else {
-            historicalVolOk = meetsHighLiquidityFloor; // 데이터 부족 시 실시간으로 대체
-          }
-          const meetsLiquidityAll = meetsHighLiquidityFloor && historicalVolOk;
-          
-          // ★ [Dip-Buying] 5개 봉 하락 구간 + RSI 과매도 반등 + EMA25 이격도 감지
-          const dipSignal = r.data ? detectDipBuySignal(r.data.closes, r.data.highs, r.data.lows, r.data.volumes, r.data.opens) : { isDip: false, dipScore: 0, rsiReversal: false, downCandles: 0, currentRSI: 50, reboundTargetPct: 0, isBearishCandle: false, ema25GapPct: 0, details: '' };
-          if (dipSignal.isDip) dipBuyScanned++;
-          
-          // ★★★ [Hard-Criteria] 기계적 직결 진입: 4대 조건 AND 게이트
-          // 1. 수급 검증: 20거래일 평균 거래대금 30억원+ (historicalVolOk && meetsHighLiquidityFloor)
-          // 2. 이격도 확정: EMA25 대비 -5%+ 이격 (dipSignal.ema25GapPct >= 5)
-          // 3. 추세 확정: 5봉 하락 + 현재 음봉 (dipSignal.isDip with bearish candle)
-          // 4. 에너지 확정: 체결강도 90%+ (aggrVal >= 90 — 아래 필터에서 검증)
-          const hardCriteria_liquidity = meetsLiquidityAll; // 조건1: 20일 평균 30억+ AND 실시간 30억+
-          const hardCriteria_emaGap = (dipSignal as any).ema25GapPct >= EMA25_GAP_MIN_PCT; // 조건2: EMA25 이격 5%+
-          const hardCriteria_trend = dipSignal.isDip && dipSignal.isBearishCandle; // 조건3: 5봉 하락 + 음봉
-          const hardCriteriaAllPassed = hardCriteria_liquidity && hardCriteria_emaGap && hardCriteria_trend;
-          
-          const isDipBuyCandidate = hardCriteriaAllPassed; // ★ 4대 AND 게이트 통과 시에만 Dip-Buy
-          
-          if (isDipBuyCandidate) {
-            dipBuyDetected++;
-            await addLog('unified', 'scan', r.sym, `[🎯Hard-Criteria 4AND통과] ${r.sym} ✅수급(20일평균$${(historicalAvgTradingVal/1e6).toFixed(1)}M≥$2.2M) ✅이격(EMA25-${(dipSignal as any).ema25GapPct?.toFixed(1)}%≥5%) ✅추세(5봉↓+음봉) | ${dipSignal.details} | 반등목표 ${dipSignal.reboundTargetPct}%`, { dipSignal, tradingVal, historicalVolOk, historicalAvgTradingVal, meetsLiquidityAll, hardCriteriaAllPassed });
-          } else if (dipSignal.isDip && !hardCriteriaAllPassed) {
-            // AND 게이트 불통과 사유 로그
-            const failReasons = [];
-            if (!hardCriteria_liquidity) failReasons.push(`수급미달(20일$${(historicalAvgTradingVal/1e6).toFixed(1)}M<$2.2M)`);
-            if (!hardCriteria_emaGap) failReasons.push(`이격부족(${(dipSignal as any).ema25GapPct?.toFixed(1)}%<5%)`);
-            if (!hardCriteria_trend) failReasons.push(`추세미충족(음봉:${dipSignal.isBearishCandle})`);
-            await addLog('unified', 'scan', r.sym, `[Hard-Criteria 불통과] ${r.sym} 하락봉감지→AND게이트실패: ${failReasons.join(' | ')}`, { dipSignal, failReasons, historicalAvgTradingVal });
           }
 
-          // ★★★ [Hard-Criteria ONLY] 4대 AND 게이트 통과 종목만 매수 진행
-          // 점수 기반, 필승패턴, 예측형, 매집 패턴 등 모든 우회 경로 차단
-          if (!isDipBuyCandidate) {
-            // Hard-Criteria 4-AND 게이트 미통과 → 매수 불가
-            continue;
-          }
-          
-          // ★ 4번째 조건: 체결강도 90%+ (Hard-Criteria 에너지 확정)
-          const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
-          const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          if (aggrVal < 90) {
-            await addLog('unified', 'scan', r.sym, `[Hard-Criteria 4AND 체결강도 미달] ${r.sym} 수급✅ 이격✅ 추세✅ BUT 체결강도 ${aggrVal}% < 90% → 진입 차단`, { aggrVal });
-            continue;
-          }
-
-          const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
-          if (alreadyHolding) continue; // 중복 보유 차단 (피라미딩도 제거)
-          if (openCount >= MAX_POSITIONS) continue;
-
+          // ★ 엔진 개편: 10대 지표 점수 + 충족 수 + 필승 패턴으로 진입 판단
           const metCount = r.scoring.metCount || 0;
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
-          const isAccumEntry = false; // 매집 우회 비활성화
+          const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
+          const isAccumEntry = isAccumCandidate;
+          
+          // 최소 충족 조건: 필승 패턴 시 3개, 매집 시 3개, 예측형 3개, 일반 5개
+          const minMet = (hasCriticalPattern || isAccumEntry || isPredictiveEntry) ? 3 : 5;
+          if (metCount < minMet) continue;
+          
+          // ★ RVOL 완화: 필승 패턴/예측형 시 해제
+          if (!isAccumEntry && !hasCriticalPattern && !isPredictiveEntry && rvol < 1.0) continue;
+          
+          const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
+          const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
+          // ★ 체결강도 완화: 필승 패턴/예측형 시 40%
+          const minAggression = (isAccumEntry || hasCriticalPattern || isPredictiveEntry) ? 40 : 80;
+          if (aggrVal < minAggression) continue;
 
           if (isOpeningRush) continue;
 
@@ -2061,9 +1915,7 @@ Deno.serve(async (req) => {
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
-          (r as any).isDipBuyCandidate = isDipBuyCandidate;
-          (r as any).dipSignal = dipSignal;
-          (r as any).meetsHighLiquidityFloor = meetsHighLiquidityFloor;
+
           // ★ 동전주 로그
           if (isPenny && r.scoring.totalScore >= PENNY_ENTRY_SCORE) {
             const rvolVal = r.scoring.indicators?.rvol?.rvol || 0;
@@ -2131,10 +1983,6 @@ Deno.serve(async (req) => {
     // Sort: critical pattern → score surge → super pattern → explosive → volume burst → liquidity → score
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY' || currentSession === 'OVERNIGHT') ? 'small' : 'large';
     candidates.sort((a, b) => {
-      // ★ Dip-Buy 후보 우선 (가치 우량 → 최우선)
-      const aDip = (a as any).isDipBuyCandidate ? 6 : 0;
-      const bDip = (b as any).isDipBuyCandidate ? 6 : 0;
-      if (aDip !== bDip) return bDip - aDip;
       // ★ 동전주($1 미만) 최우선
       const aPenny = (a as any).isPennyStock ? 5 : 0;
       const bPenny = (b as any).isPennyStock ? 5 : 0;
@@ -2271,19 +2119,11 @@ Deno.serve(async (req) => {
       const isScoreSurge = (r as any).isScoreSurge;
       const isCriticalPatternEntry = (r as any).hasCriticalPattern;
       const isPennyEntry = (r as any).isPennyStock;
-      const isDipBuyEntry = (r as any).isDipBuyCandidate;
-      const dipSig = (r as any).dipSignal;
       
-      // ★ [Dip-Buying] 하락봉 저점 매수: 고정 ₩100만원 투입
-      // ★ [Volatility Hunt] 집중 투자: 1순위 종목 50%+, 동전주 40%, 필승패턴 35%, Dip-Buy 고정₩100만, 일반 20%
+      // ★ [Volatility Hunt] 집중 투자: 1순위 종목 50%+, 동전주 40%, 필승패턴 35%, 일반 20%
       const isTopRanked = topCandidates.indexOf(r) === 0; // 1순위 종목
-      let maxKRW: number;
       const positionPct = isPyramiding ? 0.05 : isTopRanked ? 0.50 : isPennyEntry ? 0.40 : (isCriticalPatternEntry || isSuperEntry || isScoreSurge) ? 0.35 : 0.20;
-      if (isDipBuyEntry) {
-        maxKRW = Math.min(DIP_BUY_AMOUNT_KRW, balance); // ★ Dip-Buy: 고정 ₩100만원
-      } else {
-        maxKRW = balance * positionPct;
-      }
+      const maxKRW = balance * positionPct;
       const priceKRW = toKRW(r.price);
       const qty = Math.floor(maxKRW / priceKRW);
       const costKRW = Math.floor(qty * priceKRW);
@@ -2320,45 +2160,17 @@ Deno.serve(async (req) => {
         orderType = 'LIMIT(Aggressive)';
       }
 
-      // ★ [전략 동기화] 초기 SL / TP 설정
-      // ★ [Dip-Buying] 반등 매수: 본절+0.2% 즉시, TP는 반등목표(2~3%)
-      let stopLoss: number;
-      let takeProfit: number;
-      if (isDipBuyEntry && dipSig) {
-        stopLoss = +(adjustedPrice * 0.95).toFixed(4); // Dip-Buy: -5% SL (하락 추세이므로 넓게)
-        
-        // ★ [Pre-Calculation] EMA25 기반 선제적 타겟가 산출: P_Target = EMA25 × (1 - Margin)
-        const dipData = (r as any).data;
-        if (dipData && dipData.closes && dipData.closes.length >= 26) {
-          const ema25Arr = calculateEMA(dipData.closes, 25);
-          const currentEMA25 = ema25Arr[ema25Arr.length - 1];
-          const margin = PRE_CALC_MARGIN_MIN + ((dipSig as any).ema25GapPct >= 7 ? 0.02 : ((dipSig as any).ema25GapPct >= 6 ? 0.01 : 0));
-          const preCalcTarget = +(currentEMA25 * (1 - margin)).toFixed(4);
-          // ★ [Liquidity-Trap] 30억+ 수급주: 지연 저점 대비 -1.5% 알박기 (시장가 절대 금지)
-          const liquidityTrapPrice = +(r.price * (1 - LIQUIDITY_TRAP_OFFSET_PCT)).toFixed(4);
-          // 더 낮은 가격 채택 (최대한 바닥에 그물 배치)
-          adjustedPrice = Math.min(preCalcTarget, liquidityTrapPrice);
-          orderType = `LIMIT(PreCalc=${fmtKRW(preCalcTarget)}|Trap=${fmtKRW(liquidityTrapPrice)})`;
-          await addLog('unified', 'scan', r.sym, `[🎯Pre-Calculation] ${r.sym} EMA25=${fmtKRW(currentEMA25)} × (1-${(margin*100).toFixed(1)}%) = P_Target=${fmtKRW(preCalcTarget)} | Liquidity-Trap=${fmtKRW(liquidityTrapPrice)} | 최종매수가=${fmtKRW(adjustedPrice)}`, { ema25: currentEMA25, margin, preCalcTarget, liquidityTrapPrice, adjustedPrice });
-        } else {
-          // 데이터 부족 시 기존 로직 유지
-          adjustedPrice = +(adjustedPrice * (1 - DIP_LIMIT_OFFSET_PCT)).toFixed(4);
-          orderType = 'LIMIT(DipNet-2%)';
-        }
-        takeProfit = +(adjustedPrice * (1 + dipSig.reboundTargetPct / 100)).toFixed(4); // 반등 목표 2~3%
-      } else {
-        stopLoss = +(adjustedPrice * 0.90).toFixed(4);
-        // ★ 선취매/예측형: TP +20% (정규장 폭발 대비), 일반: +15%
-        const tpMultiplier = (isAccumEntry || isCriticalPatternEntry || isPredictive) && isLowVolumeSession ? 1.20 : 1.15;
-        takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
-      }
+      // ★ [전략 동기화] 초기 SL -10% / TP +15% 통일
+      const stopLoss = +(adjustedPrice * 0.90).toFixed(4);
+      // ★ 선취매/예측형: TP +20% (정규장 폭발 대비), 일반: +15%
+      const tpMultiplier = (isAccumEntry || isCriticalPatternEntry || isPredictive) && isLowVolumeSession ? 1.20 : 1.15;
+      const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
       const splitOrderNote = isAccumEntry ? ' | 📦분할잠입매집(5분할 조용히 체결)' : '';
       const tsGuardTag = tsGuard.isGuarded ? ` | ⏱️Timestamp Guard(${dataAge.toFixed(1)}s→${PASSIVE_FILL_TICKS}호가↓)` : '';
       const passiveTag = (isPredictive || isAccumEntry) ? ` | 🎯Passive Fill(호가알박기)` : '';
       const predictiveTag = isPredictive ? ` | 🔮예측형선취매(뉴스전 지표수렴)` : '';
       const liqRatioTag = (r as any).liquidityRatio ? ` | 💧유동성×${((r as any).liquidityRatio).toFixed(1)}` : '';
-      const dipBuyTag = isDipBuyEntry ? ` | 📉Dip-Buy(5봉하락|RSI${dipSig?.currentRSI?.toFixed(1)}|반등${dipSig?.reboundTargetPct}%|거래대금$${((r as any).tradingValueUSD/1e6).toFixed(1)}M)` : '';
-      const tier = isPyramiding ? 'PYRAMID' : isDipBuyEntry ? 'DIP-BUY-📉' : isPennyEntry ? 'PENNY-🪙' : isCriticalPatternEntry ? 'CRITICAL-PATTERN' : isSuperEntry ? 'SUPER-15%' : isPredictive ? 'PREDICTIVE' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
+      const tier = isPyramiding ? 'PYRAMID' : isPennyEntry ? 'PENNY-🪙' : isCriticalPatternEntry ? 'CRITICAL-PATTERN' : isSuperEntry ? 'SUPER-15%' : isPredictive ? 'PREDICTIVE' : isAccumEntry ? 'PRE-STRIKE' : 'SCOUT';
       const balanceBefore = Math.round(balance);
       const newBuyBalance = balance - costKRW;
       const spreadNote = spreadMul > 1 ? ` | ⚠️ ${sessionLabel} 스프레드 ×${spreadMul}` : '';
@@ -2384,8 +2196,8 @@ Deno.serve(async (req) => {
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
       const roundTag = currentRound > 1 ? `[Round ${currentRound}] ` : '';
-      const preBuyLabel = isDipBuyEntry ? '📉Dip-Buy하락봉매입' : isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
-      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${isDipBuyEntry ? `5봉하락 반등매수(₩100만)` : valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: ${isDipBuyEntry ? `${dipSig?.reboundTargetPct || 2.0}%` : '3.0%'} (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : isDipBuyEntry ? '반등 익절' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${dipBuyTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const preBuyLabel = isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
+      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: 3.0% (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       // ★ 필승 패턴 알림
       if (isCriticalPatternEntry) {
@@ -2393,13 +2205,9 @@ Deno.serve(async (req) => {
         const newsTag = (r as any).newsSentiment >= 80 ? ` | 📰뉴스강세${(r as any).newsSentiment}%` : '';
         await addLog('unified', 'milestone', r.sym, `🎯 [필승 패턴 매수 완료] ${r.sym} [${(r as any).criticalPatterns.join('+')}] 익절확률 ${(r as any).criticalPatternConfidence}% | ${breakevenLabel} 도달 시 Zero-Risk Lock(매수가+0.1%) → 패배 기록 0 보장${newsTag}`, { criticalPatterns: r.scoring.criticalPatterns, score: r.scoring.totalScore, newsSentiment: (r as any).newsSentiment });
       }
-      // ★ [Dip-Buy] 하락봉 반등 매수 알림
-      if (isDipBuyEntry) {
-        await addLog('unified', 'milestone', r.sym, `📉 [Dip-Buy 하락봉 매입 완료] ${r.sym} 고유동성($${((r as any).tradingValueUSD/1e6).toFixed(1)}M≥$1.48M) | 5봉 하락 구간 RSI${dipSig?.currentRSI?.toFixed(1)} 반등 포착! | ₩100만 투입 | 반등 목표: +${dipSig?.reboundTargetPct}% | 본절보호 +0.2% 즉시 가동`, { dipSignal: dipSig, tradingValue: (r as any).tradingValueUSD, score: r.scoring.totalScore });
-      }
       // ★ 슈퍼 패턴 알림
       if (isSuperEntry) {
-        await addLog('unified', 'milestone', r.sym, `🎯 [15% 익절 보장형 슈퍼 패턴] ${r.sym} 매수 완료! [${(r as any).superPatternSignals.join('+')}] | 15% 목표까지 자율 주행 홀딩 개시.`, { superPattern: r.scoring.superPattern, score: r.scoring.totalScore });
+        await addLog('unified', 'milestone', r.sym, `🎯 [15% 익절 보장형 슈퍼 패턴] ${r.sym} 매수 완료! [${(r as any).superPatternSignals.join('+')}] | 15% 목표까지 자율 주행 홀딩 개시.`, { superPattern: r.scoring.superPattern, score: r.scoring.totalScore, allocation: `${(positionPct*100).toFixed(0)}%` });
       }
       // ★ 동전주 매수 알림
       if (isPennyEntry) {
@@ -2494,7 +2302,7 @@ Deno.serve(async (req) => {
       total_cycles: (await supabase.from('agent_status').select('total_cycles').limit(1).single()).data?.total_cycles + 1 || 1,
     }).not('id', 'is', null);
 
-    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🌐 전 종목 필승 엔진 사이클 완료 — 스캔 풀: 대형 ${LARGE_SET.size}개 + 소형 ${SMALL_SET.size}개 + 동적 발견 ${discoveredSymbols.length}개 = 총 ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 활성 슬롯: ${SCAN_SYMBOLS.length}개 | 진입기준: ${adaptedEntryThreshold}점 | 📉Dip-Buy: 하락봉${dipBuyScanned}개/고유동성통과${dipBuyDetected}개`);
+    await addLog('system', 'info', null, `[${timeStr}] [${sessionLabel}] 🌐 전 종목 필승 엔진 사이클 완료 — 스캔 풀: 대형 ${LARGE_SET.size}개 + 소형 ${SMALL_SET.size}개 + 동적 발견 ${discoveredSymbols.length}개 = 총 ${LARGE_SET.size + SMALL_SET.size + discoveredSymbols.length}개 | 활성 슬롯: ${SCAN_SYMBOLS.length}개 | 진입기준: ${adaptedEntryThreshold}점`);
 
     return new Response(JSON.stringify({ success: true, logs, timestamp: now.toISOString() }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

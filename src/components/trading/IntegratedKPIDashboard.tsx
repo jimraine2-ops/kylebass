@@ -213,15 +213,6 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">
             💎 Value-Filter | 기업가치 A/B등급 → 익절확정 98%
           </Badge>
-          <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px]">
-            🎯 Hard-Criteria | 4대 AND 게이트 직결 진입
-          </Badge>
-          <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30 text-[10px]">
-            📐 Pre-Calculation | EMA25×(1-Margin) 선제 타점
-          </Badge>
-          <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-[10px]">
-            🌉 Bridge-Logic | US 마감→데이장 자동 연결
-          </Badge>
           <Badge variant="outline" className="text-[10px]">
             대형 {stats.largeCount || largePositions.length} + 소형 {stats.smallCount || smallPositions.length} = {openPositions.length}종목
           </Badge>
@@ -239,32 +230,23 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
 
     <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🎯 [선제적 체결] 30억 수급 × EMA 역추세 × 데이장 스나이핑</p>
-          <p className="italic text-yellow-400/80">"데이터가 늦다면 우리는 미래의 가격을 계산한다. 가격이 우리를 찾아오게 만들고, 체결되는 순간 이미 3%의 수익권을 확보하라."</p>
+          <p className="font-bold text-yellow-400 text-sm">🏆 Dynamic-Target + Adaptive-Exit 전략</p>
+          <p className="italic text-yellow-400/80">"시장은 생물이다. 3%가 목표지만, 힘이 2.5%에서 꺾인다면 그곳이 우리의 종착역이다."</p>
           <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Hard-Criteria] 4대 AND 게이트 (교차 통과 필수)</p>
-            <p>① 수급검증: 20거래일 평균 거래대금 30억↑($2.2M) 유지 종목</p>
-            <p>② 이격확정: 현재가 &lt; EMA25 × 0.95 (이격도 -5%↑)</p>
-            <p>③ 추세확정: 5봉 연속 하락 + 현재 음봉(하락봉)</p>
-            <p>④ 에너지확정: 실시간 체결강도 90%↑</p>
-          </div>
-          <div className="border-l-2 border-cyan-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Pre-Calculation] 진입가 선제 산출</p>
-            <p>📐 P_Target = EMA₂₅ × (1 - Margin) | Margin: 5~7%</p>
-            <p>🎯 '반등이 나올 수밖에 없는 절대 가격'을 미리 계산 → 데이장 전 매수 예약</p>
-          </div>
-          <div className="border-l-2 border-blue-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Liquidity-Trap] 데이장 그물망 배치</p>
-            <p>🕸️ 시장가 절대 금지 | 30억↑ 수급주 지연저점 -1.5% 알박기</p>
-            <p>💰 호가 두꺼운 30억↑ 종목 = 하방 경직성 → 최적 매수가 확보</p>
-          </div>
-          <div className="border-l-2 border-purple-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Bridge-Logic] US 정규장 마감 동기화</p>
-            <p>🌉 정규장 마감 시 5봉↓+EMA 5%↑ 완성 종목 → KST 09:00:01 즉시 매수 예약</p>
+            <p className="font-semibold text-foreground">[Dynamic-Target] 종목별 맞춤 익절</p>
+            <p>🔥 체결강도 150%↑ → 3.0% 익절 (강력 홀딩)</p>
+            <p>📊 체결강도 100~150% → 2.5% 익절 (분할 대응)</p>
+            <p>⚡ 체결강도 100%↓ → 2.0% 익절 (빠른 회전)</p>
           </div>
           <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Infinite-Gain] 3% 익절 → ₩100만 리셋 → 무한 루프</p>
-            <p>🛡️ 매수 즉시 본절보호(+0.2%) 가동 | 패배 원천 차단</p>
+            <p className="font-semibold text-foreground">[Adaptive-Exit] 힘의 균열 감지 즉시 익절</p>
+            <p>📉 고점 대비 -0.5% 하락 OR 체결강도 80% 미만 → 현재가 즉시 익절</p>
+            <p>🔒 어떤 경우에도 본절가(+0.2%) 아래 매도 금지</p>
+          </div>
+          <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
+            <p className="font-semibold text-foreground">[저가주 호가 최적화] ₩12,000↓</p>
+            <p>💎 호가창 얇아질 조짐 → AI 추천 구간에서 선제적 매도</p>
+            <p>🛡️ Iron-Defense: +1% → SL+0.2% | +3% → 즉시 확정</p>
           </div>
         </CardContent>
       </Card>
