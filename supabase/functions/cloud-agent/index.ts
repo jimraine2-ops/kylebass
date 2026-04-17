@@ -703,13 +703,14 @@ async function polygonFetch(path: string): Promise<{ data: any; status: number }
 }
 
 // Polygon: 최근 30거래일 일봉 → EMA25 + 평균 거래대금 산출
-async function polygonDailyMetrics(symbol: string): Promise<{ ema25: number; avgDollarVolUSD: number; lastClose: number; status: number } | null> {
+// 반환 status: 200=성공, 429=한도, 403=권한, 0=키없음, -1=네트워크오류, 204=데이터부족
+async function polygonDailyMetrics(symbol: string): Promise<{ ema25: number; avgDollarVolUSD: number; lastClose: number; status: number; bars: number }> {
   const to = new Date().toISOString().split('T')[0];
   const fromDate = new Date(Date.now() - 60 * 86400000).toISOString().split('T')[0];
   const { data, status } = await polygonFetch(`/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${fromDate}/${to}?adjusted=true&sort=asc&limit=120`);
-  if (status !== 200 || !data?.results || data.results.length < 25) {
-    return status !== 200 ? { ema25: 0, avgDollarVolUSD: 0, lastClose: 0, status } as any : null;
-  }
+  if (status !== 200) return { ema25: 0, avgDollarVolUSD: 0, lastClose: 0, status, bars: 0 };
+  const barCount = data?.results?.length || 0;
+  if (barCount < 25) return { ema25: 0, avgDollarVolUSD: 0, lastClose: 0, status: 204, bars: barCount };
   const bars = data.results.slice(-30);
   const closes = bars.map((b: any) => b.c);
   // EMA25
@@ -719,7 +720,7 @@ async function polygonDailyMetrics(symbol: string): Promise<{ ema25: number; avg
   // 20일 평균 거래대금 (USD)
   const last20 = bars.slice(-20);
   const avgDollarVolUSD = last20.reduce((s: number, b: any) => s + (b.c * b.v), 0) / last20.length;
-  return { ema25: +ema.toFixed(4), avgDollarVolUSD, lastClose: closes[closes.length - 1], status: 200 };
+  return { ema25: +ema.toFixed(4), avgDollarVolUSD, lastClose: closes[closes.length - 1], status: 200, bars: barCount };
 }
 
 async function buildTargetUniverse(
@@ -749,34 +750,59 @@ async function buildTargetUniverse(
   const startIdx = Math.floor(Date.now() / 60000) % Math.max(1, Math.ceil(candidatePool.length / SAMPLES_PER_CYCLE));
   const sliced = candidatePool.slice(startIdx * SAMPLES_PER_CYCLE, startIdx * SAMPLES_PER_CYCLE + SAMPLES_PER_CYCLE);
 
+  await addLog('system', 'scan', null, `[Phase1·호출계획] 슬라이스 ${startIdx} → 종목 [${sliced.join(', ')}] (풀 ${candidatePool.length}개 중 ${SAMPLES_PER_CYCLE}개)`, { slice: sliced, startIdx });
+
   let okCount = 0;
   let rateLimited = false;
+  const statusTally: Record<string, number> = {};
   for (const sym of sliced) {
+    const t0 = Date.now();
     const m = await polygonDailyMetrics(sym);
-    if (!m) continue;
-    if (m.status === 429) { rateLimited = true; break; }
-    if (m.status !== 200) continue;
-    okCount++;
-    // 필터2: 저가주 ($9 이하)
-    if (m.lastClose > MAX_PRICE_USD || m.lastClose < MIN_PRICE_USD) continue;
-    // 필터1: 20일 평균 거래대금 ≥ ₩30억
-    if (m.avgDollarVolUSD < TARGET_AVG_DOLLAR_VOLUME_USD) continue;
-    // 필터3: 현재가 ≤ EMA25 × 0.95
-    const gap = (m.lastClose - m.ema25) / m.ema25;
-    if (gap > TARGET_EMA_GAP_PCT) continue;
+    const elapsed = Date.now() - t0;
+    const statusKey = String(m.status);
+    statusTally[statusKey] = (statusTally[statusKey] || 0) + 1;
 
-    results.push({
-      symbol: sym,
-      price: m.lastClose,
-      ema25: m.ema25,
-      emaGapPct: gap,
-      avgDollarVolUSD: m.avgDollarVolUSD,
-      limitPriceUSD: +(m.ema25 * (1 + TARGET_PHASE2_GAP_PCT)).toFixed(4),
-      capType: capTypeMap.get(sym) || 'small',
-    });
+    // 상태별 상세 로그
+    if (m.status === 200) {
+      const priceOk = m.lastClose <= MAX_PRICE_USD && m.lastClose >= MIN_PRICE_USD;
+      const volOk = m.avgDollarVolUSD >= TARGET_AVG_DOLLAR_VOLUME_USD;
+      const gap = (m.lastClose - m.ema25) / m.ema25;
+      const gapOk = gap <= TARGET_EMA_GAP_PCT;
+      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)}≤$${MAX_PRICE_USD})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M≥$${(TARGET_AVG_DOLLAR_VOLUME_USD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%≤${(TARGET_EMA_GAP_PCT*100).toFixed(0)}%)`;
+      await addLog('system', 'scan', sym, `[Phase1·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk });
+      okCount++;
+      if (priceOk && volOk && gapOk) {
+        results.push({
+          symbol: sym, price: m.lastClose, ema25: m.ema25, emaGapPct: gap,
+          avgDollarVolUSD: m.avgDollarVolUSD,
+          limitPriceUSD: +(m.ema25 * (1 + TARGET_PHASE2_GAP_PCT)).toFixed(4),
+          capType: capTypeMap.get(sym) || 'small',
+        });
+      }
+    } else if (m.status === 429) {
+      await addLog('system', 'warning', sym, `[Phase1·${sym}] 🚫 429 한도초과 (${elapsed}ms) — 1분 백오프 진입, 사이클 중단`, { sym, status: 429 });
+      rateLimited = true;
+      break;
+    } else if (m.status === 403) {
+      await addLog('system', 'error', sym, `[Phase1·${sym}] ⛔ 403 권한없음 (${elapsed}ms) — Polygon 키/플랜 확인 필요`, { sym, status: 403 });
+    } else if (m.status === 0) {
+      await addLog('system', 'error', sym, `[Phase1·${sym}] 🔑 0 키없음 — POLYGON_API_KEY secret 미설정`, { sym, status: 0 });
+      break;
+    } else if (m.status === 204) {
+      await addLog('system', 'scan', sym, `[Phase1·${sym}] 📭 204 데이터부족 (${m.bars}봉<25, ${elapsed}ms)`, { sym, status: 204, bars: m.bars });
+    } else if (m.status === -1) {
+      await addLog('system', 'warning', sym, `[Phase1·${sym}] 🌐 네트워크오류 (${elapsed}ms)`, { sym, status: -1 });
+    } else {
+      await addLog('system', 'warning', sym, `[Phase1·${sym}] ❓ HTTP ${m.status} (${elapsed}ms)`, { sym, status: m.status });
+    }
+
     // 13초 간격 (5 req/min 안전 마진)
-    await new Promise(r => setTimeout(r, 13000));
+    if (sym !== sliced[sliced.length - 1] && !rateLimited) {
+      await new Promise(r => setTimeout(r, 13000));
+    }
   }
+
+  const tallyStr = Object.entries(statusTally).map(([k, v]) => `${k}:${v}`).join(' ');
 
   // 기존 캐시와 머지 (점진적 누적)
   const merged = new Map<string, TargetUniverseEntry>();
@@ -791,10 +817,10 @@ async function buildTargetUniverse(
     const summary = top5.map((t, i) =>
       `${i+1}.${t.symbol}($${t.price.toFixed(2)}/EMA25:$${t.ema25.toFixed(2)}/${(t.emaGapPct*100).toFixed(1)}%/마중가:$${t.limitPriceUSD.toFixed(2)})`
     ).join(', ');
-    await addLog('system', 'scan', null, `[Phase1] ✅ 타겟 유니버스 (Top ${top5.length}/스캔 ${okCount}성공): ${summary}`, { targets: top5 });
+    await addLog('system', 'scan', null, `[Phase1] ✅ Top ${top5.length} (이번사이클 ${results.length}추가/스캔 ${okCount}성공/상태 ${tallyStr}): ${summary}`, { targets: top5, statusTally });
   } else {
-    const reason = rateLimited ? 'Polygon 429 한도 초과' : `${okCount}/${sliced.length}건 조회 성공·필터 통과 0`;
-    await addLog('system', 'scan', null, `[Phase1] ⚠️ 타겟 미확정 (${reason}) — 다음 사이클 점진 누적`, {});
+    const reason = rateLimited ? '429 한도초과' : `상태분포 ${tallyStr} | 통과 0`;
+    await addLog('system', 'scan', null, `[Phase1] ⚠️ 타겟 미확정 (${reason}) — 점진 누적 진행`, { statusTally });
   }
 
   return top5;
