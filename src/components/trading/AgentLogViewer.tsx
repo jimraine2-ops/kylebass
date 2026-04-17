@@ -13,6 +13,7 @@ export function AgentLogViewer() {
       case 'buy': return 'text-stock-up';
       case 'exit': case 'sell': return 'text-stock-down';
       case 'exit_attempt': return 'text-warning';
+      case 'fill_failed': return 'text-destructive';
       case 'defense': return 'text-primary';
       case 'replace': return 'text-chart-4';
       case 'error': return 'text-destructive';
@@ -25,6 +26,7 @@ export function AgentLogViewer() {
       case 'buy': return 'default';
       case 'exit': case 'sell': return 'destructive' as const;
       case 'exit_attempt': return 'secondary' as const;
+      case 'fill_failed': return 'destructive' as const;
       case 'defense': return 'default' as const;
       case 'replace': return 'secondary' as const;
       case 'error': return 'destructive' as const;
