@@ -2247,8 +2247,6 @@ Deno.serve(async (req) => {
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
-          (r as any).newsSentiment = 50;
-          (r as any).newsCount = 0;
           (r as any).hardCriteriaPass = true;
           (r as any).aggressionPctRaw = aggressionPctRaw;
 
@@ -2258,7 +2256,35 @@ Deno.serve(async (req) => {
           (r as any).phase1Ema25 = tgt!.ema25;
           (r as any).phase1EmaGapPct = tgt!.emaGapPct;
 
-          await addLog('unified', 'scan', r.sym, `[HardCriteria-통과] ${r.sym} 3-AND ✅ Phase1+(25봉↓or음봉)+체결강도${aggressionPctRaw}%≥60% → 매수 후보`, { aggressionPctRaw, score: r.scoring.totalScore });
+          // ★ [뉴스 보조 게이트] HardCriteria 통과 후보만 종목별 뉴스 감성 조회 (Free tier 5분 캐시)
+          //   - 60%+ 긍정: +5점 가산 ([뉴스호재])
+          //   - 40~59% 중립: 0점 (가산 없음)
+          //   - 40% 미만 악재: -3점 감산 ([뉴스약세]) — 차단 없이 페널티만
+          let newsTag = '';
+          try {
+            const news = await getNewsSentiment(r.sym);
+            (r as any).newsSentiment = news.sentiment;
+            (r as any).newsCount = news.newsCount;
+            if (news.newsCount > 0) {
+              if (news.bullishPct >= 60) {
+                r.scoring.totalScore += 5;
+                newsTag = ` | 📰뉴스호재(${news.bullishPct}%/+5)`;
+              } else if (news.bullishPct < 40) {
+                r.scoring.totalScore = Math.max(0, r.scoring.totalScore - 3);
+                newsTag = ` | 📰뉴스약세(${news.bullishPct}%/-3)`;
+              } else {
+                newsTag = ` | 📰뉴스중립(${news.bullishPct}%)`;
+              }
+            } else {
+              newsTag = ` | 📰뉴스없음`;
+              (r as any).newsSentiment = 50;
+            }
+          } catch {
+            (r as any).newsSentiment = 50;
+            (r as any).newsCount = 0;
+          }
+
+          await addLog('unified', 'scan', r.sym, `[HardCriteria-통과] ${r.sym} 3-AND ✅ Phase1+(25봉↓or음봉)+체결강도${aggressionPctRaw}%≥60%${newsTag} → 매수 후보(${r.scoring.totalScore}점)`, { aggressionPctRaw, score: r.scoring.totalScore, newsSentiment: (r as any).newsSentiment, newsCount: (r as any).newsCount });
 
           candidates.push(r);
         }
