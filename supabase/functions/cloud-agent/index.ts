@@ -762,7 +762,7 @@ const POLYGON_BASE = 'https://api.polygon.io';
 const TARGET_AVG_DOLLAR_VOLUME_USD = 3_000_000_000 / KRW_RATE; // ₩30억 ≈ $2.22M
 const PHASE1_MAX_PRICE_USD = 200; // ★ 재완화: $200 이하면 모두 후보 (실거래 후보 확보)
 const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
-const TARGET_EMA_GAP_PCT = 0.15; // ★ 재완화: EMA25 대비 +15% 이하면 통과 (극단 과열만 제외)
+const TARGET_EMA_GAP_PCT = 0.20; // ★ 공격적 완화: EMA25 대비 +20% 이하면 통과 (극단 과열만 제외)
 const TARGET_PHASE2_GAP_PCT = -0.04; // 매수 마중가: EMA25 × 0.96
 
 interface TargetUniverseEntry {
@@ -2201,21 +2201,23 @@ Deno.serve(async (req) => {
           const lastClose = r.data?.closes?.[lastIdx] ?? 0;
           const isBearishCandle = lastClose > 0 && lastOpen > 0 && lastClose < lastOpen;
 
-          // 체결강도 (지표 점수가 아닌 raw % 값)
+          // 체결강도 (지표 점수가 아닌 raw % 값) — ★ 공격적 완화: 90% → 60%
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
-          const isAggressionOk = aggressionPctRaw >= 90;
+          const isAggressionOk = aggressionPctRaw >= 60;
+
+          // ★ 공격적 완화: 25봉하락 AND 음봉 → OR 조건 (둘 중 하나만 만족해도 통과)
+          const trendOrBearishOk = isDowntrend25 || isBearishCandle;
 
           const hardCriteriaPass =
-            isPhase1Target && isDowntrend25 && isBearishCandle && isAggressionOk;
+            isPhase1Target && trendOrBearishOk && isAggressionOk;
 
           if (!hardCriteriaPass) {
             // 사유 로그 (Phase1 타겟인데 탈락한 경우만 기록 — 노이즈 최소화)
             if (isPhase1Target) {
               const reasons: string[] = [];
-              if (!isDowntrend25) reasons.push('25봉추세✗');
-              if (!isBearishCandle) reasons.push('음봉✗');
-              if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<90%`);
+              if (!trendOrBearishOk) reasons.push('25봉추세✗&음봉✗');
+              if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<60%`);
               await addLog('unified', 'hold', r.sym, `[HardCriteria-탈락] ${r.sym} Phase1 타겟이나 [${reasons.join('|')}] → 진입 보류`, { aggressionPctRaw, isDowntrend25, isBearishCandle });
             }
             continue;
@@ -2256,7 +2258,7 @@ Deno.serve(async (req) => {
           (r as any).phase1Ema25 = tgt!.ema25;
           (r as any).phase1EmaGapPct = tgt!.emaGapPct;
 
-          await addLog('unified', 'scan', r.sym, `[HardCriteria-통과] ${r.sym} 4-AND ✅ Phase1+25봉하락+음봉+체결강도${aggressionPctRaw}% → 매수 후보`, { aggressionPctRaw, score: r.scoring.totalScore });
+          await addLog('unified', 'scan', r.sym, `[HardCriteria-통과] ${r.sym} 3-AND ✅ Phase1+(25봉↓or음봉)+체결강도${aggressionPctRaw}%≥60% → 매수 후보`, { aggressionPctRaw, score: r.scoring.totalScore });
 
           candidates.push(r);
         }
