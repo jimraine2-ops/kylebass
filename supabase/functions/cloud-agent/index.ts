@@ -2344,8 +2344,10 @@ Deno.serve(async (req) => {
         .map(([k, v]: [string, any]) => `${k}:${v.score}`)
         .join('|');
       const roundTag = currentRound > 1 ? `[Round ${currentRound}] ` : '';
-      const preBuyLabel = isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
-      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: 3.0% (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const isPhase1 = (r as any).isPhase1Target === true;
+      const phase1Tag = isPhase1 ? ` | 🎯Phase1 그물망(EMA25:$${(r as any).phase1Ema25?.toFixed(2)}/마중가:$${(r as any).phase1Limit?.toFixed(2)}/-${Math.abs((r as any).phase1EmaGapPct*100).toFixed(1)}%)` : '';
+      const preBuyLabel = isPhase1 ? '🎯Phase1마중가체결' : isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
+      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${isPhase1 ? 'Phase1 그물망 알박기 매수' : valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: 3.0% (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${phase1Tag}${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       // ★ 필승 패턴 알림
       if (isCriticalPatternEntry) {
