@@ -762,7 +762,7 @@ const POLYGON_BASE = 'https://api.polygon.io';
 const TARGET_AVG_DOLLAR_VOLUME_USD = 3_000_000_000 / KRW_RATE; // ₩30억 ≈ $2.22M
 const PHASE1_MAX_PRICE_USD = 50; // ★ 완화: 대형주 후보까지 포함 ($50 이하)
 const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
-const TARGET_EMA_GAP_PCT = -0.02; // ★ 완화: -2% (기존 -5%)
+const TARGET_EMA_GAP_PCT = 0.10; // ★ 완화: EMA25 대비 +10% 이하면 통과 (과열만 제외)
 const TARGET_PHASE2_GAP_PCT = -0.04; // 매수 마중가: EMA25 × 0.96
 
 interface TargetUniverseEntry {
@@ -861,7 +861,7 @@ async function buildTargetUniverse(
       const volOk = m.avgDollarVolUSD >= TARGET_AVG_DOLLAR_VOLUME_USD;
       const gap = (m.lastClose - m.ema25) / m.ema25;
       const gapOk = gap <= TARGET_EMA_GAP_PCT;
-      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)}≤$${PHASE1_MAX_PRICE_USD})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M≥$${(TARGET_AVG_DOLLAR_VOLUME_USD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%≤${(TARGET_EMA_GAP_PCT*100).toFixed(0)}%)`;
+      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)}≤$${PHASE1_MAX_PRICE_USD})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M≥$${(TARGET_AVG_DOLLAR_VOLUME_USD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%≤+${(TARGET_EMA_GAP_PCT*100).toFixed(0)}%)`;
       await addLog('system', 'scan', sym, `[Phase1·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk });
       okCount++;
       if (priceOk && volOk && gapOk) {
