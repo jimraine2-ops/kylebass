@@ -762,7 +762,7 @@ const POLYGON_BASE = 'https://api.polygon.io';
 const TARGET_AVG_DOLLAR_VOLUME_USD = 3_000_000_000 / KRW_RATE; // ₩30억 ≈ $2.22M
 const PHASE1_MAX_PRICE_USD = 50; // ★ 완화: 대형주 후보까지 포함 ($50 이하)
 const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
-const TARGET_EMA_GAP_PCT = -0.02; // ★ 완화: -2% (기존 -5%)
+const TARGET_EMA_GAP_PCT = 0.10; // ★ 완화: EMA25 대비 +10% 이하면 통과 (과열만 제외)
 const TARGET_PHASE2_GAP_PCT = -0.04; // 매수 마중가: EMA25 × 0.96
 
 interface TargetUniverseEntry {
@@ -861,7 +861,7 @@ async function buildTargetUniverse(
       const volOk = m.avgDollarVolUSD >= TARGET_AVG_DOLLAR_VOLUME_USD;
       const gap = (m.lastClose - m.ema25) / m.ema25;
       const gapOk = gap <= TARGET_EMA_GAP_PCT;
-      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)}≤$${PHASE1_MAX_PRICE_USD})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M≥$${(TARGET_AVG_DOLLAR_VOLUME_USD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%≤${(TARGET_EMA_GAP_PCT*100).toFixed(0)}%)`;
+      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)}≤$${PHASE1_MAX_PRICE_USD})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M≥$${(TARGET_AVG_DOLLAR_VOLUME_USD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%≤+${(TARGET_EMA_GAP_PCT*100).toFixed(0)}%)`;
       await addLog('system', 'scan', sym, `[Phase1·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk });
       okCount++;
       if (priceOk && volOk && gapOk) {
@@ -1410,7 +1410,27 @@ Deno.serve(async (req) => {
     for (const s of currentSmall) capTypeMap.set(s, 'small');
     let targetUniverse: TargetUniverseEntry[] = [];
     try {
-      targetUniverse = await buildTargetUniverse(SCAN_SYMBOLS, capTypeMap, addLog);
+      // ★ Phase1 풀 확장: 활성 30개 대신 LARGE+SMALL 전체 풀 상위 200개를 점진 스캔
+      // (Polygon 호출량은 그대로 — SAMPLES_PER_CYCLE=4 유지, 전체를 사이클 순환으로 누적 스캔)
+      const phase1Pool: string[] = [];
+      const phase1Seen = new Set<string>();
+      const addToPool = (sym: string, type: 'large' | 'small') => {
+        if (phase1Seen.has(sym) || phase1Pool.length >= 200) return;
+        phase1Seen.add(sym);
+        phase1Pool.push(sym);
+        if (!capTypeMap.has(sym)) capTypeMap.set(sym, type);
+      };
+      // 거래대금 상위(volumeLeaders)부터 우선 채우기
+      for (const vl of volumeLeaders) {
+        if (phase1Pool.length >= 200) break;
+        const sym = vl.symbol;
+        const type = LARGE_SET.has(sym) ? 'large' : 'small';
+        addToPool(sym, type);
+      }
+      // 부족하면 LARGE_SET, SMALL_SET 순차 보강
+      for (const s of LARGE_SET) { if (phase1Pool.length >= 200) break; addToPool(s, 'large'); }
+      for (const s of SMALL_SET) { if (phase1Pool.length >= 200) break; addToPool(s, 'small'); }
+      targetUniverse = await buildTargetUniverse(phase1Pool, capTypeMap, addLog);
     } catch (e) {
       await addLog('system', 'error', null, `[Phase1] 타겟 유니버스 빌드 실패: ${(e as Error).message}`, {});
     }
