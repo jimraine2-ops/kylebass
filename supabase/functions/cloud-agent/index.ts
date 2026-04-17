@@ -2357,39 +2357,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ [Alpha-Entry] 정예 1~5선 집중 투자: 3% 진공구간 + 뉴스 90%+ + 익절확률 95% + 가치 검증
+    // ★ [Hard-Criteria 단일 게이트] 후보 수집 단계에서 이미 4-AND 통과한 종목만 들어왔으므로,
+    //    여기서는 추가 점수 필터/뉴스 필터 없이 그대로 통과시킨다.
+    //    (가치등급 D만 차단 — 펀더멘털 위험 회피)
     const filteredCandidates = candidates.filter(c => {
-      if ((c as any)._newsBlocked) return false;
-      if ((c as any)._valueBlocked) return false; // ★ 가치 D등급 차단
-      const valueVerified = (c as any).valueVerified || false;
-      const winProb = getWinProbability(c.scoring.totalScore, valueVerified);
-      const hasCritical = (c as any).hasCriticalPattern;
-      const newsSent = (c as any).newsSentiment || 50;
-      
-      // ★ [Alpha-Entry] 진공 구간 분석: 3%+ 상승 공간이 매물대 없이 열려 있는가
-      const vacuumData = c.data ? detectVacuumZone(c.data.closes, c.data.highs, c.data.lows, c.data.volumes) : { hasVacuum: false, vacuumPct: 0, resistance: 0 };
-      const hasVacuum = vacuumData.hasVacuum;
-      
-      // ★ [Value-Filter] 교차 검증: 뉴스 + 지표 + 가치 모두 합치 → 98% 격상
-      const tripleVerified = newsSent >= ALPHA_ENTRY_NEWS_MIN && winProb >= ALPHA_ENTRY_WIN_PROB && valueVerified;
-      if (tripleVerified) {
-        (c as any)._tripleVerified = true;
-      }
-      
-      // ★ 뉴스+지표 동기화: 뉴스 90%+ & 익절확률 95%+ = 확정적 진입
-      const alphaEntry = newsSent >= ALPHA_ENTRY_NEWS_MIN && winProb >= ALPHA_ENTRY_WIN_PROB;
-      
-      // 필승 패턴 감지 시: 패턴 익절확률 90%+ → 즉시 진입
-      if (hasCritical) {
-        const patternConf = (c as any).criticalPatternConfidence || 0;
-        return patternConf >= 90 || (c.scoring.totalScore >= 70 && winProb >= ALPHA_ENTRY_WIN_PROB);
-      }
-      // ★ Alpha-Entry: 뉴스 90%+ & 익절확률 95%+ & 진공구간 → 최우선 진입
-      if (alphaEntry && hasVacuum) return true;
-      // ★ 뉴스 90%+ & 익절확률 95% → 진공 없어도 진입 허용
-      if (alphaEntry) return true;
-      // 일반 진입: 70점+ & 95% 이상 (기존 65/90 → 강화)
-      return c.scoring.totalScore >= 70 && winProb >= ALPHA_ENTRY_WIN_PROB;
+      if ((c as any)._valueBlocked) return false;
+      return (c as any).hardCriteriaPass === true;
     });
     const topCandidates = filteredCandidates.slice(0, 5);
 
