@@ -1,210 +1,27 @@
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Radio, Bot, Wallet, TrendingUp, TrendingDown, Briefcase, Activity, Target, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
-import { SessionIndicator } from "@/components/trading/SessionIndicator";
-import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
-import { ProfitScoreboard } from "@/components/dashboard/ProfitScoreboard";
-import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
-import { HourlyWinRateChart } from "@/components/dashboard/HourlyWinRateChart";
-
-import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
-import { useExchangeRate } from "@/hooks/useExchangeRate";
-import { useUnifiedPortfolio } from "@/hooks/useStockData";
-import { useAgentStatus, useAgentLogs } from "@/hooks/useAgentStatus";
-import { useTodayProfit } from "@/hooks/useTodayProfit";
-import { useMemo } from "react";
-import { formatStockName } from "@/lib/koreanStockMap";
-
-
-
-
 export default function Dashboard() {
-  const { data: unifiedData, isLoading: portfolioLoading } = useUnifiedPortfolio();
-  const { data: agentStatus } = useAgentStatus();
-  const { data: logs = [] } = useAgentLogs(5);
-  const { rate: fxRate, isLive: fxLive } = useExchangeRate();
-  const { data: profitData, isLoading: profitLoading } = useTodayProfit(fxRate);
-
-  const allSymbols = useMemo(() => {
-    const syms = new Set<string>();
-    (unifiedData?.openPositions || []).forEach((p: any) => syms.add(p.symbol));
-    return Array.from(syms);
-  }, [unifiedData?.openPositions]);
-
-  const ws = useWebSocketPrices(allSymbols);
-
-  const wallet = unifiedData?.wallet;
-  const balance = wallet?.balance || 0;
-  const initial = wallet?.initial_balance || balance;
-  const totalReturn = initial > 0 ? ((balance - initial) / initial * 100) : 0;
-  const openPositions = unifiedData?.openPositions || [];
-  const stats = unifiedData?.stats || {} as any;
-
-
-
-
-  const isAgentRunning = agentStatus?.is_running ?? false;
-  const lastLog = logs[0];
-
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-lg font-semibold">대시보드</h2>
-        <div className="flex items-center gap-2 flex-wrap">
-          <LiveSyncIndicator isConnected={ws.isConnected} latencyMs={ws.latencyMs} lastUpdateAt={ws.lastUpdateAt} />
-          <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${fxLive ? 'border-stock-up/30 text-stock-up' : 'border-warning/30 text-warning'}`}>
-            💱 ₩{fxRate.toLocaleString('ko-KR')}
-          </Badge>
-          <SessionIndicator />
-        </div>
-      </div>
+      <h2 className="text-lg font-semibold">대시보드 (무료 모드)</h2>
 
-      <ServerStatusBanner />
-      <SafePauseBanner />
-
-      {/* 수익 현황판 */}
-      <ProfitScoreboard
-        totalProfitKRW={profitData?.totalProfitKRW ?? 0}
-        roundNumber={profitData?.roundNumber ?? 1}
-        bestTicker={profitData?.bestTicker ?? null}
-        bestPnlPct={profitData?.bestPnlPct ?? 0}
-        winRate={profitData?.winRate ?? 100}
-        totalTrades={profitData?.totalTrades ?? 0}
-        isLoading={profitLoading}
-      />
-
-      {/* KPI Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* 총 잔고 */}
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <Wallet className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-medium">총 잔고</span>
-            </div>
-            <p className="text-base font-bold font-mono">₩{Math.round(balance).toLocaleString('ko-KR')}</p>
-            <p className={`text-[11px] font-mono font-semibold ${totalReturn >= 0 ? 'text-stock-up' : 'text-stock-down'}`}>
-              {totalReturn >= 0 ? '▲' : '▼'} {totalReturn >= 0 ? '+' : ''}{totalReturn.toFixed(2)}%
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* 보유 종목 */}
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <Briefcase className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-medium">보유 종목</span>
-            </div>
-            <p className="text-base font-bold font-mono">{openPositions.length}개</p>
-            <p className="text-[11px] text-muted-foreground">
-              승률 {stats.winRate || 0}% · {stats.totalTrades || 0}거래
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* 에이전트 상태 */}
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-              <Bot className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-medium">에이전트</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className={`w-2 h-2 rounded-full ${isAgentRunning ? 'bg-stock-up animate-pulse' : 'bg-muted-foreground'}`} />
-              <span className="text-sm font-semibold">{isAgentRunning ? '가동 중' : '정지'}</span>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              {agentStatus?.total_cycles || 0}사이클 · 오류 {agentStatus?.errors_count || 0}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 보유종목 */}
-      <div className="grid grid-cols-1 gap-4">
-        {/* 보유 종목 요약 */}
-        <Card>
-          <CardContent className="p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold flex items-center gap-1.5">
-                <Briefcase className="w-3.5 h-3.5 text-primary" />보유 종목
-              </span>
-              <Link to="/ai-trading" className="text-[10px] text-primary flex items-center hover:underline">
-                상세보기 <ChevronRight className="w-3 h-3" />
-              </Link>
-            </div>
-            {openPositions.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">보유 종목 없음</p>
-            ) : (
-              <div className="space-y-1.5">
-                {openPositions.slice(0, 5).map((pos: any) => {
-                  const livePrice = ws.getPrice(pos.symbol) || pos.price;
-                  const pnlPct = ((livePrice - pos.price) / pos.price) * 100;
-                  const pnlKRW = Math.round((livePrice - pos.price) * pos.quantity * fxRate);
-                  const isUp = pnlPct >= 0;
-                  return (
-                    <Link key={pos.id} to={`/stock/${pos.symbol}`}
-                      className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-semibold text-xs truncate">{formatStockName(pos.symbol)}</span>
-                        <span className="text-[10px] text-muted-foreground font-mono">{pos.quantity}주</span>
-                      </div>
-                      <div className={`flex items-center gap-1 text-xs font-bold font-mono ${isUp ? 'text-stock-up' : 'text-stock-down'}`}>
-                        {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                        {isUp ? '+' : ''}{pnlPct.toFixed(1)}%
-                        <span className="text-[10px] font-normal ml-1">({isUp ? '+' : ''}₩{pnlKRW.toLocaleString('ko-KR')})</span>
-                      </div>
-                    </Link>
-                  );
-                })}
-                {openPositions.length > 5 && (
-                  <Link to="/ai-trading" className="block text-center text-[10px] text-primary pt-1 hover:underline">
-                    +{openPositions.length - 5}개 더보기
-                  </Link>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 시간대별 승률 차트 */}
-      <HourlyWinRateChart />
-
-      {/* 최근 에이전트 활동 */}
-      <Card>
-        <CardContent className="p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-primary" />최근 활동
-            </span>
-            <Link to="/ai-trading" className="text-[10px] text-primary flex items-center hover:underline">
-              전체 로그 <ChevronRight className="w-3 h-3" />
-            </Link>
+      {/* Desktop quick access to newly developed paper-trading simulator */}
+      <Card className="border-primary/30 bg-primary/5">
+        <CardContent className="p-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-foreground">신규 개발 기능: 가상머니 자동 복리매매 시뮬레이터</p>
+            <p className="text-[11px] text-muted-foreground">무료 API 기반 · 시작자금 ₩1,000,000 · 일 목표 ₩300,000 · 전 과정 매매로그 기록</p>
           </div>
-          {logs.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-3">활동 기록 없음</p>
-          ) : (
-            <div className="space-y-1">
-              {logs.slice(0, 5).map((log: any) => (
-                <div key={log.id} className="flex items-center gap-2 text-[11px] py-1 px-2 rounded hover:bg-muted/30">
-                  <Badge variant={log.action === 'buy' ? 'default' : log.action === 'exit' || log.action === 'sell' ? 'destructive' : 'secondary'}
-                    className="text-[8px] px-1.5 py-0 shrink-0">
-                    {log.action}
-                  </Badge>
-                  {log.symbol && <span className="font-mono font-medium shrink-0">{formatStockName(log.symbol)}</span>}
-                  <span className="text-muted-foreground truncate">{log.message}</span>
-                  <span className="text-[9px] text-muted-foreground shrink-0 ml-auto">
-                    {new Date(log.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <Link to="/ai-trading" className="text-xs font-semibold text-primary hover:underline flex items-center">
+            지금 보기 <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-4 text-sm text-muted-foreground">
+          무료 모드 정책이 적용되어, 대시보드의 실시간 외부 분석/에이전트 데이터 호출은 비활성화되었습니다.
         </CardContent>
       </Card>
     </div>

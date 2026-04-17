@@ -5,11 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppLayout } from "@/components/layout/AppLayout";
-import Dashboard from "@/pages/Dashboard";
-import StockDetail from "@/pages/StockDetail";
 import AITradingPage from "@/pages/AITradingPage";
-import UnifiedScanPage from "@/pages/UnifiedScanPage";
-import EarningsWatchPage from "@/pages/EarningsWatchPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,15 +19,15 @@ const App = () => (
         <BrowserRouter>
           <AppLayout>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/stock/:symbol" element={<StockDetail />} />
-              <Route path="/unified-scan" element={<UnifiedScanPage />} />
+              <Route path="/" element={<AITradingPage />} />
               <Route path="/ai-trading" element={<AITradingPage />} />
-              <Route path="/earnings-watch" element={<EarningsWatchPage />} />
               {/* Legacy redirects */}
-              <Route path="/recommendations" element={<UnifiedScanPage />} />
-              <Route path="/penny-stocks" element={<UnifiedScanPage />} />
-              <Route path="/search" element={<StockDetail />} />
+              <Route path="/recommendations" element={<AITradingPage />} />
+              <Route path="/penny-stocks" element={<AITradingPage />} />
+              <Route path="/search" element={<AITradingPage />} />
+              <Route path="/stock/:symbol" element={<AITradingPage />} />
+              <Route path="/unified-scan" element={<AITradingPage />} />
+              <Route path="/earnings-watch" element={<AITradingPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AppLayout>
