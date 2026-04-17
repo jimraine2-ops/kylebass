@@ -55,30 +55,6 @@ export default function AITradingPage() {
       {/* 실전 체결률 KPI */}
       <FillRateCard />
 
-      {/* Strategy Card */}
-      <Card className="border-yellow-500/30 bg-yellow-500/5">
-        <CardContent className="p-3 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-bold text-yellow-400 text-sm">🎯 종목별 맞춤 익절 — Dynamic-Target & Adaptive-Exit</p>
-          <p className="italic text-yellow-400/80">"시장은 생물이다. 3%가 목표지만, 힘이 2.5%에서 꺾인다면 그곳이 우리의 종착역이다. 단 0.1%의 수익도 시장에 반납하지 마라."</p>
-          <div className="border-l-2 border-yellow-500/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Dynamic-Target] 체결강도 기반 가변 익절</p>
-            <p>🔥 체결강도 150%↑ → "3.0% 익절 추천" (강력 홀딩)</p>
-            <p>📊 체결강도 100~150% → "2.5% 익절 추천" (분할 대응)</p>
-            <p>⚡ 체결강도 100%↓ → "2.0% 익절 추천" (빠른 회전)</p>
-          </div>
-          <div className="border-l-2 border-stock-up/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[Adaptive-Exit] 힘의 균열 감지 즉시 익절</p>
-            <p>📉 고점 대비 -0.5% 하락 OR 체결강도 80% 미만 급락 → 즉시 전량 익절</p>
-            <p>🔒 100% 익절 사수: 본절가(+0.2%) 라인 절대 사수</p>
-          </div>
-          <div className="border-l-2 border-primary/40 pl-2 space-y-0.5">
-            <p className="font-semibold text-foreground">[₩12,000↓ 저가주] 호가 최적화</p>
-            <p>💎 호가창 얇아질 조짐 → AI 추천 2%/2.5% 구간에서 선제적 매도</p>
-            <p>🛡️ Iron-Defense: +1%→SL+0.2% | +3%→즉시 확정 | 200%↑ 트레일링</p>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Agent Log Viewer */}
       <AgentLogViewer />
 
