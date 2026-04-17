@@ -2126,7 +2126,11 @@ Deno.serve(async (req) => {
     // Sort: critical pattern → score surge → super pattern → explosive → volume burst → liquidity → score
     const sessionCapPreference = (currentSession === 'PRE_MARKET' || currentSession === 'DAY' || currentSession === 'OVERNIGHT') ? 'small' : 'large';
     candidates.sort((a, b) => {
-      // ★ 동전주($1 미만) 최우선
+      // ★ [Phase 1] 타겟 유니버스 최우선 (마중가 알박기 종목)
+      const aTgt = (a as any).isPhase1Target ? 10 : 0;
+      const bTgt = (b as any).isPhase1Target ? 10 : 0;
+      if (aTgt !== bTgt) return bTgt - aTgt;
+      // ★ 동전주($1 미만) 차순위
       const aPenny = (a as any).isPennyStock ? 5 : 0;
       const bPenny = (b as any).isPennyStock ? 5 : 0;
       if (aPenny !== bPenny) return bPenny - aPenny;
