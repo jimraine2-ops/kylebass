@@ -1800,7 +1800,7 @@ Deno.serve(async (req) => {
             closeReason = `[🎯3%확정익절] [${sessionLabel}] [${timeStr}] [${sym}] +${pnlPct.toFixed(1)}% ≥ 3.0% Iron-Defense 2단계 → 즉시 수익 확정 (체결강도 ${currentAggression}%<200%)`;
             newStatus = 'iron_defense_profit';
           }
-        } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER) {
+        } else if (pnlPct >= 1.0 && pnlPct < PROFIT_CHASE_TRIGGER + SLIPPAGE_BUFFER_PCT) {
           // ★ [Adaptive-Exit] 힘의 균열 감지 → 즉시 익절 (본절+0.2% 이상일 때만)
           if (adaptiveExitTriggered && pnlPct >= 0.2) {
             shouldClose = true;
