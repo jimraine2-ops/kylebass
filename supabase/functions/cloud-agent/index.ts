@@ -760,9 +760,9 @@ async function getQuoteAndCandles(symbol: string) {
 // ============================================================
 const POLYGON_BASE = 'https://api.polygon.io';
 const TARGET_AVG_DOLLAR_VOLUME_USD = 3_000_000_000 / KRW_RATE; // ₩30억 ≈ $2.22M
-const PHASE1_MAX_PRICE_USD = 50; // ★ 완화: 대형주 후보까지 포함 ($50 이하)
+const PHASE1_MAX_PRICE_USD = 200; // ★ 재완화: $200 이하면 모두 후보 (실거래 후보 확보)
 const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
-const TARGET_EMA_GAP_PCT = 0.10; // ★ 완화: EMA25 대비 +10% 이하면 통과 (과열만 제외)
+const TARGET_EMA_GAP_PCT = 0.15; // ★ 재완화: EMA25 대비 +15% 이하면 통과 (극단 과열만 제외)
 const TARGET_PHASE2_GAP_PCT = -0.04; // 매수 마중가: EMA25 × 0.96
 
 interface TargetUniverseEntry {
@@ -1427,9 +1427,9 @@ Deno.serve(async (req) => {
         const type = LARGE_SET.has(sym) ? 'large' : 'small';
         addToPool(sym, type);
       }
-      // 부족하면 LARGE_SET, SMALL_SET 순차 보강
-      for (const s of LARGE_SET) { if (phase1Pool.length >= 200) break; addToPool(s, 'large'); }
+      // ★ 부족하면 SMALL_SET(저가주) 우선 → LARGE_SET 보강 (저가 후보 확보 우선)
       for (const s of SMALL_SET) { if (phase1Pool.length >= 200) break; addToPool(s, 'small'); }
+      for (const s of LARGE_SET) { if (phase1Pool.length >= 200) break; addToPool(s, 'large'); }
       targetUniverse = await buildTargetUniverse(phase1Pool, capTypeMap, addLog);
     } catch (e) {
       await addLog('system', 'error', null, `[Phase1] 타겟 유니버스 빌드 실패: ${(e as Error).message}`, {});
