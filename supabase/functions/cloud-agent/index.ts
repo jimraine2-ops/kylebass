@@ -2148,125 +2148,93 @@ Deno.serve(async (req) => {
         for (const r of results) {
           if (!r) continue;
           const isPenny = r.isPenny;
-          
-          // ★ 필승 패턴 A/B/C 감지: 점수가 낮아도 패턴 완성 시 즉시 진입 허용
-          const cp = r.scoring.criticalPatterns;
-          const hasCriticalPattern = cp && cp.patterns.length >= 1;
-          const hasMultiPattern = cp && cp.patterns.length >= 2; // 2개 이상 = 초고확신
 
-          // ★ [Anti-Latency] Predictive Entry: 뉴스 없이 지표 60점 돌파 시 선취매
-          const isPredictiveEntry = r.scoring.totalScore >= PREDICTIVE_ENTRY_SCORE && 
-            r.scoring.totalScore < (isPenny ? PENNY_ENTRY_SCORE : adaptedEntryThreshold) &&
-            !hasCriticalPattern;
+          // ============================================================
+          // ★★★ [Hard-Criteria 4-AND Gate] 점수 게이트 폐기 — 새 정책 단일 적용
+          // 정책 핵심: "지표 점수 무관. 다음 4가지 모두 충족해야만 매수."
+          //   ① Phase 1 타겟 유니버스 포함 (= 20일 평균 거래대금 ≥ ₩30억 + 가격 필터 + EMA25 갭 ≤ -5% 통과)
+          //   ② 25봉 하락 추세 (최근 25봉 close 선형 회귀 음의 기울기)
+          //   ③ 직전 봉 음봉 (close < open)
+          //   ④ 체결강도(aggression) ≥ 90%
+          // 4가지 중 하나라도 미달 시 즉시 탈락. 점수/패턴/뉴스/예측형 모두 무시.
+          // ============================================================
+          const tgt = targetMap.get(r.sym);
+          const isPhase1Target = !!tgt;
 
-          // ★ 동전주 전용 진입 문턱: 70점 (일반: 65점)
-          const pennyEntryThreshold = PENNY_ENTRY_SCORE;
-          const effectiveThreshold = isPenny ? Math.max(pennyEntryThreshold, adaptedEntryThreshold) : adaptedEntryThreshold;
-          
-          // 점수 필터: 일반 진입은 effectiveThreshold, 필승 패턴 시 50점까지 완화, 예측형 진입 60점
-          if (!hasCriticalPattern && !isPredictiveEntry && r.scoring.totalScore < effectiveThreshold) continue;
-          if (hasCriticalPattern && r.scoring.totalScore < 50) continue; // 패턴 있어도 최소 50점
-          
-          const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
-          const isPyramiding = alreadyHolding && r.scoring.totalScore >= 80;
-          if (alreadyHolding && !isPyramiding) continue;
-          if (openCount >= MAX_POSITIONS) continue;
-
-          // ★ 유동성 하한선 & 수급 동기화
-          const vlInfo = volumeLeaders.find(vl => vl.symbol === r.sym);
-          const accumPattern = r.scoring.accumulation;
-          const isAccumCandidate = isLowVolumeSession && accumPattern?.isAccumulating;
-          
-          // ★ [Liquidity Guard] 매수잔량 절대 법칙: 진입금액의 10배 이상 유동성 확보된 종목만 진입
-          const tradingVal = vlInfo?.tradingValue || 0;
-          const entryAmountKRW = balance * 0.20; // 예상 진입 금액 (20%)
-          const liquidityCheck = checkLiquidityGuard(tradingVal, entryAmountKRW);
-          
-          // ★ 필승 패턴/매집 패턴/Predictive Entry + Finnhub 뉴스 90점 시 유동성 필터 해제
-          if (!isAccumCandidate && !hasCriticalPattern) {
-            if (!liquidityCheck.passed && !isPredictiveEntry) {
-              // 유동성 부족 → 차단 (필승 패턴/매집/예측형 제외)
-              if (vlInfo && vlInfo.tradingValue < 10000) continue;
-              const sessionAvgTradingValue = volumeLeaders.length > 0 
-                ? volumeLeaders.reduce((sum, vl) => sum + vl.tradingValue, 0) / volumeLeaders.length 
-                : 0;
-              if (vlInfo && sessionAvgTradingValue > 0 && vlInfo.tradingValue < sessionAvgTradingValue * 0.5) {
-                continue;
-              }
+          // 25봉 하락 추세: 최근 25봉 close에 대한 선형 회귀 기울기 < 0
+          const closes25 = (r.data?.closes || []).slice(-25);
+          let isDowntrend25 = false;
+          if (closes25.length >= 25) {
+            let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+            for (let k = 0; k < 25; k++) {
+              sumX += k; sumY += closes25[k]; sumXY += k * closes25[k]; sumXX += k * k;
             }
+            const slope = (25 * sumXY - sumX * sumY) / (25 * sumXX - sumX * sumX);
+            isDowntrend25 = slope < 0;
           }
 
-          // ★ 엔진 개편: 10대 지표 점수 + 충족 수 + 필승 패턴으로 진입 판단
-          const metCount = r.scoring.metCount || 0;
+          // 직전 봉 음봉
+          const lastIdx = (r.data?.closes || []).length - 1;
+          const lastOpen = r.data?.opens?.[lastIdx] ?? 0;
+          const lastClose = r.data?.closes?.[lastIdx] ?? 0;
+          const isBearishCandle = lastClose > 0 && lastOpen > 0 && lastClose < lastOpen;
+
+          // 체결강도 (지표 점수가 아닌 raw % 값)
+          const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
+          const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
+          const isAggressionOk = aggressionPctRaw >= 90;
+
+          const hardCriteriaPass =
+            isPhase1Target && isDowntrend25 && isBearishCandle && isAggressionOk;
+
+          if (!hardCriteriaPass) {
+            // 사유 로그 (Phase1 타겟인데 탈락한 경우만 기록 — 노이즈 최소화)
+            if (isPhase1Target) {
+              const reasons: string[] = [];
+              if (!isDowntrend25) reasons.push('25봉추세✗');
+              if (!isBearishCandle) reasons.push('음봉✗');
+              if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<90%`);
+              await addLog('unified', 'hold', r.sym, `[HardCriteria-탈락] ${r.sym} Phase1 타겟이나 [${reasons.join('|')}] → 진입 보류`, { aggressionPctRaw, isDowntrend25, isBearishCandle });
+            }
+            continue;
+          }
+
+          const alreadyHolding = (openPos || []).some(p => p.symbol === r.sym && p.status === 'open');
+          if (alreadyHolding) continue;
+          if (openCount >= MAX_POSITIONS) continue;
+
+          // 통과 — 후보 등록 (점수/패턴 메타는 로깅용으로만 첨부)
+          const vlInfo = volumeLeaders.find(vl => vl.symbol === r.sym);
+          const tradingVal = vlInfo?.tradingValue || 0;
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
-          const vwapOk = r.scoring.indicators.candle?.vwapCross === true;
-          const isAccumEntry = isAccumCandidate;
-          
-          // 최소 충족 조건: 필승 패턴 시 3개, 매집 시 3개, 예측형 3개, 일반 5개
-          const minMet = (hasCriticalPattern || isAccumEntry || isPredictiveEntry) ? 3 : 5;
-          if (metCount < minMet) continue;
-          
-          // ★ RVOL 완화: 필승 패턴/예측형 시 해제
-          if (!isAccumEntry && !hasCriticalPattern && !isPredictiveEntry && rvol < 1.0) continue;
-          
-          const aggressionPct = r.scoring.indicators.aggression?.details?.match(/(\d+)%/)?.[1];
-          const aggrVal = aggressionPct ? parseInt(aggressionPct) : 0;
-          // ★ 체결강도 완화: 필승 패턴/예측형 시 40%
-          const minAggression = (isAccumEntry || hasCriticalPattern || isPredictiveEntry) ? 40 : 80;
-          if (aggrVal < minAggression) continue;
+          const cp = r.scoring.criticalPatterns;
+          const accumPattern = r.scoring.accumulation;
 
-          if (isOpeningRush) continue;
-
-          // 수급 돌파/유동성 점수 계산
           (r as any).isVolumeBurst = rvol >= 2.0;
           (r as any).isPennyStock = isPenny;
-          (r as any).isAccumulationEntry = isAccumEntry;
-          (r as any).isPredictiveEntry = isPredictiveEntry;
+          (r as any).isAccumulationEntry = false;
+          (r as any).isPredictiveEntry = false;
           (r as any).accumPattern = accumPattern?.pattern || '';
           (r as any).accumCondensation = accumPattern?.condensation || 0;
-          (r as any).hasCriticalPattern = hasCriticalPattern;
+          (r as any).hasCriticalPattern = cp && cp.patterns.length >= 1;
           (r as any).criticalPatterns = cp?.patterns || [];
           (r as any).criticalPatternConfidence = cp?.confidence || 0;
-          (r as any).liquidityRatio = liquidityCheck.ratio;
+          (r as any).liquidityRatio = 0;
           (r as any).liquidityScore = liquidityScore(r.scoring.changePct || 0, tradingVal);
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
-
-          // ★ 동전주 로그
-          if (isPenny && r.scoring.totalScore >= PENNY_ENTRY_SCORE) {
-            const rvolVal = r.scoring.indicators?.rvol?.rvol || 0;
-            await addLog('unified', 'scan', r.sym, `[🪙동전주] ${r.sym} $${r.price.toFixed(4)}(${fmtKRW(r.price)}) | ${r.scoring.totalScore}점(≥${PENNY_ENTRY_SCORE}) RVOL ${rvolVal.toFixed(1)}x → 최우선 진입 대상`, { price: r.price, score: r.scoring.totalScore, rvol: rvolVal });
-          }
-
-          // ★ [Anti-Latency] 예측형 진입 로그
-          if (isPredictiveEntry) {
-            await addLog('unified', 'scan', r.sym, `[🔮예측형선취매] ${r.sym} 뉴스 미확인 BUT 지표 ${r.scoring.totalScore}점(≥${PREDICTIVE_ENTRY_SCORE}) 수렴→발산 감지 | 정보 비대칭 구간 포착 → 2~3호가 아래 지정가 대기`, { score: r.scoring.totalScore, metCount, liquidityRatio: liquidityCheck.ratio });
-          }
-
-          // ★ 필승 패턴 알림 로그 (고래/에너지 응축 포함)
-          if (hasCriticalPattern) {
-            const whaleTag = cp.whaleTrace?.detected ? ` | 🐋고래매집(지지선${fmtKRW(cp.whaleTrace.supportLevel)})` : '';
-            const energyTag = cp.energyCondensation?.detected ? ` | ⚡에너지응축[${cp.energyCondensation.signals.join('+')}]` : '';
-            await addLog('unified', 'scan', r.sym, `[🎯필승패턴감지] ${r.sym} [${cp.patterns.join('+')}] 익절확률 ${cp.confidence}% | ${r.scoring.totalScore}점(${metCount}/10)${whaleTag}${energyTag} → 패턴 기반 즉시 진입`, { criticalPatterns: cp, score: r.scoring.totalScore });
-          }
-
-          // ★ 선취매 알림 로그
-          if (isAccumEntry) {
-            await addLog('unified', 'scan', r.sym, `[데이장 선취매] 에너지 응축 패턴 확인. 거래량 無해도 지표 발산 직전! ${r.sym} 미리 매수합니다. | 매집패턴: ${accumPattern?.pattern} | 응축도: ${accumPattern?.condensation?.toFixed(1)}/10 (신뢰도 ${accumPattern?.confidence}%) | ${r.scoring.totalScore}점(${metCount}/10)`, { accumulation: accumPattern, score: r.scoring.totalScore, condensation: accumPattern?.condensation });
-          }
-
-          // ★ 뉴스 감성은 최종 후보 선정 후 분석 (타임아웃 방지)
           (r as any).newsSentiment = 50;
           (r as any).newsCount = 0;
+          (r as any).hardCriteriaPass = true;
+          (r as any).aggressionPctRaw = aggressionPctRaw;
 
-          // ★ [Phase 1] 타겟 유니버스 마킹 — 마중가/EMA25 정보 첨부
-          const tgt = targetMap.get(r.sym);
-          if (tgt) {
-            (r as any).isPhase1Target = true;
-            (r as any).phase1Limit = tgt.limitPriceUSD;
-            (r as any).phase1Ema25 = tgt.ema25;
-            (r as any).phase1EmaGapPct = tgt.emaGapPct;
-          }
+          // ★ Phase 1 타겟 메타
+          (r as any).isPhase1Target = true;
+          (r as any).phase1Limit = tgt!.limitPriceUSD;
+          (r as any).phase1Ema25 = tgt!.ema25;
+          (r as any).phase1EmaGapPct = tgt!.emaGapPct;
+
+          await addLog('unified', 'scan', r.sym, `[HardCriteria-통과] ${r.sym} 4-AND ✅ Phase1+25봉하락+음봉+체결강도${aggressionPctRaw}% → 매수 후보`, { aggressionPctRaw, score: r.scoring.totalScore });
 
           candidates.push(r);
         }
@@ -2389,39 +2357,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ [Alpha-Entry] 정예 1~5선 집중 투자: 3% 진공구간 + 뉴스 90%+ + 익절확률 95% + 가치 검증
+    // ★ [Hard-Criteria 단일 게이트] 후보 수집 단계에서 이미 4-AND 통과한 종목만 들어왔으므로,
+    //    여기서는 추가 점수 필터/뉴스 필터 없이 그대로 통과시킨다.
+    //    (가치등급 D만 차단 — 펀더멘털 위험 회피)
     const filteredCandidates = candidates.filter(c => {
-      if ((c as any)._newsBlocked) return false;
-      if ((c as any)._valueBlocked) return false; // ★ 가치 D등급 차단
-      const valueVerified = (c as any).valueVerified || false;
-      const winProb = getWinProbability(c.scoring.totalScore, valueVerified);
-      const hasCritical = (c as any).hasCriticalPattern;
-      const newsSent = (c as any).newsSentiment || 50;
-      
-      // ★ [Alpha-Entry] 진공 구간 분석: 3%+ 상승 공간이 매물대 없이 열려 있는가
-      const vacuumData = c.data ? detectVacuumZone(c.data.closes, c.data.highs, c.data.lows, c.data.volumes) : { hasVacuum: false, vacuumPct: 0, resistance: 0 };
-      const hasVacuum = vacuumData.hasVacuum;
-      
-      // ★ [Value-Filter] 교차 검증: 뉴스 + 지표 + 가치 모두 합치 → 98% 격상
-      const tripleVerified = newsSent >= ALPHA_ENTRY_NEWS_MIN && winProb >= ALPHA_ENTRY_WIN_PROB && valueVerified;
-      if (tripleVerified) {
-        (c as any)._tripleVerified = true;
-      }
-      
-      // ★ 뉴스+지표 동기화: 뉴스 90%+ & 익절확률 95%+ = 확정적 진입
-      const alphaEntry = newsSent >= ALPHA_ENTRY_NEWS_MIN && winProb >= ALPHA_ENTRY_WIN_PROB;
-      
-      // 필승 패턴 감지 시: 패턴 익절확률 90%+ → 즉시 진입
-      if (hasCritical) {
-        const patternConf = (c as any).criticalPatternConfidence || 0;
-        return patternConf >= 90 || (c.scoring.totalScore >= 70 && winProb >= ALPHA_ENTRY_WIN_PROB);
-      }
-      // ★ Alpha-Entry: 뉴스 90%+ & 익절확률 95%+ & 진공구간 → 최우선 진입
-      if (alphaEntry && hasVacuum) return true;
-      // ★ 뉴스 90%+ & 익절확률 95% → 진공 없어도 진입 허용
-      if (alphaEntry) return true;
-      // 일반 진입: 70점+ & 95% 이상 (기존 65/90 → 강화)
-      return c.scoring.totalScore >= 70 && winProb >= ALPHA_ENTRY_WIN_PROB;
+      if ((c as any)._valueBlocked) return false;
+      return (c as any).hardCriteriaPass === true;
     });
     const topCandidates = filteredCandidates.slice(0, 5);
 
