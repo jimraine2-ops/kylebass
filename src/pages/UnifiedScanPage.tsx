@@ -13,6 +13,7 @@ import { StockCard } from "@/components/recommendation/StockCard";
 import StockCardItem from "@/components/penny/StockCardItem";
 import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
+import { Phase1TargetCard } from "@/components/trading/Phase1TargetCard";
 
 type SortKey = 'score' | 'changePct' | 'rvol';
 type ViewMode = 'all' | 'large' | 'small';
@@ -102,6 +103,9 @@ export default function UnifiedScanPage() {
       </div>
 
       <ServerStatusBanner />
+
+      {/* Phase 1 Target Universe — 그물망 알박기 Top 5 (AI 트레이딩과 동일) */}
+      <Phase1TargetCard />
 
       {/* Live Status */}
       <div className="rounded-lg p-3 flex items-center justify-between flex-wrap gap-2 border border-stock-up/50 bg-stock-up/5">
