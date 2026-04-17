@@ -9,6 +9,7 @@ import { ProfitScoreboard } from "@/components/dashboard/ProfitScoreboard";
 import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
 import { HourlyWinRateChart } from "@/components/dashboard/HourlyWinRateChart";
 import { Phase1TargetCard } from "@/components/trading/Phase1TargetCard";
+import { FillRateCard } from "@/components/dashboard/FillRateCard";
 
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
@@ -65,6 +66,9 @@ export default function Dashboard() {
 
       <ServerStatusBanner />
       <SafePauseBanner />
+
+      {/* 실전 체결률 KPI */}
+      <FillRateCard />
 
       {/* Phase 1 타겟 유니버스 */}
       <Phase1TargetCard />
