@@ -2273,12 +2273,12 @@ Deno.serve(async (req) => {
           const lastClose = r.data?.closes?.[lastIdx] ?? 0;
           const isBearishCandle = lastClose > 0 && lastOpen > 0 && lastClose < lastOpen;
 
-          // 체결강도 (지표 점수가 아닌 raw % 값) — ★ 공격적 완화: 90% → 60%
+          // 체결강도 (지표 점수가 아닌 raw % 값) — ★ [골든 클라우드 Validation] 85%+ 진짜 돌파만 인정
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
-          const isAggressionOk = aggressionPctRaw >= 60;
+          const isAggressionOk = aggressionPctRaw >= 85;
 
-          // ★ 공격적 완화: 25봉하락 AND 음봉 → OR 조건 (둘 중 하나만 만족해도 통과)
+          // ★ 25봉추세 OR 음봉 (지지선 리테스트 패턴)
           const trendOrBearishOk = isDowntrend25 || isBearishCandle;
 
           const hardCriteriaPass =
@@ -2289,8 +2289,8 @@ Deno.serve(async (req) => {
             if (isPhase1Target) {
               const reasons: string[] = [];
               if (!trendOrBearishOk) reasons.push('25봉추세✗&음봉✗');
-              if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<60%`);
-              await addLog('unified', 'hold', r.sym, `[HardCriteria-탈락] ${r.sym} Phase1 타겟이나 [${reasons.join('|')}] → 진입 보류`, { aggressionPctRaw, isDowntrend25, isBearishCandle });
+              if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<85%`);
+              await addLog('unified', 'hold', r.sym, `[GoldenCloud-탈락] ${r.sym} 사냥감이나 [${reasons.join('|')}] → 가짜 돌파(Validation 미달) 진입 보류`, { aggressionPctRaw, isDowntrend25, isBearishCandle });
             }
             continue;
           }
