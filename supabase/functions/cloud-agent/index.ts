@@ -2541,14 +2541,20 @@ Deno.serve(async (req) => {
       // ★ Passive Fill: 매수 1호가 알박기 (슬리피지 0)
       const passivePrice = applyPassiveFill(tsGuard.adjustedPrice, tickSize);
       
-      // ★ 최종 매수가: 예측형/선취매 → Passive Fill, 일반 → Session Slippage
+      // ★ [골든 클라우드 스나이퍼] Phase1 사냥감 → Kumo 상단 리테스트 마중가 강제 적용
+      // (15분 지연 동안 가격이 구름 상단 지지선까지 내려와 체결되기를 대기)
       let adjustedPrice: number;
       let orderType = 'MARKET';
-      if (isPredictive || isAccumEntry) {
-        adjustedPrice = passivePrice; // 호가 알박기
+      const kumoLimit = (r as any).phase1KumoTop as number | undefined;
+      if (kumoLimit && kumoLimit > 0) {
+        // Kumo 상단 마중가 (현재가보다 낮을 때만 = 리테스트 대기, 아니면 현재가 기준 Passive Fill)
+        adjustedPrice = kumoLimit < r.price ? +kumoLimit.toFixed(4) : passivePrice;
+        orderType = kumoLimit < r.price ? 'LIMIT(☁️Kumo-Retest)' : 'LIMIT(Passive)';
+      } else if (isPredictive || isAccumEntry) {
+        adjustedPrice = passivePrice;
         orderType = 'LIMIT(Passive)';
       } else if (tsGuard.isGuarded) {
-        adjustedPrice = tsGuard.adjustedPrice; // Timestamp Guard 적용
+        adjustedPrice = tsGuard.adjustedPrice;
         orderType = 'LIMIT(Guard)';
       } else {
         const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.005) : sessionSlippage;
