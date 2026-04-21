@@ -15,6 +15,7 @@ import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { Phase1TargetCard } from "@/components/trading/Phase1TargetCard";
 import { FillRateCard } from "@/components/dashboard/FillRateCard";
+import { GoldenCloudSniperBanner } from "@/components/trading/GoldenCloudSniperBanner";
 
 type SortKey = 'score' | 'changePct' | 'rvol';
 type ViewMode = 'all' | 'large' | 'small';
@@ -104,6 +105,9 @@ export default function UnifiedScanPage() {
       </div>
 
       <ServerStatusBanner />
+
+      {/* ☁️🎯 Golden Cloud Sniper — 4단계 전략 배너 */}
+      <GoldenCloudSniperBanner />
 
       {/* Phase 1 Target Universe — 그물망 알박기 Top 5 (AI 트레이딩과 동일) */}
       <Phase1TargetCard />

@@ -20,6 +20,7 @@ import { formatStockName } from "@/lib/koreanStockMap";
 import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
 import { useValueGrades } from "@/hooks/useValueGrade";
 import { KumoRetestAccuracyCard } from "@/components/trading/KumoRetestAccuracyCard";
+import { GoldenCloudSniperBanner } from "@/components/trading/GoldenCloudSniperBanner";
 
 interface IntegratedKPIDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
@@ -191,6 +192,10 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
   return (
     <div className="space-y-6">
       <SafePauseBanner />
+
+      {/* ☁️🎯 Golden Cloud Sniper — 4단계 전략 배너 */}
+      <GoldenCloudSniperBanner />
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           {/* ★ 연승 카운터 */}
