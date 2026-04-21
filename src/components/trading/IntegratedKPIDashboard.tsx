@@ -305,7 +305,10 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
         </Card>
       )}
 
-      {/* ★ 자금 운용률 경고 배너 */}
+      {/* ★ Kumo-Retest LIMIT 정확도 — 마중가 vs 실체결 슬리피지 추적 */}
+      <KumoRetestAccuracyCard />
+
+
       {(() => {
         const initialBal = wallet?.initial_balance || confirmedBalance;
         const utilization = initialBal > 0 ? ((initialBal - confirmedBalance) / initialBal) * 100 : 0;
