@@ -795,25 +795,78 @@ async function polygonFetch(path: string): Promise<{ data: any; status: number }
   } catch { return { data: null, status: -1 }; }
 }
 
-// Polygon: 최근 30거래일 일봉 → EMA25 + 평균 거래대금 산출
+// Polygon: 최근 220거래일 일봉 → EMA25 + EMA200 + Ichimoku Kumo + 평균 거래대금 산출
 // 반환 status: 200=성공, 429=한도, 403=권한, 0=키없음, -1=네트워크오류, 204=데이터부족
-async function polygonDailyMetrics(symbol: string): Promise<{ ema25: number; avgDollarVolUSD: number; lastClose: number; status: number; bars: number }> {
+async function polygonDailyMetrics(symbol: string): Promise<{
+  ema25: number; ema200: number; kumoTop: number; kumoBottom: number; aboveKumo: boolean; ema200Uptrend: boolean;
+  avgDollarVolUSD: number; lastClose: number; status: number; bars: number;
+}> {
   const to = new Date().toISOString().split('T')[0];
-  const fromDate = new Date(Date.now() - 60 * 86400000).toISOString().split('T')[0];
-  const { data, status } = await polygonFetch(`/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${fromDate}/${to}?adjusted=true&sort=asc&limit=120`);
-  if (status !== 200) return { ema25: 0, avgDollarVolUSD: 0, lastClose: 0, status, bars: 0 };
+  // ★ EMA200 + Ichimoku(52봉 lookback) → 최소 220 거래일 필요
+  const fromDate = new Date(Date.now() - 360 * 86400000).toISOString().split('T')[0];
+  const { data, status } = await polygonFetch(`/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${fromDate}/${to}?adjusted=true&sort=asc&limit=400`);
+  if (status !== 200) return { ema25: 0, ema200: 0, kumoTop: 0, kumoBottom: 0, aboveKumo: false, ema200Uptrend: false, avgDollarVolUSD: 0, lastClose: 0, status, bars: 0 };
   const barCount = data?.results?.length || 0;
-  if (barCount < 25) return { ema25: 0, avgDollarVolUSD: 0, lastClose: 0, status: 204, bars: barCount };
-  const bars = data.results.slice(-30);
+  if (barCount < 60) return { ema25: 0, ema200: 0, kumoTop: 0, kumoBottom: 0, aboveKumo: false, ema200Uptrend: false, avgDollarVolUSD: 0, lastClose: 0, status: 204, bars: barCount };
+  const bars = data.results;
   const closes = bars.map((b: any) => b.c);
+  const highs = bars.map((b: any) => b.h);
+  const lows = bars.map((b: any) => b.l);
+
   // EMA25
-  const k = 2 / (25 + 1);
-  let ema = closes.slice(0, 25).reduce((s: number, v: number) => s + v, 0) / 25;
-  for (let i = 25; i < closes.length; i++) ema = closes[i] * k + ema * (1 - k);
+  const k25 = 2 / (25 + 1);
+  let ema25 = closes.slice(0, 25).reduce((s: number, v: number) => s + v, 0) / 25;
+  for (let i = 25; i < closes.length; i++) ema25 = closes[i] * k25 + ema25 * (1 - k25);
+
+  // EMA200 (200봉 미만이면 가용 봉수로 fallback)
+  const emaPeriod = Math.min(200, closes.length);
+  const k200 = 2 / (emaPeriod + 1);
+  let ema200 = closes.slice(0, emaPeriod).reduce((s: number, v: number) => s + v, 0) / emaPeriod;
+  for (let i = emaPeriod; i < closes.length; i++) ema200 = closes[i] * k200 + ema200 * (1 - k200);
+  // ema200 우상향: 최근 20봉 동안 EMA200이 상승
+  let ema200_20agoEMA = closes.slice(0, emaPeriod).reduce((s: number, v: number) => s + v, 0) / emaPeriod;
+  const stopAt = Math.max(emaPeriod, closes.length - 20);
+  for (let i = emaPeriod; i < stopAt; i++) ema200_20agoEMA = closes[i] * k200 + ema200_20agoEMA * (1 - k200);
+  const ema200Uptrend = ema200 > ema200_20agoEMA;
+
+  // ★ Ichimoku Kumo (구름대) — Senkou Span A/B
+  // Tenkan-sen (9): (9봉 최고 + 9봉 최저) / 2
+  // Kijun-sen (26): (26봉 최고 + 26봉 최저) / 2
+  // Senkou Span A: (Tenkan + Kijun) / 2
+  // Senkou Span B: (52봉 최고 + 52봉 최저) / 2
+  const N = closes.length;
+  const tHi = Math.max(...highs.slice(N - 9));
+  const tLo = Math.min(...lows.slice(N - 9));
+  const tenkan = (tHi + tLo) / 2;
+  const kHi = Math.max(...highs.slice(N - 26));
+  const kLo = Math.min(...lows.slice(N - 26));
+  const kijun = (kHi + kLo) / 2;
+  const spanA = (tenkan + kijun) / 2;
+  const lookbackB = Math.min(52, N);
+  const bHi = Math.max(...highs.slice(N - lookbackB));
+  const bLo = Math.min(...lows.slice(N - lookbackB));
+  const spanB = (bHi + bLo) / 2;
+  const kumoTop = Math.max(spanA, spanB);
+  const kumoBottom = Math.min(spanA, spanB);
+  const lastClose = closes[N - 1];
+  // 구름 상단 근접/돌파: 종가가 kumoTop의 0.97배 이상 (3% 이내 근접 또는 위)
+  const aboveKumo = lastClose >= kumoTop * 0.97;
+
   // 20일 평균 거래대금 (USD)
   const last20 = bars.slice(-20);
   const avgDollarVolUSD = last20.reduce((s: number, b: any) => s + (b.c * b.v), 0) / last20.length;
-  return { ema25: +ema.toFixed(4), avgDollarVolUSD, lastClose: closes[closes.length - 1], status: 200, bars: barCount };
+  return {
+    ema25: +ema25.toFixed(4),
+    ema200: +ema200.toFixed(4),
+    kumoTop: +kumoTop.toFixed(4),
+    kumoBottom: +kumoBottom.toFixed(4),
+    aboveKumo,
+    ema200Uptrend,
+    avgDollarVolUSD,
+    lastClose,
+    status: 200,
+    bars: barCount,
+  };
 }
 
 async function buildTargetUniverse(
