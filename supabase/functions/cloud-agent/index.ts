@@ -108,10 +108,12 @@ async function verifyRealFill(params: {
   }
 
   // 4. Real-Market-Check — Twelve Data 분봉 교차 검증 (캐시/스로틀로 무료 한도 보호)
+  // ★ [페니주 적응형] $2 미만 저가주는 임계 절반 (5,000주) — 호가 단위가 작아 명목 거래대금은 충분
+  const dynamicMinVolShares = price < 2 ? Math.floor(REAL_MARKET_MIN_VOL_SHARES / 2) : REAL_MARKET_MIN_VOL_SHARES;
   const td = await fetchTwelveDataMinute(symbol);
   if (td) {
-    if (td.vol < REAL_MARKET_MIN_VOL_SHARES) {
-      return { fillable: false, reason: `[수급 부족으로 인한 체결 실패] Twelve Data 분봉 체결주식 ${td.vol.toLocaleString()}주 < ${REAL_MARKET_MIN_VOL_SHARES.toLocaleString()}주`, tdVol: td.vol, barValueKRW };
+    if (td.vol < dynamicMinVolShares) {
+      return { fillable: false, reason: `[수급 부족으로 인한 체결 실패] Twelve Data 분봉 체결주식 ${td.vol.toLocaleString()}주 < ${dynamicMinVolShares.toLocaleString()}주${price < 2 ? ' (페니주 완화)' : ''}`, tdVol: td.vol, barValueKRW };
     }
     // 가격 괴리 1% 이상이면 미체결 (호가 스프레드 위험)
     const divergencePct = Math.abs(price - td.close) / price * 100;
@@ -128,6 +130,9 @@ async function verifyRealFill(params: {
 let currentRound = 1;
 let roundResetTimestamps: string[] = []; // 라운드 리셋 시점 기록
 let cumulativeTotalProfitKRW = 0; // 전 라운드 누적 수익 (안전 자산)
+
+// ★ [로그 노이즈 감소] 동일 종목 동일 사유 미체결은 5회당 1번만 기록
+const fillFailCounter = new Map<string, { reason: string; count: number }>();
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
@@ -2075,15 +2080,27 @@ Deno.serve(async (req) => {
 
           if (!fillCheck.fillable) {
             // 미체결 처리 — 포지션 유지하고 다음 사이클 재시도
-            await addLog('unified', 'fill_failed', sym, `[미체결] ${sym} ${newStatus} 시도 → ${fillCheck.reason} | 포지션 유지, 다음 사이클 재검증`, {
-              attemptedStatus: newStatus,
-              pnlPct: +pnlPct.toFixed(2),
-              barValueKRW: fillCheck.barValueKRW,
-              tdVol: fillCheck.tdVol,
-              priceUSD: price,
-            });
+            // ★ [로그 노이즈 감소] 동일 종목·동일 사유는 5회당 1번만 기록
+            const fkey = `${sym}::${newStatus}`;
+            const prev = fillFailCounter.get(fkey);
+            const sameReason = prev && prev.reason === fillCheck.reason;
+            const nextCount = sameReason ? prev!.count + 1 : 1;
+            fillFailCounter.set(fkey, { reason: fillCheck.reason, count: nextCount });
+            const shouldLog = !sameReason || nextCount === 1 || nextCount % 5 === 0;
+            if (shouldLog) {
+              const repeatTag = nextCount > 1 ? ` ×${nextCount}회 누적` : '';
+              await addLog('unified', 'fill_failed', sym, `[미체결] ${sym} ${newStatus} 시도 → ${fillCheck.reason}${repeatTag} | 포지션 유지, 다음 사이클 재검증`, {
+                attemptedStatus: newStatus,
+                pnlPct: +pnlPct.toFixed(2),
+                barValueKRW: fillCheck.barValueKRW,
+                tdVol: fillCheck.tdVol,
+                priceUSD: price,
+                repeatCount: nextCount,
+              });
+            }
             shouldClose = false; // 매도 취소
           } else {
+            fillFailCounter.delete(`${sym}::${newStatus}`); // 체결 성공 시 카운터 리셋
             await addLog('unified', 'exit_attempt', sym, `[매도시도] ${sym} ${newStatus} | 체결 확정: ${fillCheck.reason}`, { price, pnlPct: +pnlPct.toFixed(2), newStatus, quantScore, fillCheck: fillCheck.reason });
             // 슬리피지 보정 매도가 — 익절성 매도는 -0.2% 슬리피지 차감하여 실체결가로 기록
             const fillPrice = isProfitExit ? +(price * (1 - 0.002)).toFixed(4) : price;
