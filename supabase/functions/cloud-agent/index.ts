@@ -769,10 +769,14 @@ interface TargetUniverseEntry {
   symbol: string;
   price: number;
   ema25: number;
+  ema200: number;
+  kumoTop: number;          // ★ 일목균형표 구름 상단 (Senkou A/B 중 큰 값) = 리테스트 마중가
+  kumoBottom: number;
   emaGapPct: number;        // (price - ema25) / ema25
   avgDollarVolUSD: number;  // 20일 평균 거래대금 USD
-  limitPriceUSD: number;    // EMA25 × 0.93 = 그물망 알박기 가격
+  limitPriceUSD: number;    // ★ 골든 클라우드 스나이퍼: Kumo 상단 = 리테스트 지지선 마중가
   capType: 'large' | 'small';
+  newsBullishPct: number;   // ★ 24h 뉴스 감성 (가산점)
 }
 
 let cachedTargetUniverse: { ts: number; list: TargetUniverseEntry[] } | null = null;
