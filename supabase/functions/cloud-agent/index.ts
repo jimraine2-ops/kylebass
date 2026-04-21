@@ -891,7 +891,7 @@ async function buildTargetUniverse(
     return cachedTargetUniverse?.list || [];
   }
 
-  await addLog('system', 'scan', null, `[Phase1] 🎯 타겟 유니버스 빌드 시작 — Polygon.io 정밀 EMA25 산출 (풀: ${candidatePool.length}개)`, {});
+  await addLog('system', 'scan', null, `[GoldenCloud] 🎯 사냥감 빌드 시작 — Polygon EMA25/EMA200/Ichimoku Kumo + Finnhub 24h 뉴스 (풀: ${candidatePool.length}개)`, {});
 
   const results: TargetUniverseEntry[] = [];
   // ★ Polygon 무료 = 5 req/min → 사이클당 4개만 호출 (60초 한도 내 안전)
