@@ -980,9 +980,9 @@ async function buildTargetUniverse(
   if (top5.length > 0) {
     cachedTargetUniverse = { ts: Date.now(), list: top5 };
     const summary = top5.map((t, i) =>
-      `${i+1}.${t.symbol}($${t.price.toFixed(2)}/EMA25:$${t.ema25.toFixed(2)}/${(t.emaGapPct*100).toFixed(1)}%/마중가:$${t.limitPriceUSD.toFixed(2)})`
+      `${i+1}.${t.symbol}($${t.price.toFixed(2)}/EMA200:$${t.ema200.toFixed(2)}/☁️Kumo상단:$${t.kumoTop.toFixed(2)}/마중가:$${t.limitPriceUSD.toFixed(2)}/📰${t.newsBullishPct}%)`
     ).join(', ');
-    await addLog('system', 'scan', null, `[Phase1] ✅ Top ${top5.length} (이번사이클 ${results.length}추가/스캔 ${okCount}성공/상태 ${tallyStr}): ${summary}`, { targets: top5, statusTally });
+    await addLog('system', 'scan', null, `[GoldenCloud] ✅ Top ${top5.length} 사냥감 확정 (이번사이클 ${results.length}추가/스캔 ${okCount}성공/${tallyStr}) — 리테스트 마중가 대기: ${summary}`, { targets: top5, statusTally });
   } else {
     const reason = rateLimited ? '429 한도초과' : `상태분포 ${tallyStr} | 통과 0`;
     await addLog('system', 'scan', null, `[Phase1] ⚠️ 타겟 미확정 (${reason}) — 점진 누적 진행`, { statusTally });
