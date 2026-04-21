@@ -6,6 +6,8 @@ import { Progress } from "@/components/ui/progress";
 import { TrendingUp, TrendingDown, Shield, ArrowUp, ArrowDown, Activity, Radar, ShieldCheck, Target } from "lucide-react";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { cn } from "@/lib/utils";
+import { useGoldenCloudTargets } from "@/hooks/useGoldenCloudTargets";
+import { KumoEma200Badge } from "@/components/trading/KumoEma200Badge";
 
 interface OpenPositionCardProps {
   position: any;
@@ -125,6 +127,10 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
   const targetProgress = targetPct > 0 ? Math.min(100, Math.max(0, (unrealizedPnlPct / targetPct) * 100)) : 0;
   const targetPriceKRW = Math.round(pos.price * (1 + targetPct / 100) * fxRate);
 
+  // ★ [GoldenCloud] 진입가 vs Kumo 상단/EMA200 미니 차트 데이터
+  const { data: goldenCloudMap } = useGoldenCloudTargets();
+  const goldenCloudTarget = goldenCloudMap?.get(pos.symbol);
+
   return (
     <div
       className={cn(
@@ -222,6 +228,15 @@ export const OpenPositionCard = React.forwardRef<HTMLDivElement, OpenPositionCar
           </div>
         </div>
       </div>
+
+      {/* ★ [GoldenCloud] Kumo/EMA200 위치 미니 차트 — 구름대 위 안전 추격 여부 */}
+      {goldenCloudTarget && (
+        <KumoEma200Badge
+          target={goldenCloudTarget}
+          entryPrice={pos.price}
+          currentPrice={displayPrice}
+        />
+      )}
 
       {/* ★ [AI 추천 익절%] Dynamic-Target — 항상 표시 */}
       {dynamicTP && (
