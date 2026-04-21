@@ -19,6 +19,7 @@ import { EditableBalance } from "@/components/trading/EditableBalance";
 import { formatStockName } from "@/lib/koreanStockMap";
 import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
 import { useValueGrades } from "@/hooks/useValueGrade";
+import { KumoRetestAccuracyCard } from "@/components/trading/KumoRetestAccuracyCard";
 
 interface IntegratedKPIDashboardProps {
   wsGetPrice?: (symbol: string) => number | null;
