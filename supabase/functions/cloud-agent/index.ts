@@ -769,10 +769,14 @@ interface TargetUniverseEntry {
   symbol: string;
   price: number;
   ema25: number;
+  ema200: number;
+  kumoTop: number;          // ★ 일목균형표 구름 상단 (Senkou A/B 중 큰 값) = 리테스트 마중가
+  kumoBottom: number;
   emaGapPct: number;        // (price - ema25) / ema25
   avgDollarVolUSD: number;  // 20일 평균 거래대금 USD
-  limitPriceUSD: number;    // EMA25 × 0.93 = 그물망 알박기 가격
+  limitPriceUSD: number;    // ★ 골든 클라우드 스나이퍼: Kumo 상단 = 리테스트 지지선 마중가
   capType: 'large' | 'small';
+  newsBullishPct: number;   // ★ 24h 뉴스 감성 (가산점)
 }
 
 let cachedTargetUniverse: { ts: number; list: TargetUniverseEntry[] } | null = null;
@@ -795,25 +799,78 @@ async function polygonFetch(path: string): Promise<{ data: any; status: number }
   } catch { return { data: null, status: -1 }; }
 }
 
-// Polygon: 최근 30거래일 일봉 → EMA25 + 평균 거래대금 산출
+// Polygon: 최근 220거래일 일봉 → EMA25 + EMA200 + Ichimoku Kumo + 평균 거래대금 산출
 // 반환 status: 200=성공, 429=한도, 403=권한, 0=키없음, -1=네트워크오류, 204=데이터부족
-async function polygonDailyMetrics(symbol: string): Promise<{ ema25: number; avgDollarVolUSD: number; lastClose: number; status: number; bars: number }> {
+async function polygonDailyMetrics(symbol: string): Promise<{
+  ema25: number; ema200: number; kumoTop: number; kumoBottom: number; aboveKumo: boolean; ema200Uptrend: boolean;
+  avgDollarVolUSD: number; lastClose: number; status: number; bars: number;
+}> {
   const to = new Date().toISOString().split('T')[0];
-  const fromDate = new Date(Date.now() - 60 * 86400000).toISOString().split('T')[0];
-  const { data, status } = await polygonFetch(`/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${fromDate}/${to}?adjusted=true&sort=asc&limit=120`);
-  if (status !== 200) return { ema25: 0, avgDollarVolUSD: 0, lastClose: 0, status, bars: 0 };
+  // ★ EMA200 + Ichimoku(52봉 lookback) → 최소 220 거래일 필요
+  const fromDate = new Date(Date.now() - 360 * 86400000).toISOString().split('T')[0];
+  const { data, status } = await polygonFetch(`/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${fromDate}/${to}?adjusted=true&sort=asc&limit=400`);
+  if (status !== 200) return { ema25: 0, ema200: 0, kumoTop: 0, kumoBottom: 0, aboveKumo: false, ema200Uptrend: false, avgDollarVolUSD: 0, lastClose: 0, status, bars: 0 };
   const barCount = data?.results?.length || 0;
-  if (barCount < 25) return { ema25: 0, avgDollarVolUSD: 0, lastClose: 0, status: 204, bars: barCount };
-  const bars = data.results.slice(-30);
+  if (barCount < 60) return { ema25: 0, ema200: 0, kumoTop: 0, kumoBottom: 0, aboveKumo: false, ema200Uptrend: false, avgDollarVolUSD: 0, lastClose: 0, status: 204, bars: barCount };
+  const bars = data.results;
   const closes = bars.map((b: any) => b.c);
+  const highs = bars.map((b: any) => b.h);
+  const lows = bars.map((b: any) => b.l);
+
   // EMA25
-  const k = 2 / (25 + 1);
-  let ema = closes.slice(0, 25).reduce((s: number, v: number) => s + v, 0) / 25;
-  for (let i = 25; i < closes.length; i++) ema = closes[i] * k + ema * (1 - k);
+  const k25 = 2 / (25 + 1);
+  let ema25 = closes.slice(0, 25).reduce((s: number, v: number) => s + v, 0) / 25;
+  for (let i = 25; i < closes.length; i++) ema25 = closes[i] * k25 + ema25 * (1 - k25);
+
+  // EMA200 (200봉 미만이면 가용 봉수로 fallback)
+  const emaPeriod = Math.min(200, closes.length);
+  const k200 = 2 / (emaPeriod + 1);
+  let ema200 = closes.slice(0, emaPeriod).reduce((s: number, v: number) => s + v, 0) / emaPeriod;
+  for (let i = emaPeriod; i < closes.length; i++) ema200 = closes[i] * k200 + ema200 * (1 - k200);
+  // ema200 우상향: 최근 20봉 동안 EMA200이 상승
+  let ema200_20agoEMA = closes.slice(0, emaPeriod).reduce((s: number, v: number) => s + v, 0) / emaPeriod;
+  const stopAt = Math.max(emaPeriod, closes.length - 20);
+  for (let i = emaPeriod; i < stopAt; i++) ema200_20agoEMA = closes[i] * k200 + ema200_20agoEMA * (1 - k200);
+  const ema200Uptrend = ema200 > ema200_20agoEMA;
+
+  // ★ Ichimoku Kumo (구름대) — Senkou Span A/B
+  // Tenkan-sen (9): (9봉 최고 + 9봉 최저) / 2
+  // Kijun-sen (26): (26봉 최고 + 26봉 최저) / 2
+  // Senkou Span A: (Tenkan + Kijun) / 2
+  // Senkou Span B: (52봉 최고 + 52봉 최저) / 2
+  const N = closes.length;
+  const tHi = Math.max(...highs.slice(N - 9));
+  const tLo = Math.min(...lows.slice(N - 9));
+  const tenkan = (tHi + tLo) / 2;
+  const kHi = Math.max(...highs.slice(N - 26));
+  const kLo = Math.min(...lows.slice(N - 26));
+  const kijun = (kHi + kLo) / 2;
+  const spanA = (tenkan + kijun) / 2;
+  const lookbackB = Math.min(52, N);
+  const bHi = Math.max(...highs.slice(N - lookbackB));
+  const bLo = Math.min(...lows.slice(N - lookbackB));
+  const spanB = (bHi + bLo) / 2;
+  const kumoTop = Math.max(spanA, spanB);
+  const kumoBottom = Math.min(spanA, spanB);
+  const lastClose = closes[N - 1];
+  // 구름 상단 근접/돌파: 종가가 kumoTop의 0.97배 이상 (3% 이내 근접 또는 위)
+  const aboveKumo = lastClose >= kumoTop * 0.97;
+
   // 20일 평균 거래대금 (USD)
   const last20 = bars.slice(-20);
   const avgDollarVolUSD = last20.reduce((s: number, b: any) => s + (b.c * b.v), 0) / last20.length;
-  return { ema25: +ema.toFixed(4), avgDollarVolUSD, lastClose: closes[closes.length - 1], status: 200, bars: barCount };
+  return {
+    ema25: +ema25.toFixed(4),
+    ema200: +ema200.toFixed(4),
+    kumoTop: +kumoTop.toFixed(4),
+    kumoBottom: +kumoBottom.toFixed(4),
+    aboveKumo,
+    ema200Uptrend,
+    avgDollarVolUSD,
+    lastClose,
+    status: 200,
+    bars: barCount,
+  };
 }
 
 async function buildTargetUniverse(
@@ -834,7 +891,7 @@ async function buildTargetUniverse(
     return cachedTargetUniverse?.list || [];
   }
 
-  await addLog('system', 'scan', null, `[Phase1] 🎯 타겟 유니버스 빌드 시작 — Polygon.io 정밀 EMA25 산출 (풀: ${candidatePool.length}개)`, {});
+  await addLog('system', 'scan', null, `[GoldenCloud] 🎯 사냥감 빌드 시작 — Polygon EMA25/EMA200/Ichimoku Kumo + Finnhub 24h 뉴스 (풀: ${candidatePool.length}개)`, {});
 
   const results: TargetUniverseEntry[] = [];
   // ★ Polygon 무료 = 5 req/min → 사이클당 4개만 호출 (60초 한도 내 안전)
@@ -861,15 +918,30 @@ async function buildTargetUniverse(
       const volOk = m.avgDollarVolUSD >= TARGET_AVG_DOLLAR_VOLUME_USD;
       const gap = (m.lastClose - m.ema25) / m.ema25;
       const gapOk = gap <= TARGET_EMA_GAP_PCT;
-      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)}≤$${PHASE1_MAX_PRICE_USD})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M≥$${(TARGET_AVG_DOLLAR_VOLUME_USD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%≤+${(TARGET_EMA_GAP_PCT*100).toFixed(0)}%)`;
-      await addLog('system', 'scan', sym, `[Phase1·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk });
+      // ★ [골든 클라우드 스나이퍼] 추가 필터: ① EMA200 우상향 ② 구름 상단 근접/돌파
+      const ema200Ok = m.ema200Uptrend && m.lastClose > m.ema200;
+      const kumoOk = m.aboveKumo && m.kumoTop > 0;
+      // ★ Finnhub 24h 뉴스 감성 (가산점 — 차단 X)
+      let newsBullish = 50;
+      try {
+        const news = await getNewsSentiment(sym);
+        if (news.newsCount > 0) newsBullish = news.bullishPct;
+      } catch { newsBullish = 50; }
+      const newsTag = newsBullish >= 60 ? `📰호재${newsBullish}%` : newsBullish < 40 ? `📰약세${newsBullish}%` : `📰중립${newsBullish}%`;
+      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|EMA200${ema200Ok?'✓':'✗'}(우상향${m.ema200Uptrend?'✓':'✗'}/현재가>EMA200:${m.lastClose>m.ema200?'✓':'✗'})|☁️구름${kumoOk?'✓':'✗'}(상단$${m.kumoTop.toFixed(2)})|${newsTag}`;
+      await addLog('system', 'scan', sym, `[GoldenCloud·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, kumoOk, newsBullish });
       okCount++;
-      if (priceOk && volOk && gapOk) {
+      // ★ 골든 클라우드 4-AND: 가격 + 거래대금 + EMA200 우상향 + Kumo 상단 근접/돌파 (EMA갭은 로그 참고용)
+      if (priceOk && volOk && ema200Ok && kumoOk) {
         results.push({
-          symbol: sym, price: m.lastClose, ema25: m.ema25, emaGapPct: gap,
+          symbol: sym, price: m.lastClose, ema25: m.ema25, ema200: m.ema200,
+          kumoTop: m.kumoTop, kumoBottom: m.kumoBottom,
+          emaGapPct: gap,
           avgDollarVolUSD: m.avgDollarVolUSD,
-          limitPriceUSD: +(m.ema25 * (1 + TARGET_PHASE2_GAP_PCT)).toFixed(4),
+          // ★ 핵심: 마중가 = Kumo 상단 (리테스트 지지선) — 15분 지연 동안 가격이 내려와 체결되기를 대기
+          limitPriceUSD: +m.kumoTop.toFixed(4),
           capType: capTypeMap.get(sym) || 'small',
+          newsBullishPct: newsBullish,
         });
       }
     } else if (m.status === 429) {
@@ -908,9 +980,9 @@ async function buildTargetUniverse(
   if (top5.length > 0) {
     cachedTargetUniverse = { ts: Date.now(), list: top5 };
     const summary = top5.map((t, i) =>
-      `${i+1}.${t.symbol}($${t.price.toFixed(2)}/EMA25:$${t.ema25.toFixed(2)}/${(t.emaGapPct*100).toFixed(1)}%/마중가:$${t.limitPriceUSD.toFixed(2)})`
+      `${i+1}.${t.symbol}($${t.price.toFixed(2)}/EMA200:$${t.ema200.toFixed(2)}/☁️Kumo상단:$${t.kumoTop.toFixed(2)}/마중가:$${t.limitPriceUSD.toFixed(2)}/📰${t.newsBullishPct}%)`
     ).join(', ');
-    await addLog('system', 'scan', null, `[Phase1] ✅ Top ${top5.length} (이번사이클 ${results.length}추가/스캔 ${okCount}성공/상태 ${tallyStr}): ${summary}`, { targets: top5, statusTally });
+    await addLog('system', 'scan', null, `[GoldenCloud] ✅ Top ${top5.length} 사냥감 확정 (이번사이클 ${results.length}추가/스캔 ${okCount}성공/${tallyStr}) — 리테스트 마중가 대기: ${summary}`, { targets: top5, statusTally });
   } else {
     const reason = rateLimited ? '429 한도초과' : `상태분포 ${tallyStr} | 통과 0`;
     await addLog('system', 'scan', null, `[Phase1] ⚠️ 타겟 미확정 (${reason}) — 점진 누적 진행`, { statusTally });
@@ -2201,12 +2273,12 @@ Deno.serve(async (req) => {
           const lastClose = r.data?.closes?.[lastIdx] ?? 0;
           const isBearishCandle = lastClose > 0 && lastOpen > 0 && lastClose < lastOpen;
 
-          // 체결강도 (지표 점수가 아닌 raw % 값) — ★ 공격적 완화: 90% → 60%
+          // 체결강도 (지표 점수가 아닌 raw % 값) — ★ [골든 클라우드 Validation] 85%+ 진짜 돌파만 인정
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
-          const isAggressionOk = aggressionPctRaw >= 60;
+          const isAggressionOk = aggressionPctRaw >= 85;
 
-          // ★ 공격적 완화: 25봉하락 AND 음봉 → OR 조건 (둘 중 하나만 만족해도 통과)
+          // ★ 25봉추세 OR 음봉 (지지선 리테스트 패턴)
           const trendOrBearishOk = isDowntrend25 || isBearishCandle;
 
           const hardCriteriaPass =
@@ -2217,8 +2289,8 @@ Deno.serve(async (req) => {
             if (isPhase1Target) {
               const reasons: string[] = [];
               if (!trendOrBearishOk) reasons.push('25봉추세✗&음봉✗');
-              if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<60%`);
-              await addLog('unified', 'hold', r.sym, `[HardCriteria-탈락] ${r.sym} Phase1 타겟이나 [${reasons.join('|')}] → 진입 보류`, { aggressionPctRaw, isDowntrend25, isBearishCandle });
+              if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<85%`);
+              await addLog('unified', 'hold', r.sym, `[GoldenCloud-탈락] ${r.sym} 사냥감이나 [${reasons.join('|')}] → 가짜 돌파(Validation 미달) 진입 보류`, { aggressionPctRaw, isDowntrend25, isBearishCandle });
             }
             continue;
           }
@@ -2250,10 +2322,13 @@ Deno.serve(async (req) => {
           (r as any).hardCriteriaPass = true;
           (r as any).aggressionPctRaw = aggressionPctRaw;
 
-          // ★ Phase 1 타겟 메타
+          // ★ 골든 클라우드 사냥감 메타 (마중가 = Kumo 상단)
           (r as any).isPhase1Target = true;
-          (r as any).phase1Limit = tgt!.limitPriceUSD;
+          (r as any).phase1Limit = tgt!.limitPriceUSD; // = kumoTop (리테스트 마중가)
           (r as any).phase1Ema25 = tgt!.ema25;
+          (r as any).phase1Ema200 = tgt!.ema200;
+          (r as any).phase1KumoTop = tgt!.kumoTop;
+          (r as any).phase1KumoBottom = tgt!.kumoBottom;
           (r as any).phase1EmaGapPct = tgt!.emaGapPct;
 
           // ★ [뉴스 보조 게이트] HardCriteria 통과 후보만 종목별 뉴스 감성 조회 (Free tier 5분 캐시)
@@ -2284,7 +2359,7 @@ Deno.serve(async (req) => {
             (r as any).newsCount = 0;
           }
 
-          await addLog('unified', 'scan', r.sym, `[HardCriteria-통과] ${r.sym} 3-AND ✅ Phase1+(25봉↓or음봉)+체결강도${aggressionPctRaw}%≥60%${newsTag} → 매수 후보(${r.scoring.totalScore}점)`, { aggressionPctRaw, score: r.scoring.totalScore, newsSentiment: (r as any).newsSentiment, newsCount: (r as any).newsCount });
+          await addLog('unified', 'scan', r.sym, `[GoldenCloud-통과] ${r.sym} ☁️구름상단리테스트+체결강도${aggressionPctRaw}%≥85%${newsTag} → Kumo$${tgt!.kumoTop.toFixed(2)} 마중가 매수 후보(${r.scoring.totalScore}점)`, { aggressionPctRaw, score: r.scoring.totalScore, newsSentiment: (r as any).newsSentiment, newsCount: (r as any).newsCount, kumoTop: tgt!.kumoTop });
 
           candidates.push(r);
         }
@@ -2466,14 +2541,20 @@ Deno.serve(async (req) => {
       // ★ Passive Fill: 매수 1호가 알박기 (슬리피지 0)
       const passivePrice = applyPassiveFill(tsGuard.adjustedPrice, tickSize);
       
-      // ★ 최종 매수가: 예측형/선취매 → Passive Fill, 일반 → Session Slippage
+      // ★ [골든 클라우드 스나이퍼] Phase1 사냥감 → Kumo 상단 리테스트 마중가 강제 적용
+      // (15분 지연 동안 가격이 구름 상단 지지선까지 내려와 체결되기를 대기)
       let adjustedPrice: number;
       let orderType = 'MARKET';
-      if (isPredictive || isAccumEntry) {
-        adjustedPrice = passivePrice; // 호가 알박기
+      const kumoLimit = (r as any).phase1KumoTop as number | undefined;
+      if (kumoLimit && kumoLimit > 0) {
+        // Kumo 상단 마중가 (현재가보다 낮을 때만 = 리테스트 대기, 아니면 현재가 기준 Passive Fill)
+        adjustedPrice = kumoLimit < r.price ? +kumoLimit.toFixed(4) : passivePrice;
+        orderType = kumoLimit < r.price ? 'LIMIT(☁️Kumo-Retest)' : 'LIMIT(Passive)';
+      } else if (isPredictive || isAccumEntry) {
+        adjustedPrice = passivePrice;
         orderType = 'LIMIT(Passive)';
       } else if (tsGuard.isGuarded) {
-        adjustedPrice = tsGuard.adjustedPrice; // Timestamp Guard 적용
+        adjustedPrice = tsGuard.adjustedPrice;
         orderType = 'LIMIT(Guard)';
       } else {
         const aggressiveSlip = isAccumEntry ? Math.max(sessionSlippage, 0.005) : sessionSlippage;
@@ -2518,7 +2599,7 @@ Deno.serve(async (req) => {
         .join('|');
       const roundTag = currentRound > 1 ? `[Round ${currentRound}] ` : '';
       const isPhase1 = (r as any).isPhase1Target === true;
-      const phase1Tag = isPhase1 ? ` | 🎯Phase1 그물망(EMA25:$${(r as any).phase1Ema25?.toFixed(2)}/마중가:$${(r as any).phase1Limit?.toFixed(2)}/-${Math.abs((r as any).phase1EmaGapPct*100).toFixed(1)}%)` : '';
+      const phase1Tag = isPhase1 ? ` | 🎯GoldenCloud(EMA200:$${(r as any).phase1Ema200?.toFixed(2)}/☁️Kumo:$${(r as any).phase1KumoBottom?.toFixed(2)}~$${(r as any).phase1KumoTop?.toFixed(2)}/리테스트마중가:$${(r as any).phase1Limit?.toFixed(2)})` : '';
       const preBuyLabel = isPhase1 ? '🎯Phase1마중가체결' : isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
       const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${isPhase1 ? 'Phase1 그물망 알박기 매수' : valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: 3.0% (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${phase1Tag}${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
