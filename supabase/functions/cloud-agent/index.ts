@@ -918,15 +918,30 @@ async function buildTargetUniverse(
       const volOk = m.avgDollarVolUSD >= TARGET_AVG_DOLLAR_VOLUME_USD;
       const gap = (m.lastClose - m.ema25) / m.ema25;
       const gapOk = gap <= TARGET_EMA_GAP_PCT;
-      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)}≤$${PHASE1_MAX_PRICE_USD})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M≥$${(TARGET_AVG_DOLLAR_VOLUME_USD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%≤+${(TARGET_EMA_GAP_PCT*100).toFixed(0)}%)`;
-      await addLog('system', 'scan', sym, `[Phase1·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk });
+      // ★ [골든 클라우드 스나이퍼] 추가 필터: ① EMA200 우상향 ② 구름 상단 근접/돌파
+      const ema200Ok = m.ema200Uptrend && m.lastClose > m.ema200;
+      const kumoOk = m.aboveKumo && m.kumoTop > 0;
+      // ★ Finnhub 24h 뉴스 감성 (가산점 — 차단 X)
+      let newsBullish = 50;
+      try {
+        const news = await getNewsSentiment(sym);
+        if (news.newsCount > 0) newsBullish = news.bullishPct;
+      } catch { newsBullish = 50; }
+      const newsTag = newsBullish >= 60 ? `📰호재${newsBullish}%` : newsBullish < 40 ? `📰약세${newsBullish}%` : `📰중립${newsBullish}%`;
+      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|EMA200${ema200Ok?'✓':'✗'}(우상향${m.ema200Uptrend?'✓':'✗'}/현재가>EMA200:${m.lastClose>m.ema200?'✓':'✗'})|☁️구름${kumoOk?'✓':'✗'}(상단$${m.kumoTop.toFixed(2)})|${newsTag}`;
+      await addLog('system', 'scan', sym, `[GoldenCloud·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, kumoOk, newsBullish });
       okCount++;
-      if (priceOk && volOk && gapOk) {
+      // ★ 골든 클라우드 4-AND: 가격 + 거래대금 + EMA200 우상향 + Kumo 상단 근접/돌파 (EMA갭은 로그 참고용)
+      if (priceOk && volOk && ema200Ok && kumoOk) {
         results.push({
-          symbol: sym, price: m.lastClose, ema25: m.ema25, emaGapPct: gap,
+          symbol: sym, price: m.lastClose, ema25: m.ema25, ema200: m.ema200,
+          kumoTop: m.kumoTop, kumoBottom: m.kumoBottom,
+          emaGapPct: gap,
           avgDollarVolUSD: m.avgDollarVolUSD,
-          limitPriceUSD: +(m.ema25 * (1 + TARGET_PHASE2_GAP_PCT)).toFixed(4),
+          // ★ 핵심: 마중가 = Kumo 상단 (리테스트 지지선) — 15분 지연 동안 가격이 내려와 체결되기를 대기
+          limitPriceUSD: +m.kumoTop.toFixed(4),
           capType: capTypeMap.get(sym) || 'small',
+          newsBullishPct: newsBullish,
         });
       }
     } else if (m.status === 429) {
