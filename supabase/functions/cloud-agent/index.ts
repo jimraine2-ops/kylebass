@@ -2322,10 +2322,13 @@ Deno.serve(async (req) => {
           (r as any).hardCriteriaPass = true;
           (r as any).aggressionPctRaw = aggressionPctRaw;
 
-          // ★ Phase 1 타겟 메타
+          // ★ 골든 클라우드 사냥감 메타 (마중가 = Kumo 상단)
           (r as any).isPhase1Target = true;
-          (r as any).phase1Limit = tgt!.limitPriceUSD;
+          (r as any).phase1Limit = tgt!.limitPriceUSD; // = kumoTop (리테스트 마중가)
           (r as any).phase1Ema25 = tgt!.ema25;
+          (r as any).phase1Ema200 = tgt!.ema200;
+          (r as any).phase1KumoTop = tgt!.kumoTop;
+          (r as any).phase1KumoBottom = tgt!.kumoBottom;
           (r as any).phase1EmaGapPct = tgt!.emaGapPct;
 
           // ★ [뉴스 보조 게이트] HardCriteria 통과 후보만 종목별 뉴스 감성 조회 (Free tier 5분 캐시)
