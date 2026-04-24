@@ -71,8 +71,17 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message, rate: 1380 }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // Never return 5xx — frontend should never blank out due to FX outage.
+    console.error('exchange-rate fatal, returning fallback:', error);
+    return new Response(JSON.stringify({
+      rate: cachedRate?.rate ?? 1380,
+      currency: 'KRW', base: 'USD',
+      timestamp: Date.now(),
+      cached: !!cachedRate,
+      fallback: true,
+      error: (error as Error)?.message ?? 'SERVICE_FAILED',
+    }), {
+      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
