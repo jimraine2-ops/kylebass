@@ -1,14 +1,18 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Filter, Crosshair, ShieldCheck, Repeat } from "lucide-react";
+import { Cloud, Activity, Target, ShieldAlert } from "lucide-react";
 
 /**
- * 🎯 Golden Cloud Sniper — 4단계 전략 배너
- * 무료 API의 15분 지연을 역이용하는 타임머신 전략을 시각화.
- * - Static-Filter: 장 시작 전 4-AND 사냥감 선별
- * - Tactical-Entry: Kumo 상단 LIMIT 마중가 알박기
- * - Validation: 체결강도 85%↑ + 25봉 추세로 가짜 돌파 차단
- * - Infinite-Loop: 본절보호 + 3% 익절 후 ₩100만 무한 리셋
+ * ☁️ Kumo Breakout & Retest Sniper — 일목균형표 정밀 타격 프로토콜
+ *
+ * "뉴스는 선반영되고 거래량은 속임수가 있을 수 있지만, 구름대는 거짓말을 하지 않는다.
+ *  구름 위로 올라온 시세가 지지받는 그 찰나의 순간을 포착하라."
+ *
+ * 4-Phase Protocol:
+ *  ① Technical Core   — Kumo 돌파 + 정배열(전환>기준) + 리테스트 지지
+ *  ② Data Engine      — yfinance 1m + 52일 선행로드 (지연 시세 배제)
+ *  ③ Execution        — Kumo 상단 +0.1~0.3% LIMIT 진입
+ *  ④ Risk Protocol    — +3.0% 익절 / +1.2% 본절 / Span B 이탈 손절
  */
 export function GoldenCloudSniperBanner() {
   return (
@@ -20,85 +24,85 @@ export function GoldenCloudSniperBanner() {
             <span className="text-2xl">☁️🎯</span>
             <div>
               <h3 className="font-bold text-yellow-400 text-sm tracking-wide">
-                Golden Cloud Sniper — 무료 API 타임머신 전략
+                Kumo Breakout & Retest Sniper — 일목균형표 정밀 타격 프로토콜
               </h3>
               <p className="text-[10px] italic text-yellow-400/70">
-                "우리는 15분 전의 뉴스를 보지만, 매수 주문은 15분 후의 지지선에 박아넣는다."
+                "구름대는 거짓말을 하지 않는다 — 구름 위 시세가 지지받는 찰나를 포착하라."
               </p>
             </div>
           </div>
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/40 text-[10px] font-bold">
-            ACTIVE · 사이클 자율 회전
+            ACTIVE · Kumo-Retest 매수 엔진
           </Badge>
         </div>
 
         {/* 4-Phase Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
-          {/* Phase 1 — Static-Filter */}
+          {/* Phase 1 — Technical Core (Ichimoku Algorithm) */}
           <div className="bg-background/50 rounded-lg p-2.5 border border-cyan-500/30 space-y-1">
             <div className="flex items-center gap-1.5">
-              <Filter className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-[11px] font-bold text-cyan-400">① Static-Filter</span>
+              <Cloud className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-[11px] font-bold text-cyan-400">① Technical Core</span>
             </div>
             <p className="text-[10px] text-muted-foreground leading-tight">
-              장 시작 전 4-AND 게이트로 5종목 확정 (API 호출 절약)
+              일목균형표 진입 알고리즘 — 구름대 상관관계 성립 시에만 가동
             </p>
             <div className="space-y-0.5 text-[9px] font-mono text-foreground/80">
-              <div>📊 20일 거래대금 ≥ 30억원</div>
-              <div>📈 가격 &gt; EMA200 (우상향)</div>
-              <div>☁️ Kumo 상단 돌파/근접</div>
-              <div>📰 24h 뉴스 Sentiment ≥ 0.5</div>
+              <div>☁️ Kumo Breakout (Span A·B 상향)</div>
+              <div>📈 정배열: 전환(9) &gt; 기준(26)</div>
+              <div>🎯 Retest: 구름 상단 지지 터치</div>
+              <div>✨ 호전 상태 유지 (가격 &gt; 구름)</div>
             </div>
           </div>
 
-          {/* Phase 2 — Tactical-Entry */}
+          {/* Phase 2 — Data Engine (yfinance 1m) */}
+          <div className="bg-background/50 rounded-lg p-2.5 border border-blue-500/30 space-y-1">
+            <div className="flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-blue-400" />
+              <span className="text-[11px] font-bold text-blue-400">② Data Engine</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground leading-tight">
+              yfinance 1분 실시간 — Twelve Data 지연 시세 완전 배제
+            </p>
+            <div className="space-y-0.5 text-[9px] font-mono text-foreground/80">
+              <div>⏱️ Interval = 1m 호출</div>
+              <div>📊 Span 실시간 재계산</div>
+              <div>📦 52일 과거 선행 로드</div>
+              <div>🔒 데이터 무결성 단일 소스</div>
+            </div>
+          </div>
+
+          {/* Phase 3 — Execution (Limit Entry +0.1~0.3%) */}
           <div className="bg-background/50 rounded-lg p-2.5 border border-yellow-500/30 space-y-1">
             <div className="flex items-center gap-1.5">
-              <Crosshair className="w-3.5 h-3.5 text-yellow-400" />
-              <span className="text-[11px] font-bold text-yellow-400">② Tactical-Entry</span>
+              <Target className="w-3.5 h-3.5 text-yellow-400" />
+              <span className="text-[11px] font-bold text-yellow-400">③ Execution</span>
             </div>
             <p className="text-[10px] text-muted-foreground leading-tight">
-              15분 지연 보정 — Kumo 상단 LIMIT 마중가 알박기
+              구름대 상단 +0.1~0.3% LIMIT 정밀 알박기
             </p>
             <div className="space-y-0.5 text-[9px] font-mono text-foreground/80">
-              <div>🪤 LIMIT @ Kumo 상단</div>
-              <div>⏱️ 리테스트 하락 대기</div>
-              <div>🎯 지지선 정타 체결</div>
-              <div>♻️ 미체결 시 다음 사이클</div>
+              <div>🪤 LIMIT @ P_Cloud_Top × 1.001~1.003</div>
+              <div>⏳ 지지선 터치 시 즉시 체결</div>
+              <div>🚫 시장가/추격 매수 금지</div>
+              <div>♻️ 미체결 → 다음 1m 사이클</div>
             </div>
           </div>
 
-          {/* Phase 3 — Validation */}
-          <div className="bg-background/50 rounded-lg p-2.5 border border-stock-up/30 space-y-1">
+          {/* Phase 4 — Risk Protocol (TP/Breakeven/SL) */}
+          <div className="bg-background/50 rounded-lg p-2.5 border border-stock-down/30 space-y-1">
             <div className="flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-stock-up" />
-              <span className="text-[11px] font-bold text-stock-up">③ Validation</span>
+              <ShieldAlert className="w-3.5 h-3.5 text-stock-down" />
+              <span className="text-[11px] font-bold text-stock-down">④ Risk Protocol</span>
             </div>
             <p className="text-[10px] text-muted-foreground leading-tight">
-              가짜 돌파 차단 — 실거래 수급 교차 검증
+              기계적 익절 + Span B 이탈 손절 — '잃지 않는 매매'
             </p>
             <div className="space-y-0.5 text-[9px] font-mono text-foreground/80">
-              <div>💰 1분 거래대금 ≥ 3억원</div>
-              <div>🔥 체결강도 ≥ 85%</div>
-              <div>📉 25봉 추세 + 음봉 확인</div>
-              <div>🚫 미달 시 [Validation 미달] 보류</div>
-            </div>
-          </div>
-
-          {/* Phase 4 — Infinite-Loop */}
-          <div className="bg-background/50 rounded-lg p-2.5 border border-primary/30 space-y-1">
-            <div className="flex items-center gap-1.5">
-              <Repeat className="w-3.5 h-3.5 text-primary" />
-              <span className="text-[11px] font-bold text-primary">④ Infinite-Loop</span>
-            </div>
-            <p className="text-[10px] text-muted-foreground leading-tight">
-              3% 기계적 익절 + ₩100만 무한 리셋
-            </p>
-            <div className="space-y-0.5 text-[9px] font-mono text-foreground/80">
-              <div>🛡️ 체결 즉시 본절보호 +0.2%</div>
-              <div>🎯 기본 익절 3.0%</div>
-              <div>🚀 수급 폭발 시 최대 5.0%</div>
-              <div>♾️ 익절→₩100만 회수→재공략</div>
+              <div>🎯 +3.0% 도달 → 전량 매도</div>
+              <div>🛡️ +1.2% 통과 → SL 매수가+0.2%</div>
+              <div>⛔ Span B(구름 하단) 이탈 → 손절</div>
+              <div>♾️ 청산 후 ₩100만 무한 리셋</div>
             </div>
           </div>
         </div>
@@ -106,9 +110,10 @@ export function GoldenCloudSniperBanner() {
         {/* Bottom tag bar */}
         <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-yellow-500/20">
           <span className="text-[9px] text-muted-foreground">상시 가동:</span>
-          <Badge variant="outline" className="text-[9px] border-cyan-500/40 text-cyan-400">☁️ Kumo-Retest LIMIT</Badge>
-          <Badge variant="outline" className="text-[9px] border-stock-up/40 text-stock-up">🛡️ Iron-Defense</Badge>
-          <Badge variant="outline" className="text-[9px] border-yellow-500/40 text-yellow-400">🎯 Dynamic-Target 2~5%</Badge>
+          <Badge variant="outline" className="text-[9px] border-cyan-500/40 text-cyan-400">☁️ Kumo Breakout+Retest</Badge>
+          <Badge variant="outline" className="text-[9px] border-blue-500/40 text-blue-400">⏱️ yfinance 1m</Badge>
+          <Badge variant="outline" className="text-[9px] border-yellow-500/40 text-yellow-400">🪤 LIMIT +0.1~0.3%</Badge>
+          <Badge variant="outline" className="text-[9px] border-stock-down/40 text-stock-down">⛔ Span B Stop</Badge>
           <Badge variant="outline" className="text-[9px] border-primary/40 text-primary">♾️ Infinite-Reset ₩1M</Badge>
         </div>
       </CardContent>
