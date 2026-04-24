@@ -1,4 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { installCostGuard } from "../_shared/cost-guard.ts";
+
+// ★ [후불 0원 정책] 부팅 즉시 유료 LLM/AI 호출 차단 가드 설치
+installCostGuard();
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

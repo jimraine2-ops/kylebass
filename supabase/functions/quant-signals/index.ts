@@ -1,3 +1,8 @@
+import { installCostGuard } from "../_shared/cost-guard.ts";
+
+// ★ [후불 0원 정책] 부팅 즉시 유료 LLM/AI 호출 차단 가드 설치
+installCostGuard();
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
