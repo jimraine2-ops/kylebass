@@ -14,10 +14,10 @@ const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $9
 const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
 const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
 const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
-const PENNY_BREAKEVEN_PCT = 1.0; // ★ 동전주 본절보호: +1.0% (강화)
+const PENNY_BREAKEVEN_PCT = 1.5; // ★ [Kumo-Sniper v3] 본절보호 트리거 +1.5% — 수익률 +1.5% 통과 시 SL→매수가+0.2%
 const PENNY_IRON_HOLD_SCORE = 65; // ★ 동전주 철갑 홀딩: 65점
 const PENNY_MAX_POSITIONS = 3; // ★ 동전주 최대 3종목 집중
-const GHOST_BREAKEVEN_PCT = 1.0; // ★ Zero-Risk Lock: +1.0% 돌파 시 즉시 SL→매수가+0.2% (Iron-Defense 1단계)
+const GHOST_BREAKEVEN_PCT = 1.5; // ★ [Kumo-Sniper v3] Zero-Risk Lock: +1.5% 돌파 시 즉시 SL→매수가+0.2% (Iron-Defense 1단계)
 const PROFIT_CHASE_TRIGGER = 3.0; // ★ 3% 익절 확정 트리거: +3.0% 터치 즉시 시장가 매도 (Iron-Defense 2단계)
 const PROFIT_CHASE_SL_PCT = 1.015; // ★ 수익 추격 SL: 매수가 +1.5%
 const TRAILING_DROP_PCT = 2.0; // ★ 추격 매도: 고점 대비 2.0% 하락 시에만 전량 매도
@@ -764,7 +764,8 @@ async function getQuoteAndCandles(symbol: string) {
 // 필터3: 현재가 ≤ EMA25 × 0.98 (-2% 이하, 완화)
 // ============================================================
 const POLYGON_BASE = 'https://api.polygon.io';
-const TARGET_AVG_DOLLAR_VOLUME_USD = 3_000_000_000 / KRW_RATE; // ₩30억 ≈ $2.22M
+const TARGET_AVG_DOLLAR_VOLUME_USD = 1_000_000_000 / KRW_RATE; // ★ [Kumo-Sniper v3] ₩10억 ≈ $750K — 잡주 차단 + 종목 풀 확장
+const KUMO_THICKNESS_MIN_PCT = 0.005; // ★ [Kumo-Sniper v3] 구름 두께 ≥ 현재가의 0.5% — 얇은 구름(지지력 부족) 차단
 const PHASE1_MAX_PRICE_USD = 200; // ★ 재완화: $200 이하면 모두 후보 (실거래 후보 확보)
 const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
 const TARGET_EMA_GAP_PCT = 0.20; // ★ 공격적 완화: EMA25 대비 +20% 이하면 통과 (극단 과열만 제외)
@@ -933,17 +934,20 @@ async function buildTargetUniverse(
         if (news.newsCount > 0) newsBullish = news.bullishPct;
       } catch { newsBullish = 50; }
       const newsTag = newsBullish >= 60 ? `📰호재${newsBullish}%` : newsBullish < 40 ? `📰약세${newsBullish}%` : `📰중립${newsBullish}%`;
-      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|EMA200${ema200Ok?'✓':'✗'}(우상향${m.ema200Uptrend?'✓':'✗'}/현재가>EMA200:${m.lastClose>m.ema200?'✓':'✗'})|☁️구름${kumoOk?'✓':'✗'}(상단$${m.kumoTop.toFixed(2)})|${newsTag}`;
-      await addLog('system', 'scan', sym, `[GoldenCloud·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, kumoOk, newsBullish });
+      // ★ [Kumo-Sniper v3] 구름 두께 필터: (kumoTop - kumoBottom) / price ≥ 0.5%
+      const cloudThicknessPct = m.lastClose > 0 ? (m.kumoTop - m.kumoBottom) / m.lastClose : 0;
+      const thickOk = cloudThicknessPct >= KUMO_THICKNESS_MIN_PCT;
+      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M≥$0.75M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|EMA200${ema200Ok?'✓':'✗'}(우상향${m.ema200Uptrend?'✓':'✗'}/현재가>EMA200:${m.lastClose>m.ema200?'✓':'✗'})|☁️구름${kumoOk?'✓':'✗'}(상단$${m.kumoTop.toFixed(2)})|📏두께${thickOk?'✓':'✗'}(${(cloudThicknessPct*100).toFixed(2)}%≥0.50%)|${newsTag}`;
+      await addLog('system', 'scan', sym, `[GoldenCloud·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, cloudThicknessPct, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, kumoOk, thickOk, newsBullish });
       okCount++;
-      // ★ 골든 클라우드 4-AND: 가격 + 거래대금 + EMA200 우상향 + Kumo 상단 근접/돌파 (EMA갭은 로그 참고용)
-      if (priceOk && volOk && ema200Ok && kumoOk) {
+      // ★ [Kumo-Sniper v3] 5-AND 게이트: 가격 + 거래대금(₩10억+) + EMA200 우상향 + Kumo 상단 돌파/근접 + 구름 두께 0.5%+
+      if (priceOk && volOk && ema200Ok && kumoOk && thickOk) {
         results.push({
           symbol: sym, price: m.lastClose, ema25: m.ema25, ema200: m.ema200,
           kumoTop: m.kumoTop, kumoBottom: m.kumoBottom,
           emaGapPct: gap,
           avgDollarVolUSD: m.avgDollarVolUSD,
-          // ★ 핵심: 마중가 = Kumo 상단 (리테스트 지지선) — 15분 지연 동안 가격이 내려와 체결되기를 대기
+          // ★ 핵심: 마중가 = Kumo 상단 (리테스트 지지선) — yfinance 1m 시세가 ±0.1% 내 도달 시 체결
           limitPriceUSD: +m.kumoTop.toFixed(4),
           capType: capTypeMap.get(sym) || 'small',
           newsBullishPct: newsBullish,
@@ -979,7 +983,8 @@ async function buildTargetUniverse(
   for (const e of (cachedTargetUniverse?.list || [])) merged.set(e.symbol, e);
   for (const e of results) merged.set(e.symbol, e);
   const all = Array.from(merged.values()).sort((a, b) => a.emaGapPct - b.emaGapPct);
-  const top5 = all.slice(0, 5);
+  // ★ [Kumo-Sniper v3] Top 10 사냥감 — 60초 순회 호출 대상 (IP 차단 방지)
+  const top5 = all.slice(0, 10);
 
   // 성공 결과만 캐시 (빈 배열이면 캐시 갱신 X)
   if (top5.length > 0) {
@@ -987,7 +992,7 @@ async function buildTargetUniverse(
     const summary = top5.map((t, i) =>
       `${i+1}.${t.symbol}($${t.price.toFixed(2)}/EMA200:$${t.ema200.toFixed(2)}/☁️Kumo상단:$${t.kumoTop.toFixed(2)}/마중가:$${t.limitPriceUSD.toFixed(2)}/📰${t.newsBullishPct}%)`
     ).join(', ');
-    await addLog('system', 'scan', null, `[GoldenCloud] ✅ Top ${top5.length} 사냥감 확정 (이번사이클 ${results.length}추가/스캔 ${okCount}성공/${tallyStr}) — 리테스트 마중가 대기: ${summary}`, { targets: top5, statusTally });
+    await addLog('system', 'scan', null, `[GoldenCloud v3] ✅ Top ${top5.length} 사냥감 확정 (이번사이클 ${results.length}추가/스캔 ${okCount}성공/${tallyStr}) — Kumo 상단 ±0.1% 리테스트 LIMIT 대기: ${summary}`, { targets: top5, statusTally });
   } else {
     const reason = rateLimited ? '429 한도초과' : `상태분포 ${tallyStr} | 통과 0`;
     await addLog('system', 'scan', null, `[Phase1] ⚠️ 타겟 미확정 (${reason}) — 점진 누적 진행`, { statusTally });
