@@ -419,6 +419,7 @@ export type Database = {
     }
     Functions: {
       cleanup_old_scalping_trades: { Args: never; Returns: undefined }
+      cleanup_old_unified_trades: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
