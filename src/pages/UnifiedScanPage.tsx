@@ -31,7 +31,6 @@ export default function UnifiedScanPage() {
   const { data: portfolioData } = useUnifiedPortfolio();
   const [selectedStock, setSelectedStock] = useState<any>(null);
   const [sortKey, setSortKey] = useState<SortKey>('score');
-  const [viewMode, setViewMode] = useState<ViewMode>('all');
 
   const isLoading = quantLoading || pennyLoading;
 
