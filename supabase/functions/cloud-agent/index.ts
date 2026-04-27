@@ -2270,53 +2270,28 @@ Deno.serve(async (req) => {
           const isPenny = r.isPenny;
 
           // ============================================================
-          // ★★★ [Hard-Criteria 4-AND Gate] 점수 게이트 폐기 — 새 정책 단일 적용
-          // 정책 핵심: "지표 점수 무관. 다음 4가지 모두 충족해야만 매수."
+          // ★★★ [Hard-Criteria Gate] 25봉 하락 추세 조건 제거 (사용자 요청)
+          // 정책: "다음 조건 모두 충족해야만 매수."
           //   ① Phase 1 타겟 유니버스 포함 (= 20일 평균 거래대금 ≥ ₩30억 + 가격 필터 + EMA25 갭 ≤ -5% 통과)
-          //   ② 25봉 하락 추세 (최근 25봉 close 선형 회귀 음의 기울기)
-          //   ③ 직전 봉 음봉 (close < open)
-          //   ④ 체결강도(aggression) ≥ 90%
-          // 4가지 중 하나라도 미달 시 즉시 탈락. 점수/패턴/뉴스/예측형 모두 무시.
+          //   ② 체결강도(aggression) ≥ 85%
+          // 하나라도 미달 시 즉시 탈락. 25봉 하락/음봉 필터는 폐기.
           // ============================================================
           const tgt = targetMap.get(r.sym);
           const isPhase1Target = !!tgt;
-
-          // 25봉 하락 추세: 최근 25봉 close에 대한 선형 회귀 기울기 < 0
-          const closes25 = (r.data?.closes || []).slice(-25);
-          let isDowntrend25 = false;
-          if (closes25.length >= 25) {
-            let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-            for (let k = 0; k < 25; k++) {
-              sumX += k; sumY += closes25[k]; sumXY += k * closes25[k]; sumXX += k * k;
-            }
-            const slope = (25 * sumXY - sumX * sumY) / (25 * sumXX - sumX * sumX);
-            isDowntrend25 = slope < 0;
-          }
-
-          // 직전 봉 음봉
-          const lastIdx = (r.data?.closes || []).length - 1;
-          const lastOpen = r.data?.opens?.[lastIdx] ?? 0;
-          const lastClose = r.data?.closes?.[lastIdx] ?? 0;
-          const isBearishCandle = lastClose > 0 && lastOpen > 0 && lastClose < lastOpen;
 
           // 체결강도 (지표 점수가 아닌 raw % 값) — ★ [골든 클라우드 Validation] 85%+ 진짜 돌파만 인정
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
           const isAggressionOk = aggressionPctRaw >= 85;
 
-          // ★ 25봉추세 OR 음봉 (지지선 리테스트 패턴)
-          const trendOrBearishOk = isDowntrend25 || isBearishCandle;
-
-          const hardCriteriaPass =
-            isPhase1Target && trendOrBearishOk && isAggressionOk;
+          const hardCriteriaPass = isPhase1Target && isAggressionOk;
 
           if (!hardCriteriaPass) {
             // 사유 로그 (Phase1 타겟인데 탈락한 경우만 기록 — 노이즈 최소화)
             if (isPhase1Target) {
               const reasons: string[] = [];
-              if (!trendOrBearishOk) reasons.push('25봉추세✗&음봉✗');
               if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<85%`);
-              await addLog('unified', 'hold', r.sym, `[GoldenCloud-탈락] ${r.sym} 사냥감이나 [${reasons.join('|')}] → 가짜 돌파(Validation 미달) 진입 보류`, { aggressionPctRaw, isDowntrend25, isBearishCandle });
+              await addLog('unified', 'hold', r.sym, `[GoldenCloud-탈락] ${r.sym} 사냥감이나 [${reasons.join('|')}] → 가짜 돌파(Validation 미달) 진입 보류`, { aggressionPctRaw });
             }
             continue;
           }
