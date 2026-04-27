@@ -65,7 +65,7 @@ export async function fetchQuantSignals(symbols?: string[]) {
 }
 
 // ==================== UNIFIED PORTFOLIO ====================
-export async function getUnifiedPortfolio() {
+export async function getUnifiedPortfolio(): Promise<any> {
   try {
     const [{ data: wallet }, { data: openPositions }, { data: closedTrades }] = await Promise.all([
       supabase.from('unified_wallet').select('*').limit(1).maybeSingle(),
