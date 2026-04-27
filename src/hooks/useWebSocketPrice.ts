@@ -178,10 +178,10 @@ export function useWebSocketPrices(symbols: string[]) {
     symbolsRef.current = symbols;
   }, [symbols]);
 
-  // Connect on mount
+  // Connect on mount only; symbol changes are handled by the subscription effect above.
   useEffect(() => {
     symbolsRef.current = symbols;
-    connect();
+    connectRef.current();
 
     return () => {
       if (wsRef.current) {
@@ -195,7 +195,7 @@ export function useWebSocketPrices(symbols: string[]) {
         clearTimeout(batchTimerRef.current);
       }
     };
-  }, []); // Only on mount
+  }, [symbols]);
 
   const getPrice = (symbol: string): number | null => {
     return pricesRef.current.get(symbol)?.price ?? state.prices.get(symbol)?.price ?? null;
