@@ -75,15 +75,12 @@ export function useQuantSignals(symbols?: string[]) {
     queryKey: ['quant-signals', symbols?.join(',')],
     queryFn: async () => {
       const data = await fetchQuantSignals(symbols);
-      if (symbols && symbols.length > 0 && (!data?.results || data.results.length === 0)) {
-        throw new Error('Rate limited - retrying');
-      }
       return data;
     },
     staleTime: 60000,
     gcTime: 5 * 60 * 1000,
     refetchInterval: 60000,
-    retry: 3,
+    retry: 1,
     retryDelay: (attemptIndex) => Math.min(2000 * (attemptIndex + 1), 8000),
   });
 }
