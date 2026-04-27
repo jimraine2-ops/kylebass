@@ -40,6 +40,7 @@ async function finnhubFetch(path: string) {
 }
 
 Deno.serve(async (req) => {
+  let requestedAction = '';
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -58,6 +59,7 @@ Deno.serve(async (req) => {
     }
     const body = parsed.data;
     const { action } = body;
+    requestedAction = action;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // ==================== UNIFIED PORTFOLIO ====================
@@ -278,6 +280,16 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('AI Trading error:', error);
-    return new Response(JSON.stringify({ error: (error as Error)?.message ?? 'unknown' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    if (requestedAction === 'get-unified-portfolio' || requestedAction === 'get-portfolio' || requestedAction === 'get-scalping-portfolio') {
+      return new Response(JSON.stringify({
+        fallback: true,
+        error: 'Portfolio temporarily unavailable',
+        wallet: null,
+        openPositions: [],
+        closedTrades: [],
+        stats: { winRate: 0, totalPnl: 0, totalUnrealizedPnl: 0, totalTrades: 0, wins: 0, losses: 0, profitFactor: 0, cumulativeReturn: 0 },
+      }), { status: 200, headers: jsonHeaders });
+    }
+    return new Response(JSON.stringify({ error: (error as Error)?.message ?? 'unknown' }), { status: 500, headers: jsonHeaders });
   }
 });
