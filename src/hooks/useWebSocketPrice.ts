@@ -22,6 +22,7 @@ interface WebSocketState {
 }
 
 export function useWebSocketPrices(symbols: string[]) {
+  const symbolKey = symbols.join('|');
   const [state, setState] = useState<WebSocketState>({
     prices: new Map(),
     isConnected: false,
@@ -178,9 +179,8 @@ export function useWebSocketPrices(symbols: string[]) {
     symbolsRef.current = symbols;
   }, [symbols]);
 
-  // Connect on mount only; symbol changes are handled by the subscription effect above.
+  // Connect on mount and when the actual symbol set changes.
   useEffect(() => {
-    symbolsRef.current = symbols;
     connectRef.current();
 
     return () => {
@@ -195,7 +195,7 @@ export function useWebSocketPrices(symbols: string[]) {
         clearTimeout(batchTimerRef.current);
       }
     };
-  }, [symbols]);
+  }, [symbolKey]);
 
   const getPrice = (symbol: string): number | null => {
     return pricesRef.current.get(symbol)?.price ?? state.prices.get(symbol)?.price ?? null;
