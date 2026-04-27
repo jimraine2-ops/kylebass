@@ -37,6 +37,8 @@ export function useWebSocketPrices(symbols: string[]) {
   const pricesRef = useRef<Map<string, PriceData>>(new Map());
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryCountRef = useRef(0);
+  const connectingRef = useRef(false);
+  const mountedRef = useRef(false);
   const connectRef = useRef<() => void>(() => undefined);
   const maxRetries = 5;
 
@@ -56,12 +58,19 @@ export function useWebSocketPrices(symbols: string[]) {
   }, []);
 
   const connect = useCallback(async () => {
+    if (connectingRef.current) return;
+    const existingWs = wsRef.current;
+    if (existingWs && (existingWs.readyState === WebSocket.OPEN || existingWs.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
     if (symbolsRef.current.length === 0) {
       setState(prev => ({ ...prev, isConnected: false, error: null }));
       scheduleReconnect(EMPTY_SYMBOL_RETRY_MS);
       return;
     }
 
+    connectingRef.current = true;
     try {
       const timeout = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('WS_TOKEN_TIMEOUT')), WS_TOKEN_TIMEOUT_MS);
@@ -82,6 +91,7 @@ export function useWebSocketPrices(symbols: string[]) {
       wsRef.current = ws;
 
       ws.onopen = () => {
+        connectingRef.current = false;
         retryCountRef.current = 0; // Reset on successful connection
         setState(prev => ({ ...prev, isConnected: true, error: null }));
         // Subscribe to all symbols
@@ -123,10 +133,12 @@ export function useWebSocketPrices(symbols: string[]) {
       };
 
       ws.onerror = () => {
+        connectingRef.current = false;
         setState(prev => ({ ...prev, error: 'WebSocket 연결 오류', isConnected: false }));
       };
 
       ws.onclose = (event) => {
+        connectingRef.current = false;
         setState(prev => ({ ...prev, isConnected: false }));
         wsRef.current = null;
         
@@ -141,6 +153,7 @@ export function useWebSocketPrices(symbols: string[]) {
       };
 
     } catch (e) {
+      connectingRef.current = false;
       const message = e instanceof Error && e.message === 'WS_TOKEN_TIMEOUT'
         ? 'WebSocket 토큰 지연 — Polling 모드'
         : 'WebSocket 연결 실패 — Polling 모드';
@@ -179,11 +192,14 @@ export function useWebSocketPrices(symbols: string[]) {
     symbolsRef.current = symbols;
   }, [symbols]);
 
-  // Connect on mount and when the actual symbol set changes.
+  // Connect once, then keep the same socket while symbol subscriptions change.
   useEffect(() => {
+    mountedRef.current = true;
     connectRef.current();
 
     return () => {
+      mountedRef.current = false;
+      connectingRef.current = false;
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -195,6 +211,14 @@ export function useWebSocketPrices(symbols: string[]) {
         clearTimeout(batchTimerRef.current);
       }
     };
+  }, []);
+
+  useEffect(() => {
+    if (!mountedRef.current) return;
+    const ws = wsRef.current;
+    if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+      connectRef.current();
+    }
   }, [symbolKey]);
 
   const getPrice = (symbol: string): number | null => {
