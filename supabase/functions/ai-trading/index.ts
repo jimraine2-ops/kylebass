@@ -1,16 +1,28 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.95.3";
+import { corsHeaders } from "npm:@supabase/supabase-js@2.95.3/cors";
+import { z } from "npm:zod@3.25.76";
 import { installCostGuard } from "../_shared/cost-guard.ts";
 
 // ★ [후불 0원 정책] 부팅 즉시 유료 LLM/AI 호출 차단 가드 설치
 installCostGuard();
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
-
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
+const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json' };
+
+const BodySchema = z.object({
+  action: z.enum([
+    'get-unified-portfolio', 'reset-unified-wallet', 'update-balance', 'manual-buy',
+    'get-portfolio', 'reset-wallet', 'get-scalping-portfolio', 'reset-scalping-wallet',
+    'analyze-and-trade', 'scalping-analyze', 'quant-auto-trade',
+  ]),
+  newBalance: z.number().optional(),
+  symbol: z.string().trim().min(1).max(12).optional(),
+  price: z.number().positive().optional(),
+  quantity: z.number().positive().optional(),
+  capType: z.enum(['large', 'small']).optional(),
+  reason: z.string().max(500).optional(),
+});
 
 function toKRW(usd: number): number { return usd * KRW_RATE; }
 function fmtKRW(usd: number): string { return `₩${toKRW(usd).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}`; }
@@ -29,24 +41,24 @@ async function finnhubFetch(path: string) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
   try {
-    const body = await req.json();
-    const { action } = body;
-
-    const ALLOWED_ACTIONS = ['get-unified-portfolio', 'reset-unified-wallet', 'update-balance', 'manual-buy',
-      // Legacy actions kept for backward compatibility during transition
-      'get-portfolio', 'reset-wallet', 'get-scalping-portfolio', 'reset-scalping-wallet',
-      'analyze-and-trade', 'scalping-analyze', 'quant-auto-trade'];
-    if (!action || typeof action !== 'string' || !ALLOWED_ACTIONS.includes(action)) {
-      return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('AI Trading missing required environment variables', { hasUrl: !!supabaseUrl, hasKey: !!supabaseKey });
+      return new Response(JSON.stringify({ error: 'Server configuration unavailable', fallback: true }), { status: 200, headers: jsonHeaders });
     }
+
+    const parsed = BodySchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return new Response(JSON.stringify({ error: parsed.error.flatten().fieldErrors }), { status: 400, headers: jsonHeaders });
+    }
+    const body = parsed.data;
+    const { action } = body;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // ==================== UNIFIED PORTFOLIO ====================
     if (action === 'get-unified-portfolio') {
