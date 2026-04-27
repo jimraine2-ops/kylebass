@@ -335,7 +335,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Stock data error:', error);
     // Return graceful fallback instead of 500 for rate limit errors
-    const msg = error.message || '';
+    const msg = (error as Error)?.message ?? '';
     if (msg.includes('rate limit') || msg.includes('429')) {
       return new Response(JSON.stringify({ quotes: [], error: 'Rate limited, please retry', rateLimited: true }), {
         status: 200,

@@ -255,7 +255,7 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('Penny stocks error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: (error as Error)?.message ?? 'unknown' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }

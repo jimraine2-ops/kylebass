@@ -45,9 +45,10 @@ export function useWebSocketPrices(symbols: string[]) {
     try {
       const { data, error } = await supabase.functions.invoke('ws-token', { body: {} });
       if (error || !data?.wsUrl) {
-        setState(prev => ({ ...prev, error: 'WebSocket 토큰 획득 실패', isConnected: false }));
-        // Fallback: retry in 10s
-        reconnectTimerRef.current = setTimeout(connect, 10000);
+        const reason = data?.fallback ? 'Finnhub 키 없음 — Polling 모드' : 'WebSocket 토큰 획득 실패';
+        setState(prev => ({ ...prev, error: reason, isConnected: false }));
+        // Fallback: retry in 30s (longer, since edge runtime may be cold)
+        reconnectTimerRef.current = setTimeout(connect, 30000);
         return;
       }
 
