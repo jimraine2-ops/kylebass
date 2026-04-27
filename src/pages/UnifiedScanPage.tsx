@@ -173,9 +173,7 @@ export default function UnifiedScanPage() {
         <>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <Badge variant={viewMode === 'all' ? 'default' : 'outline'} className="cursor-pointer text-xs" onClick={() => setViewMode('all')}>전체 ({allStocks.length})</Badge>
-              <Badge variant={viewMode === 'large' ? 'default' : 'outline'} className="cursor-pointer text-xs" onClick={() => setViewMode('large')}>대형주 ({largeStocks.length})</Badge>
-              <Badge variant={viewMode === 'small' ? 'default' : 'outline'} className="cursor-pointer text-xs" onClick={() => setViewMode('small')}>소형주 ({enrichedSmallStocks.length})</Badge>
+              <Badge variant="default" className="text-xs">전체 ({allStocks.length})</Badge>
             </div>
             <div className="flex items-center gap-2">
               <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground" />
