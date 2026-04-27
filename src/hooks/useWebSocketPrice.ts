@@ -197,9 +197,9 @@ export function useWebSocketPrices(symbols: string[]) {
     };
   }, []); // Only on mount
 
-  const getPrice = useCallback((symbol: string): number | null => {
-    return state.prices.get(symbol)?.price ?? null;
-  }, [state.prices]);
+  const getPrice = (symbol: string): number | null => {
+    return pricesRef.current.get(symbol)?.price ?? state.prices.get(symbol)?.price ?? null;
+  };
 
   return {
     prices: state.prices,
