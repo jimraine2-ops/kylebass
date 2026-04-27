@@ -149,7 +149,9 @@ export function useWebSocketPrices(symbols: string[]) {
     }
   }, [flushBatch, scheduleReconnect]);
 
-  connectRef.current = connect;
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // Handle symbol subscription changes
   useEffect(() => {
