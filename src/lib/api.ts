@@ -66,11 +66,19 @@ export async function fetchQuantSignals(symbols?: string[]) {
 
 // ==================== UNIFIED PORTFOLIO ====================
 export async function getUnifiedPortfolio() {
-  const { data, error } = await supabase.functions.invoke('ai-trading', {
-    body: { action: 'get-unified-portfolio' },
-  });
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase.functions.invoke('ai-trading', {
+      body: { action: 'get-unified-portfolio' },
+    });
+    if (error) {
+      console.warn('[getUnifiedPortfolio] ai-trading unavailable, using safe fallback:', error.message ?? error);
+      return { wallet: null, openPositions: [], closedTrades: [], stats: {}, fallback: true };
+    }
+    return data ?? { wallet: null, openPositions: [], closedTrades: [], stats: {}, fallback: true };
+  } catch (error) {
+    console.warn('[getUnifiedPortfolio] request failed, using safe fallback:', error);
+    return { wallet: null, openPositions: [], closedTrades: [], stats: {}, fallback: true };
+  }
 }
 
 export async function resetUnifiedWallet() {
