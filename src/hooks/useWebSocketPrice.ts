@@ -163,40 +163,37 @@ export function useWebSocketPrices(symbols: string[]) {
     }
   }, [flushBatch, scheduleReconnect]);
 
-  useEffect(() => {
-    connectRef.current = connect;
-  }, [connect]);
+  // Keep latest connect in a ref (assigned during render — no hook needed)
+  connectRef.current = connect;
 
-  // Handle symbol subscription changes
+  // Single effect: handle mount, symbol changes, and reconnection
   useEffect(() => {
+    mountedRef.current = true;
     const prevSymbols = new Set(symbolsRef.current);
     const newSymbols = new Set(symbols);
-
     const ws = wsRef.current;
+
     if (ws && ws.readyState === WebSocket.OPEN) {
-      // Unsubscribe removed symbols
       for (const s of prevSymbols) {
         if (!newSymbols.has(s)) {
           ws.send(JSON.stringify({ type: 'unsubscribe', symbol: s }));
           pricesRef.current.delete(s);
         }
       }
-      // Subscribe new symbols
       for (const s of newSymbols) {
         if (!prevSymbols.has(s)) {
           ws.send(JSON.stringify({ type: 'subscribe', symbol: s }));
         }
       }
+    } else if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+      connectRef.current();
     }
 
     symbolsRef.current = symbols;
-  }, [symbols]);
+  }, [symbolKey]);
 
-  // Connect once, then keep the same socket while symbol subscriptions change.
+  // Cleanup on unmount only
   useEffect(() => {
-    mountedRef.current = true;
-    connectRef.current();
-
     return () => {
       mountedRef.current = false;
       connectingRef.current = false;
@@ -212,14 +209,6 @@ export function useWebSocketPrices(symbols: string[]) {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!mountedRef.current) return;
-    const ws = wsRef.current;
-    if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-      connectRef.current();
-    }
-  }, [symbolKey]);
 
   const getPrice = (symbol: string): number | null => {
     return pricesRef.current.get(symbol)?.price ?? state.prices.get(symbol)?.price ?? null;
