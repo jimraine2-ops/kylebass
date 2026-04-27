@@ -5,6 +5,38 @@ const WS_TOKEN_TIMEOUT_MS = 5000;
 const POLLING_MODE_RETRY_MS = 120000;
 const CONNECTION_RETRY_MS = 30000;
 const EMPTY_SYMBOL_RETRY_MS = 60000;
+const WS_TOKEN_CACHE_MS = 10 * 60 * 1000;
+
+let cachedWsUrl: string | null = null;
+let cachedWsUrlAt = 0;
+let wsTokenPromise: Promise<string | null> | null = null;
+
+async function getWsUrl(): Promise<string | null> {
+  const now = Date.now();
+  if (cachedWsUrl && now - cachedWsUrlAt < WS_TOKEN_CACHE_MS) {
+    return cachedWsUrl;
+  }
+
+  if (!wsTokenPromise) {
+    wsTokenPromise = supabase.functions
+      .invoke('ws-token', { body: {} })
+      .then(({ data, error }) => {
+        if (error || data?.fallback || !data?.wsUrl) return null;
+        cachedWsUrl = data.wsUrl;
+        cachedWsUrlAt = Date.now();
+        return cachedWsUrl;
+      })
+      .catch((error) => {
+        console.warn('[useWebSocketPrices] ws-token unavailable, using polling fallback:', error);
+        return null;
+      })
+      .finally(() => {
+        wsTokenPromise = null;
+      });
+  }
+
+  return wsTokenPromise;
+}
 
 interface PriceData {
   symbol: string;
@@ -75,19 +107,16 @@ export function useWebSocketPrices(symbols: string[]) {
       const timeout = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('WS_TOKEN_TIMEOUT')), WS_TOKEN_TIMEOUT_MS);
       });
-      const { data, error } = await Promise.race([
-        supabase.functions.invoke('ws-token', { body: {} }),
-        timeout,
-      ]);
+      const wsUrl = await Promise.race([getWsUrl(), timeout]);
 
-      if (error || !data?.wsUrl) {
-        const reason = data?.fallback ? 'WebSocket 임시 우회 — Polling 모드' : 'WebSocket 토큰 획득 실패 — Polling 모드';
+      if (!wsUrl) {
+        const reason = 'WebSocket 임시 우회 — Polling 모드';
         setState(prev => ({ ...prev, error: reason, isConnected: false }));
         scheduleReconnect(POLLING_MODE_RETRY_MS);
         return;
       }
 
-      const ws = new WebSocket(data.wsUrl);
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -173,6 +202,8 @@ export function useWebSocketPrices(symbols: string[]) {
     const newSymbols = new Set(symbols);
     const ws = wsRef.current;
 
+    symbolsRef.current = symbols;
+
     if (ws && ws.readyState === WebSocket.OPEN) {
       for (const s of prevSymbols) {
         if (!newSymbols.has(s)) {
@@ -188,8 +219,6 @@ export function useWebSocketPrices(symbols: string[]) {
     } else if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
       connectRef.current();
     }
-
-    symbolsRef.current = symbols;
   }, [symbolKey]);
 
   // Cleanup on unmount only
