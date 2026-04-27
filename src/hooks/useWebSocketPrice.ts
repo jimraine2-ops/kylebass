@@ -36,16 +36,15 @@ export function useWebSocketPrices(symbols: string[]) {
   const pricesRef = useRef<Map<string, PriceData>>(new Map());
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryCountRef = useRef(0);
+  const connectRef = useRef<() => void>(() => undefined);
   const maxRetries = 5;
 
   const scheduleReconnect = useCallback((delayMs: number) => {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
     }
-    reconnectTimerRef.current = setTimeout(connectRef.current, delayMs);
+    reconnectTimerRef.current = setTimeout(() => connectRef.current(), delayMs);
   }, []);
-
-  const connectRef = useRef<() => void>(() => undefined);
 
   const flushBatch = useCallback(() => {
     setState(prev => ({
@@ -150,7 +149,9 @@ export function useWebSocketPrices(symbols: string[]) {
     }
   }, [flushBatch, scheduleReconnect]);
 
-  connectRef.current = connect;
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // Handle symbol subscription changes
   useEffect(() => {
