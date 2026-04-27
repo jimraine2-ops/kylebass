@@ -12,7 +12,7 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 
 // ===== In-Memory Cache =====
 const cache = new Map<string, { data: any; ts: number }>();
-const CACHE_TTL = 90_000;
+const CACHE_TTL = 180_000;
 
 function getCached(key: string) {
   const entry = cache.get(key);
@@ -389,18 +389,18 @@ Deno.serve(async (req) => {
         'INTC','QCOM','AVGO','CRM','NFLX','UBER','SQ','PYPL',
         'BA','DIS','SNAP','SHOP','CRWD','NET','ABNB',
       ];
-      const targetSymbols: string[] = (symbols || defaultSymbols).slice(0, 35);
+      const targetSymbols: string[] = (symbols || defaultSymbols).slice(0, 12);
       const results: any[] = [];
 
-      if (targetSymbols.length <= 5) {
+      if (targetSymbols.length <= 4) {
         const batchResults = await Promise.all(targetSymbols.map(sym => analyzeSymbol(sym).catch(() => null)));
         for (const r of batchResults) { if (r) results.push(r); }
       } else {
-        for (let i = 0; i < targetSymbols.length; i += 5) {
-          const batch = targetSymbols.slice(i, i + 5);
+        for (let i = 0; i < targetSymbols.length; i += 4) {
+          const batch = targetSymbols.slice(i, i + 4);
           const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
           for (const r of batchResults) { if (r) results.push(r); }
-          if (i + 5 < targetSymbols.length) await new Promise(resolve => setTimeout(resolve, 500));
+          if (i + 4 < targetSymbols.length) await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
 
@@ -416,7 +416,7 @@ Deno.serve(async (req) => {
 
     // ===== SUPER SCAN: Full market rotation =====
     if (action === 'super-scan') {
-      const BATCH_SIZE = 30;
+      const BATCH_SIZE = 12;
       const universe = FULL_UNIVERSE;
       const startIdx = superScanRotationIdx % universe.length;
       const currentBatch: string[] = [];
@@ -426,10 +426,10 @@ Deno.serve(async (req) => {
       superScanRotationIdx = (startIdx + BATCH_SIZE) % universe.length;
 
       // Analyze current batch (new data)
-      for (let i = 0; i < currentBatch.length; i += 5) {
-        const batch = currentBatch.slice(i, i + 5);
+      for (let i = 0; i < currentBatch.length; i += 4) {
+        const batch = currentBatch.slice(i, i + 4);
         await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
-        if (i + 5 < currentBatch.length) await new Promise(r => setTimeout(r, 400));
+        if (i + 4 < currentBatch.length) await new Promise(r => setTimeout(r, 250));
       }
 
       // Gather ALL cached results (from this and previous calls)

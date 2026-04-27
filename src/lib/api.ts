@@ -56,12 +56,50 @@ export async function scanPennyStocks() {
 }
 
 // Quant Signals - 10 Indicator Recommendation
+const QUANT_SIGNALS_CACHE_TTL = 60_000;
+const quantSignalsCache = new Map<string, { data: any; ts: number }>();
+const quantSignalsInFlight = new Map<string, Promise<any>>();
+
+function getQuantSignalsKey(symbols?: string[]) {
+  if (!symbols?.length) return '__default__';
+  return symbols.map((s) => String(s).trim().toUpperCase()).filter(Boolean).sort().join(',');
+}
+
+function emptyQuantSignals(symbols?: string[]) {
+  return {
+    premium: [],
+    penny: [],
+    recommendations: [],
+    results: [],
+    allScanned: symbols?.length ?? 0,
+    fallback: true,
+  };
+}
+
 export async function fetchQuantSignals(symbols?: string[]) {
-  const { data, error } = await supabase.functions.invoke('quant-signals', {
-    body: { action: 'analyze', symbols },
+  const key = getQuantSignalsKey(symbols);
+  const cached = quantSignalsCache.get(key);
+  if (cached && Date.now() - cached.ts < QUANT_SIGNALS_CACHE_TTL) return cached.data;
+
+  const inFlight = quantSignalsInFlight.get(key);
+  if (inFlight) return inFlight;
+
+  const promise = supabase.functions.invoke('quant-signals', {
+    body: { action: 'analyze', symbols: symbols?.slice(0, 12) },
+  }).then(({ data, error }) => {
+    if (error) throw error;
+    const safeData = data || emptyQuantSignals(symbols);
+    quantSignalsCache.set(key, { data: safeData, ts: Date.now() });
+    return safeData;
+  }).catch((error) => {
+    console.warn('[fetchQuantSignals] using safe fallback:', error);
+    return quantSignalsCache.get(key)?.data || emptyQuantSignals(symbols);
+  }).finally(() => {
+    quantSignalsInFlight.delete(key);
   });
-  if (error) throw error;
-  return data;
+
+  quantSignalsInFlight.set(key, promise);
+  return promise;
 }
 
 // ==================== UNIFIED PORTFOLIO ====================
