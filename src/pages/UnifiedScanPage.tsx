@@ -18,7 +18,6 @@ import { FillRateCard } from "@/components/dashboard/FillRateCard";
 import { GoldenCloudSniperBanner } from "@/components/trading/GoldenCloudSniperBanner";
 
 type SortKey = 'score' | 'changePct' | 'rvol';
-type ViewMode = 'all' | 'large' | 'small';
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'score', label: '점수순' },
