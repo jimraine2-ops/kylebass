@@ -6,12 +6,17 @@ const POLLING_MODE_RETRY_MS = 120000;
 const CONNECTION_RETRY_MS = 30000;
 const EMPTY_SYMBOL_RETRY_MS = 60000;
 const WS_TOKEN_CACHE_MS = 10 * 60 * 1000;
+const FINNHUB_WS_ENABLED = import.meta.env.VITE_ENABLE_FINNHUB_WS === 'true';
 
 let cachedWsUrl: string | null = null;
 let cachedWsUrlAt = 0;
 let wsTokenPromise: Promise<string | null> | null = null;
 
 async function getWsUrl(): Promise<string | null> {
+  if (!FINNHUB_WS_ENABLED) {
+    return null;
+  }
+
   const now = Date.now();
   if (cachedWsUrl && now - cachedWsUrlAt < WS_TOKEN_CACHE_MS) {
     return cachedWsUrl;
@@ -93,6 +98,14 @@ export function useWebSocketPrices(symbols: string[]) {
     if (connectingRef.current) return;
     const existingWs = wsRef.current;
     if (existingWs && (existingWs.readyState === WebSocket.OPEN || existingWs.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    if (!FINNHUB_WS_ENABLED) {
+      setState(prev => prev.isConnected || prev.error
+        ? { ...prev, isConnected: false, error: null }
+        : prev
+      );
       return;
     }
 
