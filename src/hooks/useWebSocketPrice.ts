@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+const WS_TOKEN_TIMEOUT_MS = 5000;
+const POLLING_MODE_RETRY_MS = 120000;
+const CONNECTION_RETRY_MS = 30000;
+const EMPTY_SYMBOL_RETRY_MS = 60000;
+
 interface PriceData {
   symbol: string;
   price: number;
@@ -33,6 +38,15 @@ export function useWebSocketPrices(symbols: string[]) {
   const retryCountRef = useRef(0);
   const maxRetries = 5;
 
+  const scheduleReconnect = useCallback((delayMs: number) => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+    }
+    reconnectTimerRef.current = setTimeout(connectRef.current, delayMs);
+  }, []);
+
+  const connectRef = useRef<() => void>(() => undefined);
+
   const flushBatch = useCallback(() => {
     setState(prev => ({
       ...prev,
@@ -42,13 +56,25 @@ export function useWebSocketPrices(symbols: string[]) {
   }, []);
 
   const connect = useCallback(async () => {
+    if (symbolsRef.current.length === 0) {
+      setState(prev => ({ ...prev, isConnected: false, error: null }));
+      scheduleReconnect(EMPTY_SYMBOL_RETRY_MS);
+      return;
+    }
+
     try {
-      const { data, error } = await supabase.functions.invoke('ws-token', { body: {} });
+      const timeout = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('WS_TOKEN_TIMEOUT')), WS_TOKEN_TIMEOUT_MS);
+      });
+      const { data, error } = await Promise.race([
+        supabase.functions.invoke('ws-token', { body: {} }),
+        timeout,
+      ]);
+
       if (error || !data?.wsUrl) {
-        const reason = data?.fallback ? 'Finnhub 키 없음 — Polling 모드' : 'WebSocket 토큰 획득 실패';
+        const reason = data?.fallback ? 'WebSocket 임시 우회 — Polling 모드' : 'WebSocket 토큰 획득 실패 — Polling 모드';
         setState(prev => ({ ...prev, error: reason, isConnected: false }));
-        // Fallback: retry in 30s (longer, since edge runtime may be cold)
-        reconnectTimerRef.current = setTimeout(connect, 30000);
+        scheduleReconnect(POLLING_MODE_RETRY_MS);
         return;
       }
 
@@ -111,14 +137,20 @@ export function useWebSocketPrices(symbols: string[]) {
         }
         retryCountRef.current += 1;
         const backoff = Math.min(3000 * Math.pow(2, retryCountRef.current - 1), 60000);
-        reconnectTimerRef.current = setTimeout(connect, backoff);
+        scheduleReconnect(backoff);
       };
 
     } catch (e) {
-      setState(prev => ({ ...prev, error: '연결 실패', isConnected: false }));
-      reconnectTimerRef.current = setTimeout(connect, 10000);
+      const message = e instanceof Error && e.message === 'WS_TOKEN_TIMEOUT'
+        ? 'WebSocket 토큰 지연 — Polling 모드'
+        : 'WebSocket 연결 실패 — Polling 모드';
+      console.warn('[useWebSocketPrices] using polling fallback:', e);
+      setState(prev => ({ ...prev, error: message, isConnected: false }));
+      scheduleReconnect(CONNECTION_RETRY_MS);
     }
-  }, [flushBatch]);
+  }, [flushBatch, scheduleReconnect]);
+
+  connectRef.current = connect;
 
   // Handle symbol subscription changes
   useEffect(() => {
