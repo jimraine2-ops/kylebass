@@ -66,7 +66,7 @@ export default function UnifiedScanPage() {
       capType: 'small',
     }));
 
-    let combined = viewMode === 'large' ? large : viewMode === 'small' ? small : [...large, ...small];
+    let combined = [...large, ...small];
 
     combined.sort((a: any, b: any) => {
       switch (sortKey) {
@@ -78,7 +78,7 @@ export default function UnifiedScanPage() {
     });
 
     return combined.slice(0, 80);
-  }, [largeStocks, enrichedSmallStocks, sortKey, viewMode]);
+  }, [largeStocks, enrichedSmallStocks, sortKey]);
 
   const hotStocks = allStocks.filter((s: any) => (s.changePct || s.regularMarketChangePercent || 0) >= 10);
   const surgingStocks = allStocks.filter((s: any) => (s.changePct || s.regularMarketChangePercent || 0) >= 5);
