@@ -65,19 +65,72 @@ export async function fetchQuantSignals(symbols?: string[]) {
 }
 
 // ==================== UNIFIED PORTFOLIO ====================
-export async function getUnifiedPortfolio() {
+export async function getUnifiedPortfolio(): Promise<any> {
   try {
-    const { data, error } = await supabase.functions.invoke('ai-trading', {
-      body: { action: 'get-unified-portfolio' },
-    });
-    if (error) {
-      console.warn('[getUnifiedPortfolio] ai-trading unavailable, using safe fallback:', error.message ?? error);
-      return { wallet: null, openPositions: [], closedTrades: [], stats: {}, fallback: true };
-    }
-    return data ?? { wallet: null, openPositions: [], closedTrades: [], stats: {}, fallback: true };
+    const [{ data: wallet }, { data: openPositions }, { data: closedTrades }] = await Promise.all([
+      supabase.from('unified_wallet').select('*').limit(1).maybeSingle(),
+      supabase.from('unified_trades').select('*').eq('status', 'open').order('opened_at', { ascending: false }),
+      supabase.from('unified_trades').select('*').neq('status', 'open').order('closed_at', { ascending: false }).limit(100),
+    ]);
+
+    const enrichedPositions = (openPositions || []).map((pos: any) => ({
+      ...pos,
+      currentPrice: pos.price,
+      unrealizedPnl: 0,
+      unrealizedPnlPct: 0,
+      timeElapsedMin: pos.opened_at ? Math.round((Date.now() - new Date(pos.opened_at).getTime()) / 60000) : 0,
+      priceKRW: pos.price * 1350,
+      currentPriceKRW: pos.price * 1350,
+    }));
+
+    const closed = closedTrades || [];
+    const wins = closed.filter((t: any) => (t.pnl || 0) > 0).length;
+    const losses = closed.filter((t: any) => (t.pnl || 0) <= 0).length;
+    const totalPnl = closed.reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
+    const grossProfit = closed.filter((t: any) => (t.pnl || 0) > 0).reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
+    const grossLoss = Math.abs(closed.filter((t: any) => (t.pnl || 0) < 0).reduce((sum: number, t: any) => sum + (t.pnl || 0), 0));
+    const avgHoldTimeMinutes = closed.length > 0
+      ? closed.reduce((sum: number, t: any) => {
+          if (t.opened_at && t.closed_at) return sum + (new Date(t.closed_at).getTime() - new Date(t.opened_at).getTime());
+          return sum;
+        }, 0) / closed.length / 60000
+      : 0;
+    const largePnl = closed.filter((t: any) => t.cap_type === 'large').reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
+    const smallPnl = closed.filter((t: any) => t.cap_type === 'small').reduce((sum: number, t: any) => sum + (t.pnl || 0), 0);
+
+    return {
+      wallet,
+      openPositions: enrichedPositions,
+      closedTrades: closed,
+      stats: {
+        winRate: closed.length > 0 ? +((wins / closed.length) * 100).toFixed(1) : 0,
+        totalPnl: +totalPnl.toFixed(0),
+        totalUnrealizedPnl: 0,
+        totalTrades: closed.length,
+        wins,
+        losses,
+        profitFactor: grossLoss > 0 ? +(grossProfit / grossLoss).toFixed(2) : grossProfit > 0 ? 999 : 0,
+        avgHoldTimeMinutes: +avgHoldTimeMinutes.toFixed(1),
+        cumulativeReturn: wallet ? +((totalPnl / wallet.initial_balance) * 100).toFixed(2) : 0,
+        largeCount: enrichedPositions.filter((p: any) => p.cap_type === 'large').length,
+        smallCount: enrichedPositions.filter((p: any) => p.cap_type === 'small').length,
+        largePnl,
+        smallPnl,
+      },
+    };
   } catch (error) {
-    console.warn('[getUnifiedPortfolio] request failed, using safe fallback:', error);
-    return { wallet: null, openPositions: [], closedTrades: [], stats: {}, fallback: true };
+    console.warn('[getUnifiedPortfolio] direct read failed, using safe fallback:', error);
+    return {
+      wallet: null,
+      openPositions: [],
+      closedTrades: [],
+      fallback: true,
+      stats: {
+        winRate: 0, totalPnl: 0, totalUnrealizedPnl: 0, totalTrades: 0,
+        wins: 0, losses: 0, profitFactor: 0, avgHoldTimeMinutes: 0,
+        cumulativeReturn: 0, largeCount: 0, smallCount: 0, largePnl: 0, smallPnl: 0,
+      },
+    };
   }
 }
 
