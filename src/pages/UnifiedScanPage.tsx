@@ -18,7 +18,6 @@ import { FillRateCard } from "@/components/dashboard/FillRateCard";
 import { GoldenCloudSniperBanner } from "@/components/trading/GoldenCloudSniperBanner";
 
 type SortKey = 'score' | 'changePct' | 'rvol';
-type ViewMode = 'all' | 'large' | 'small';
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'score', label: '점수순' },
@@ -32,7 +31,6 @@ export default function UnifiedScanPage() {
   const { data: portfolioData } = useUnifiedPortfolio();
   const [selectedStock, setSelectedStock] = useState<any>(null);
   const [sortKey, setSortKey] = useState<SortKey>('score');
-  const [viewMode, setViewMode] = useState<ViewMode>('all');
 
   const isLoading = quantLoading || pennyLoading;
 
@@ -68,7 +66,7 @@ export default function UnifiedScanPage() {
       capType: 'small',
     }));
 
-    let combined = viewMode === 'large' ? large : viewMode === 'small' ? small : [...large, ...small];
+    let combined = [...large, ...small];
 
     combined.sort((a: any, b: any) => {
       switch (sortKey) {
@@ -80,7 +78,7 @@ export default function UnifiedScanPage() {
     });
 
     return combined.slice(0, 80);
-  }, [largeStocks, enrichedSmallStocks, sortKey, viewMode]);
+  }, [largeStocks, enrichedSmallStocks, sortKey]);
 
   const hotStocks = allStocks.filter((s: any) => (s.changePct || s.regularMarketChangePercent || 0) >= 10);
   const surgingStocks = allStocks.filter((s: any) => (s.changePct || s.regularMarketChangePercent || 0) >= 5);
@@ -175,9 +173,7 @@ export default function UnifiedScanPage() {
         <>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <Badge variant={viewMode === 'all' ? 'default' : 'outline'} className="cursor-pointer text-xs" onClick={() => setViewMode('all')}>전체 ({allStocks.length})</Badge>
-              <Badge variant={viewMode === 'large' ? 'default' : 'outline'} className="cursor-pointer text-xs" onClick={() => setViewMode('large')}>대형주 ({largeStocks.length})</Badge>
-              <Badge variant={viewMode === 'small' ? 'default' : 'outline'} className="cursor-pointer text-xs" onClick={() => setViewMode('small')}>소형주 ({enrichedSmallStocks.length})</Badge>
+              <Badge variant="default" className="text-xs">전체 ({allStocks.length})</Badge>
             </div>
             <div className="flex items-center gap-2">
               <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground" />
