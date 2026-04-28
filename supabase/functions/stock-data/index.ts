@@ -9,6 +9,55 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const TWELVE_DATA_BASE = 'https://api.twelvedata.com';
 const SLIPPAGE_BUY = 0.0002;  // +0.02% for buy
 const SLIPPAGE_SELL = 0.0002; // -0.02% for sell
+const FETCH_TIMEOUT_MS = 7000;
+
+function jsonResponse(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function fallbackQuote(symbol: string) {
+  return {
+    symbol,
+    shortName: symbol,
+    regularMarketPrice: 0,
+    regularMarketChange: 0,
+    regularMarketChangePercent: 0,
+    regularMarketVolume: 0,
+    marketCap: 0,
+    fiftyTwoWeekHigh: 0,
+    fiftyTwoWeekLow: 0,
+    dataSource: 'fallback',
+    crossVerified: false,
+    fallback: true,
+  };
+}
+
+function fallbackPayload(action: string | undefined, symbol?: string, symbols?: string[], message = 'Stock data temporarily unavailable') {
+  if (action === 'quote') {
+    const tickerList = (symbols?.length ? symbols : symbol ? [symbol] : []).slice(0, 20);
+    return { quotes: tickerList.map(fallbackQuote), dataSource: 'fallback', fallback: true, error: message };
+  }
+  if (action === 'chart') return { chartData: [], meta: { symbol, regularMarketPrice: 0 }, fallback: true, error: message };
+  if (action === 'search') return { results: [], fallback: true, error: message };
+  if (action === 'company-news') return { news: [], fallback: true, error: message };
+  if (action === 'basic-financials') return { metric: {}, fallback: true, error: message };
+  if (action === 'sec-filings') return { filings: [], fallback: true, error: message };
+  if (action === 'peers') return { peers: [], fallback: true, error: message };
+  return { fallback: true, error: message };
+}
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function getToken(): string {
   const key = Deno.env.get('FINNHUB_API_KEY');
@@ -44,7 +93,7 @@ async function finnhubFetch(path: string, retries = 3): Promise<any> {
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const res = await fetch(url);
+      const res = await fetchWithTimeout(url);
       if (res.status === 429) {
         await res.text();
         if (attempt >= retries - 1) return null; // Don't throw, return null
@@ -105,7 +154,7 @@ async function twelveDataQuote(symbol: string): Promise<{ price: number; timesta
   const token = getTwelveDataToken();
   if (!token) return null;
   try {
-    const res = await fetch(`${TWELVE_DATA_BASE}/quote?symbol=${encodeURIComponent(symbol)}&apikey=${token}`);
+    const res = await fetchWithTimeout(`${TWELVE_DATA_BASE}/quote?symbol=${encodeURIComponent(symbol)}&apikey=${token}`);
     if (!res.ok) return null;
     const data = await res.json();
     if (data.code) return null; // API error
