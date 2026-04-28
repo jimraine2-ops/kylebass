@@ -1,34 +1,80 @@
 import { supabase } from "@/integrations/supabase/client";
 
+const STOCK_DATA_CACHE_TTL = 30_000;
+const stockDataCache = new Map<string, { data: any; ts: number }>();
+const stockDataInFlight = new Map<string, Promise<any>>();
+
+function getStockDataKey(action: string, payload: Record<string, unknown>) {
+  return `${action}:${JSON.stringify(payload)}`;
+}
+
+function fallbackQuote(symbol: string) {
+  return {
+    symbol,
+    shortName: symbol,
+    regularMarketPrice: 0,
+    regularMarketChange: 0,
+    regularMarketChangePercent: 0,
+    regularMarketVolume: 0,
+    marketCap: 0,
+    dataSource: 'fallback',
+    fallback: true,
+  };
+}
+
+function stockDataFallback(action: string, payload: Record<string, any>) {
+  if (action === 'quote') return { quotes: (payload.symbols || [payload.symbol]).filter(Boolean).map(fallbackQuote), fallback: true };
+  if (action === 'chart') return { chartData: [], meta: { symbol: payload.symbol, regularMarketPrice: 0 }, fallback: true };
+  if (action === 'search') return { results: [], fallback: true };
+  if (action === 'company-news') return { news: [], fallback: true };
+  if (action === 'basic-financials') return { metric: {}, fallback: true };
+  return { fallback: true };
+}
+
+async function invokeStockData(action: string, payload: Record<string, any>) {
+  const body = { action, ...payload };
+  const key = getStockDataKey(action, body);
+  const cached = stockDataCache.get(key);
+  if (cached && Date.now() - cached.ts < STOCK_DATA_CACHE_TTL) return cached.data;
+
+  const inFlight = stockDataInFlight.get(key);
+  if (inFlight) return inFlight;
+
+  const promise = supabase.functions.invoke('stock-data', { body })
+    .then(({ data, error }) => {
+      if (error) throw error;
+      const safeData = data || stockDataFallback(action, payload);
+      stockDataCache.set(key, { data: safeData, ts: Date.now() });
+      return safeData;
+    })
+    .catch((error) => {
+      console.warn('[stock-data] using safe fallback:', error);
+      return stockDataCache.get(key)?.data || stockDataFallback(action, payload);
+    })
+    .finally(() => {
+      stockDataInFlight.delete(key);
+    });
+
+  stockDataInFlight.set(key, promise);
+  return promise;
+}
+
 export async function fetchStockQuote(symbols: string[]) {
-  const { data, error } = await supabase.functions.invoke('stock-data', {
-    body: { action: 'quote', symbols },
-  });
-  if (error) throw error;
+  const data = await invokeStockData('quote', { symbols: symbols.slice(0, 20) });
   return data?.quotes || [];
 }
 
 export async function fetchChartData(symbol: string) {
-  const { data, error } = await supabase.functions.invoke('stock-data', {
-    body: { action: 'chart', symbol },
-  });
-  if (error) throw error;
-  return data;
+  return invokeStockData('chart', { symbol });
 }
 
 export async function searchStocks(query: string) {
-  const { data, error } = await supabase.functions.invoke('stock-data', {
-    body: { action: 'search', symbol: query },
-  });
-  if (error) throw error;
+  const data = await invokeStockData('search', { symbol: query });
   return data?.results || [];
 }
 
 export async function fetchCompanyNews(symbol: string) {
-  const { data, error } = await supabase.functions.invoke('stock-data', {
-    body: { action: 'company-news', symbol },
-  });
-  if (error) throw error;
+  const data = await invokeStockData('company-news', { symbol });
   const news = data?.news || [];
   
   if (news.length > 0) {
@@ -220,11 +266,7 @@ export async function fetchSuperScan() {
 
 // Fetch basic financials for value filter
 export async function fetchBasicFinancials(symbol: string) {
-  const { data, error } = await supabase.functions.invoke('stock-data', {
-    body: { action: 'basic-financials', symbol },
-  });
-  if (error) throw error;
-  return data;
+  return invokeStockData('basic-financials', { symbol });
 }
 
 // Legacy no-ops
