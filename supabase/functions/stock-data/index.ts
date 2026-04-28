@@ -243,8 +243,15 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let action: string | undefined;
+  let symbol: string | undefined;
+  let symbols: string[] | undefined;
+
   try {
-    const { action, symbol, symbols } = await req.json();
+    const body = await req.json();
+    action = body?.action;
+    symbol = body?.symbol;
+    symbols = body?.symbols;
 
     if (action === 'quote') {
       const tickerList: string[] = symbols || [symbol];
@@ -380,16 +387,6 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Stock data error:', error);
     const msg = (error as Error)?.message ?? '';
-    let action: string | undefined;
-    let symbol: string | undefined;
-    let symbols: string[] | undefined;
-    try {
-      const cloned = req.clone();
-      const body = await cloned.json();
-      action = body?.action;
-      symbol = body?.symbol;
-      symbols = body?.symbols;
-    } catch { /* body already consumed or invalid */ }
     return jsonResponse(fallbackPayload(action, symbol, symbols, msg || 'Stock data temporarily unavailable'));
   }
 });
