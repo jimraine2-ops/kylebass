@@ -319,9 +319,7 @@ Deno.serve(async (req) => {
           quotes.push({ symbol: s, shortName: s, regularMarketPrice: 0, regularMarketChange: 0, regularMarketChangePercent: 0, regularMarketVolume: 0, marketCap: 0, fiftyTwoWeekHigh: 0, fiftyTwoWeekLow: 0, dataSource: 'error', crossVerified: false });
         }
       }
-      return new Response(JSON.stringify({ quotes, dataSource: 'finnhub', crossVerification: getTwelveDataToken() ? 'twelvedata' : 'none' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return jsonResponse({ quotes, dataSource: 'finnhub', crossVerification: getTwelveDataToken() ? 'twelvedata' : 'none' });
     }
 
     if (action === 'chart') {
@@ -334,19 +332,17 @@ Deno.serve(async (req) => {
           date: new Date(t * 1000).toISOString().split('T')[0],
           timestamp: t, open: data.o[i], high: data.h[i], low: data.l[i], close: data.c[i], volume: data.v[i],
         }));
-        return new Response(JSON.stringify({
+        return jsonResponse({
           chartData, meta: { symbol, regularMarketPrice: data.c[data.c.length - 1] }
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        });
       }
 
       try {
         const quote = await throttledFinnhubFetch(`/quote?symbol=${encodeURIComponent(symbol)}`);
         const result = buildSyntheticChart(quote, symbol);
-        return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        return jsonResponse(result);
       } catch {
-        return new Response(JSON.stringify({ chartData: [], meta: { symbol, regularMarketPrice: 0 }, error: 'Chart data unavailable' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        return jsonResponse(fallbackPayload(action, symbol, symbols, 'Chart data unavailable'));
       }
     }
 
@@ -354,43 +350,46 @@ Deno.serve(async (req) => {
       const query = symbol;
       const data = await throttledFinnhubFetch(`/search?q=${encodeURIComponent(query)}`);
       const results = (data?.result || []).map((r: any) => ({ symbol: r.symbol, shortname: r.description, exchange: r.displaySymbol, type: r.type }));
-      return new Response(JSON.stringify({ results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse({ results });
     }
 
     if (action === 'company-news') {
       const to = new Date().toISOString().split('T')[0];
       const fromDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
       const news = await throttledFinnhubFetch(`/company-news?symbol=${encodeURIComponent(symbol)}&from=${fromDate}&to=${to}`);
-      return new Response(JSON.stringify({ news: (news || []).slice(0, 20) }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse({ news: (news || []).slice(0, 20) });
     }
 
     if (action === 'basic-financials') {
       const data = await throttledFinnhubFetch(`/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`);
-      return new Response(JSON.stringify(data), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse(data || { metric: {}, fallback: true });
     }
 
     if (action === 'sec-filings') {
       const data = await throttledFinnhubFetch(`/stock/filings?symbol=${encodeURIComponent(symbol)}`);
-      return new Response(JSON.stringify({ filings: (data || []).slice(0, 20) }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse({ filings: (data || []).slice(0, 20) });
     }
 
     if (action === 'peers') {
       const data = await throttledFinnhubFetch(`/stock/peers?symbol=${encodeURIComponent(symbol)}`);
-      return new Response(JSON.stringify({ peers: data || [] }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return jsonResponse({ peers: data || [] });
     }
 
-    return new Response(JSON.stringify({ error: 'Invalid action' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return jsonResponse({ error: 'Invalid action' }, 400);
 
   } catch (error) {
     console.error('Stock data error:', error);
-    // Return graceful fallback instead of 500 for rate limit errors
     const msg = (error as Error)?.message ?? '';
-    if (msg.includes('rate limit') || msg.includes('429')) {
-      return new Response(JSON.stringify({ quotes: [], error: 'Rate limited, please retry', rateLimited: true }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-    return new Response(JSON.stringify({ error: msg }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    let action: string | undefined;
+    let symbol: string | undefined;
+    let symbols: string[] | undefined;
+    try {
+      const cloned = req.clone();
+      const body = await cloned.json();
+      action = body?.action;
+      symbol = body?.symbol;
+      symbols = body?.symbols;
+    } catch { /* body already consumed or invalid */ }
+    return jsonResponse(fallbackPayload(action, symbol, symbols, msg || 'Stock data temporarily unavailable'));
   }
 });
