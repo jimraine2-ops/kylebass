@@ -883,6 +883,125 @@ async function polygonDailyMetrics(symbol: string): Promise<{
   };
 }
 
+// ============================================================
+// ★ [최종 설계 - 형님] Twelve Data 5분봉: EMA200 이격도(2~3%) + 양운(Kumo) 지지
+// ============================================================
+interface Td5mCheck {
+  ok: boolean;          // 게이트 통과 여부
+  ema200: number;
+  distPct: number;      // |price-ema200|/ema200
+  inOrbit: boolean;     // 2~3% 이내 자석 궤도
+  aboveKumo: boolean;   // 캔들이 양운(Kumo) 위
+  reason: string;
+}
+const td5mCache = new Map<string, { ts: number; data: Td5mCheck }>();
+const TD_5M_TTL_MS = 90_000; // 90초 캐시 (Free tier 보호)
+
+async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td5mCheck> {
+  const cached = td5mCache.get(symbol);
+  if (cached && Date.now() - cached.ts < TD_5M_TTL_MS) return cached.data;
+  const token = Deno.env.get('TWELVE_DATA_API_KEY') || '';
+  const empty: Td5mCheck = { ok: false, ema200: 0, distPct: 1, inOrbit: false, aboveKumo: false, reason: 'NO_KEY' };
+  if (!token) return empty;
+  // 글로벌 1.5초 스로틀 공유
+  const wait = Math.max(0, TD_MIN_INTERVAL_MS - (Date.now() - lastTwelveDataCall));
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastTwelveDataCall = Date.now();
+  try {
+    // 5분봉 220개 → EMA200 + Ichimoku Kumo
+    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=5min&outputsize=220&apikey=${token}`;
+    const res = await fetch(url);
+    if (!res.ok) return { ...empty, reason: `HTTP_${res.status}` };
+    const json = await res.json();
+    const values: any[] = Array.isArray(json?.values) ? json.values : [];
+    if (values.length < 60) return { ...empty, reason: `BARS_${values.length}` };
+    // Twelve Data는 최신순 → 오래된 순으로 뒤집기
+    const bars = values.slice().reverse();
+    const closes = bars.map((b: any) => +b.close);
+    const highs = bars.map((b: any) => +b.high);
+    const lows = bars.map((b: any) => +b.low);
+    // EMA200
+    const period = Math.min(200, closes.length);
+    const k = 2 / (period + 1);
+    let ema200 = closes.slice(0, period).reduce((s: number, v: number) => s + v, 0) / period;
+    for (let i = period; i < closes.length; i++) ema200 = closes[i] * k + ema200 * (1 - k);
+    // Ichimoku Kumo
+    const N = closes.length;
+    const tenkan = (Math.max(...highs.slice(N - 9)) + Math.min(...lows.slice(N - 9))) / 2;
+    const kijun  = (Math.max(...highs.slice(N - 26)) + Math.min(...lows.slice(N - 26))) / 2;
+    const spanA  = (tenkan + kijun) / 2;
+    const lookbackB = Math.min(52, N);
+    const spanB  = (Math.max(...highs.slice(N - lookbackB)) + Math.min(...lows.slice(N - lookbackB))) / 2;
+    const kumoTop = Math.max(spanA, spanB);
+    const kumoBottom = Math.min(spanA, spanB);
+    const price = currentPrice || closes[N - 1];
+    const distPct = ema200 > 0 ? Math.abs(price - ema200) / ema200 : 1;
+    const inOrbit = distPct <= 0.03; // 자석 궤도 ≤3%
+    const aboveKumo = price > kumoTop && spanA > spanB; // 양운(빨간 구름) 위
+    const ok = inOrbit && aboveKumo;
+    const data: Td5mCheck = {
+      ok, ema200: +ema200.toFixed(4), distPct, inOrbit, aboveKumo,
+      reason: ok ? 'PASS' : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>3%`}${aboveKumo ? '' : '|양운지지X'}`,
+    };
+    td5mCache.set(symbol, { ts: Date.now(), data });
+    return data;
+  } catch (e) {
+    return { ...empty, reason: `ERR_${(e as Error).message?.slice(0, 20)}` };
+  }
+}
+
+// ============================================================
+// ★ [최종 설계 - 막내] Polygon 1분봉: 200 EMA 리테스트 양봉 OR 음봉3개 후 돌파 양봉
+// ============================================================
+interface Polygon1mPattern {
+  ok: boolean;
+  pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'NONE';
+  ema200_1m: number;
+  reason: string;
+}
+const poly1mCache = new Map<string, { ts: number; data: Polygon1mPattern }>();
+const POLY_1M_TTL_MS = 30_000;
+
+async function polygon1mPattern(symbol: string): Promise<Polygon1mPattern> {
+  const cached = poly1mCache.get(symbol);
+  if (cached && Date.now() - cached.ts < POLY_1M_TTL_MS) return cached.data;
+  const empty: Polygon1mPattern = { ok: false, pattern: 'NONE', ema200_1m: 0, reason: 'NO_DATA' };
+  // 최근 250분 1분봉
+  const to = new Date().toISOString().split('T')[0];
+  const from = new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0];
+  const { data, status } = await polygonFetch(`/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/minute/${from}/${to}?adjusted=true&sort=asc&limit=300`);
+  if (status !== 200) return { ...empty, reason: `HTTP_${status}` };
+  const bars = data?.results || [];
+  if (bars.length < 30) return { ...empty, reason: `BARS_${bars.length}` };
+  const closes = bars.map((b: any) => b.c);
+  const opens = bars.map((b: any) => b.o);
+  const lows = bars.map((b: any) => b.l);
+  // 1분봉 EMA200 (가용분으로 fallback)
+  const period = Math.min(200, closes.length);
+  const k = 2 / (period + 1);
+  let ema = closes.slice(0, period).reduce((s: number, v: number) => s + v, 0) / period;
+  for (let i = period; i < closes.length; i++) ema = closes[i] * k + ema * (1 - k);
+  const ema200_1m = ema;
+  const N = closes.length;
+  const c0 = closes[N - 1], o0 = opens[N - 1], l0 = lows[N - 1];
+  const isBull = c0 > o0;
+  // Case A: 리테스트 — 직전 5봉 중 저가가 EMA200 ±0.3% 터치 후 현재봉 양봉
+  const retestTouch = lows.slice(N - 6, N - 1).some((lo: number) => Math.abs(lo - ema200_1m) / ema200_1m <= 0.003);
+  const caseA = retestTouch && isBull && c0 > ema200_1m;
+  // Case B: 음봉 3개 응축 후 강한 양봉 돌파 (현재봉이 직전 3봉 고가 위)
+  const prev3Bear = [N - 4, N - 3, N - 2].every(i => closes[i] < opens[i]);
+  const prev3High = Math.max(closes[N - 4], opens[N - 4], closes[N - 3], opens[N - 3], closes[N - 2], opens[N - 2]);
+  const caseB = prev3Bear && isBull && c0 > prev3High;
+  const pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'NONE' = caseA ? 'RETEST' : caseB ? 'CONDENSATION_BREAKOUT' : 'NONE';
+  const ok = pattern !== 'NONE';
+  const result: Polygon1mPattern = {
+    ok, pattern, ema200_1m: +ema200_1m.toFixed(4),
+    reason: ok ? `${pattern}${caseA ? '(EMA200리테스트)' : '(응축돌파)'}` : '패턴없음',
+  };
+  poly1mCache.set(symbol, { ts: Date.now(), data: result });
+  return result;
+}
+
 async function buildTargetUniverse(
   candidatePool: string[],
   capTypeMap: Map<string, 'large' | 'small'>,
@@ -2273,40 +2392,37 @@ Deno.serve(async (req) => {
           const isPenny = r.isPenny;
 
           // ============================================================
-          // ★★★ [Golden Rule Hard-Criteria Gate] 사용자 최종 설계 (3단계 검증)
-          // 1단계: Phase1 사냥감 통과 (EMA200 우상향+위/이격≤5%/Kumo 양운/구름 두께) — Phase1 빌드에서 강제
-          // 2단계: 1분봉 리테스트 — 현재가가 EMA200 ±3% 이내 (자석 궤도)
-          // 3단계: 체결강도 ≥ 120% + 거래량 폭발 RVOL ≥ 2.0
-          // 하나라도 미달 시 즉시 탈락.
+          // ★★★ [최종 설계 - Triple-API Hard-Criteria Gate]
+          // 1단계 (Twelve Data 5분봉): EMA200 이격 ≤3% + 양운(Kumo) 지지 — 형님의 허락
+          // 2단계 (Polygon 1분봉): 200EMA 리테스트 양봉 OR 음봉3개 후 돌파 양봉 — 막내의 타이밍
+          // 3단계 (Finnhub 실시간): 체결강도 ≥120% + RVOL ≥2.0 — 돈의 흐름
+          // 뉴스 전략 완전 배제. 세 API 지표가 모두 일치할 때만 진입.
           // ============================================================
           const tgt = targetMap.get(r.sym);
           const isPhase1Target = !!tgt;
+          if (!isPhase1Target) continue; // Phase1(일봉) 사냥감만 후속 검증
 
-          // 체결강도 raw % — Golden Rule 3단계: 120%+ 강제
+          // 3단계 - Finnhub 실시간 흐름
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
           const isAggressionOk = aggressionPctRaw >= 120;
-
-          // 거래량 폭발 (RVOL ≥ 2.0)
           const rvolRaw = r.scoring.indicators?.rvol?.rvol || 0;
           const isVolumeBurst = rvolRaw >= 2.0;
 
-          // 자석 궤도 (현재가-EMA200 이격 ≤ 3%) — 1분봉 리테스트 근사
-          const ema200 = tgt?.ema200 || 0;
-          const distPct = ema200 > 0 ? Math.abs(r.price - ema200) / ema200 : 1;
-          const isMagnetOrbit = distPct <= 0.03;
+          // 1단계 - Twelve Data 5분봉 자석/양운
+          const td5 = await td5mMagnetCheck(r.sym, r.price);
+          // 2단계 - Polygon 1분봉 패턴
+          const poly1 = await polygon1mPattern(r.sym);
 
-          const hardCriteriaPass = isPhase1Target && isAggressionOk && isVolumeBurst && isMagnetOrbit;
+          const hardCriteriaPass = td5.ok && poly1.ok && isAggressionOk && isVolumeBurst;
 
           if (!hardCriteriaPass) {
-            // 사유 로그 (Phase1 타겟인데 탈락한 경우만)
-            if (isPhase1Target) {
-              const reasons: string[] = [];
-              if (!isMagnetOrbit) reasons.push(`🧲이격${(distPct*100).toFixed(2)}%>3%`);
-              if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<120%`);
-              if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<2.0`);
-              await addLog('unified', 'hold', r.sym, `[GoldenRule-탈락] ${r.sym} [${reasons.join('|')}] → 자석 궤도/체결강도/거래량 미달`, { distPct, aggressionPctRaw, rvolRaw });
-            }
+            const reasons: string[] = [];
+            if (!td5.ok) reasons.push(`5m자석/양운✗(${td5.reason})`);
+            if (!poly1.ok) reasons.push(`1m패턴✗(${poly1.reason})`);
+            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<120%`);
+            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<2.0`);
+            await addLog('unified', 'hold', r.sym, `[Triple-API탈락] ${r.sym} [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw });
             continue;
           }
 
@@ -2314,7 +2430,7 @@ Deno.serve(async (req) => {
           if (alreadyHolding) continue;
           if (openCount >= MAX_POSITIONS) continue;
 
-          // 통과 — 후보 등록 (점수/패턴 메타는 로깅용으로만 첨부)
+          // 통과 — 후보 등록
           const vlInfo = volumeLeaders.find(vl => vl.symbol === r.sym);
           const tradingVal = vlInfo?.tradingValue || 0;
           const rvol = r.scoring.indicators.rvol?.rvol || 0;
@@ -2336,45 +2452,21 @@ Deno.serve(async (req) => {
           (r as any).tradingValueUSD = tradingVal;
           (r as any).hardCriteriaPass = true;
           (r as any).aggressionPctRaw = aggressionPctRaw;
+          (r as any).td5mDistPct = td5.distPct;
+          (r as any).poly1mPattern = poly1.pattern;
 
           // ★ 골든 클라우드 사냥감 메타 (마중가 = Kumo 상단)
           (r as any).isPhase1Target = true;
-          (r as any).phase1Limit = tgt!.limitPriceUSD; // = kumoTop (리테스트 마중가)
+          (r as any).phase1Limit = tgt!.limitPriceUSD;
           (r as any).phase1Ema25 = tgt!.ema25;
           (r as any).phase1Ema200 = tgt!.ema200;
           (r as any).phase1KumoTop = tgt!.kumoTop;
           (r as any).phase1KumoBottom = tgt!.kumoBottom;
           (r as any).phase1EmaGapPct = tgt!.emaGapPct;
+          (r as any).newsSentiment = 50;
+          (r as any).newsCount = 0;
 
-          // ★ [뉴스 보조 게이트] HardCriteria 통과 후보만 종목별 뉴스 감성 조회 (Free tier 5분 캐시)
-          //   - 60%+ 긍정: +5점 가산 ([뉴스호재])
-          //   - 40~59% 중립: 0점 (가산 없음)
-          //   - 40% 미만 악재: -3점 감산 ([뉴스약세]) — 차단 없이 페널티만
-          let newsTag = '';
-          try {
-            const news = await getNewsSentiment(r.sym);
-            (r as any).newsSentiment = news.sentiment;
-            (r as any).newsCount = news.newsCount;
-            if (news.newsCount > 0) {
-              if (news.bullishPct >= 60) {
-                r.scoring.totalScore += 5;
-                newsTag = ` | 📰뉴스호재(${news.bullishPct}%/+5)`;
-              } else if (news.bullishPct < 40) {
-                r.scoring.totalScore = Math.max(0, r.scoring.totalScore - 3);
-                newsTag = ` | 📰뉴스약세(${news.bullishPct}%/-3)`;
-              } else {
-                newsTag = ` | 📰뉴스중립(${news.bullishPct}%)`;
-              }
-            } else {
-              newsTag = ` | 📰뉴스없음`;
-              (r as any).newsSentiment = 50;
-            }
-          } catch {
-            (r as any).newsSentiment = 50;
-            (r as any).newsCount = 0;
-          }
-
-          await addLog('unified', 'scan', r.sym, `[GoldenRule-통과] ${r.sym} 🧲EMA200이격${(distPct*100).toFixed(2)}%≤3%+체결강도${aggressionPctRaw}%≥120%+RVOL${rvolRaw.toFixed(2)}x≥2.0${newsTag} → Kumo$${tgt!.kumoTop.toFixed(2)} 마중가 매수 후보(${r.scoring.totalScore}점)`, { distPct, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore, newsSentiment: (r as any).newsSentiment, newsCount: (r as any).newsCount, kumoTop: tgt!.kumoTop });
+          await addLog('unified', 'scan', r.sym, `[Triple-API통과] ${r.sym} 🧲5m이격${(td5.distPct*100).toFixed(2)}%+양운✓ | 1m${poly1.pattern} | 체결${aggressionPctRaw}%+RVOL${rvolRaw.toFixed(2)}x → Kumo$${tgt!.kumoTop.toFixed(2)} 마중가(${r.scoring.totalScore}점)`, { td5, poly1, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore });
 
           candidates.push(r);
         }

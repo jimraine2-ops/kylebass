@@ -30,7 +30,7 @@ export function GoldenCloudSniperBanner() {
             </div>
           </div>
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/40 text-[10px] font-bold">
-            ACTIVE · 3-Stage Mechanical Gate
+            ACTIVE · Triple-API Mechanical Gate
           </Badge>
         </div>
 
@@ -40,16 +40,16 @@ export function GoldenCloudSniperBanner() {
           <div className="bg-background/50 rounded-lg p-2.5 border border-cyan-500/30 space-y-1">
             <div className="flex items-center gap-1.5">
               <Compass className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-[11px] font-bold text-cyan-400">① 형님들의 허락 (5분·3분봉)</span>
+              <span className="text-[11px] font-bold text-cyan-400">① 형님들의 허락 <span className="text-[8px] text-cyan-400/60">[Twelve Data 5m]</span></span>
             </div>
             <p className="text-[10px] text-muted-foreground leading-tight">
-              상위 분봉 추세가 '안전한 우상향'인지 검증
+              5분봉 200 EMA 자석 궤도 + 양운(Kumo) 지지 검증
             </p>
             <div className="space-y-0.5 text-[9px] font-mono text-foreground/80">
-              <div>📊 EMA20 / EMA200(주황) 위 안착</div>
-              <div>☁️ 캔들 하단 두꺼운 양운(빨강)</div>
-              <div>🧲 EMA200 이격 2~3% 이내 (자석)</div>
-              <div>🚫 이격 ≥ 5% → 자격 미달 차단</div>
+              <div>📊 EMA200 위 안착 (5분봉)</div>
+              <div>☁️ Kumo 양운(spanA &gt; spanB) 위</div>
+              <div>🧲 EMA200 이격 ≤ 3% (자석 궤도)</div>
+              <div>🚫 이격 &gt; 3% / 음운 → 즉시 차단</div>
             </div>
           </div>
 
@@ -57,15 +57,15 @@ export function GoldenCloudSniperBanner() {
           <div className="bg-background/50 rounded-lg p-2.5 border border-yellow-500/30 space-y-1">
             <div className="flex items-center gap-1.5">
               <Crosshair className="w-3.5 h-3.5 text-yellow-400" />
-              <span className="text-[11px] font-bold text-yellow-400">② 막내의 타이밍 (1분봉)</span>
+              <span className="text-[11px] font-bold text-yellow-400">② 막내의 타이밍 <span className="text-[8px] text-yellow-400/60">[Polygon 1m]</span></span>
             </div>
             <p className="text-[10px] text-muted-foreground leading-tight">
-              실제 매수 방아쇠를 당기는 정밀 타격 구간
+              1분봉 200 EMA 리테스트 / 응축 돌파 패턴 감시
             </p>
             <div className="space-y-0.5 text-[9px] font-mono text-foreground/80">
-              <div>✅ 모든 이평선·구름대 위로 안착</div>
-              <div>🅰️ Case A — 200 EMA 리테스트 후 첫 양봉</div>
-              <div>🅱️ Case B — 단봉 음봉 3개 응축 후 강한 양봉</div>
+              <div>🅰️ Case A — EMA200 ±0.3% 터치 후 양봉</div>
+              <div>🅱️ Case B — 음봉 3개 응축 후 돌파 양봉</div>
+              <div>✅ 현재가 &gt; EMA200(1m) 강제</div>
               <div>🪤 LIMIT @ Kumo 상단 ±0.1% 알박기</div>
             </div>
           </div>
@@ -74,16 +74,16 @@ export function GoldenCloudSniperBanner() {
           <div className="bg-background/50 rounded-lg p-2.5 border border-primary/30 space-y-1">
             <div className="flex items-center gap-1.5">
               <Filter className="w-3.5 h-3.5 text-primary" />
-              <span className="text-[11px] font-bold text-primary">③ 최종 필터링 (돈의 흐름)</span>
+              <span className="text-[11px] font-bold text-primary">③ 돈의 흐름 + UT Bot <span className="text-[8px] text-primary/60">[Finnhub RT]</span></span>
             </div>
             <p className="text-[10px] text-muted-foreground leading-tight">
-              기술 지표가 완성돼도 '돈의 흐름' 없으면 진입 금지
+              실시간 가격 + UT Bot 매칭 + 0.1초 단위 익/손절 감시
             </p>
             <div className="space-y-0.5 text-[9px] font-mono text-foreground/80">
-              <div>💪 체결강도 ≥ 120% & 우상향 중</div>
-              <div>💥 거래량 폭발 (직전 3~5봉 압도)</div>
-              <div>📈 RVOL ≥ 2.0 강제</div>
-              <div>🚫 미달 시 즉시 탈락 (대기 모드)</div>
+              <div>💪 체결강도 ≥ 120%</div>
+              <div>📈 RVOL ≥ 2.0 (거래량 폭발)</div>
+              <div>🎯 +3% 익절 / -1.5% 손절 (0.1s 감시)</div>
+              <div>🚫 뉴스 전략 완전 배제</div>
             </div>
           </div>
         </div>
