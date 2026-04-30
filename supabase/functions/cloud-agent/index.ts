@@ -2495,7 +2495,9 @@ Deno.serve(async (req) => {
           (r as any).newsSentiment = 50;
           (r as any).newsCount = 0;
 
-          await addLog('unified', 'scan', r.sym, `[Triple-API통과] ${r.sym} 🧲5m이격${(td5.distPct*100).toFixed(2)}%+양운✓ | 1m${poly1.pattern} | 체결${aggressionPctRaw}%+RVOL${rvolRaw.toFixed(2)}x → Kumo$${tgt!.kumoTop.toFixed(2)} 마중가(${r.scoring.totalScore}점)`, { td5, poly1, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore });
+          const retestTag = td5.retestTouch ? `🎯리테스트발생(±0.3%)` : `🧲궤도(${(td5.distPct*100).toFixed(2)}%)`;
+          const dataAgeSec = td5.fetchedAt ? Math.floor((Date.now() - td5.fetchedAt) / 1000) : 0;
+          await addLog('unified', 'scan', r.sym, `[Triple-API통과] ${r.sym} ${retestTag} target=$${td5.ema200.toFixed(2)}(지표${dataAgeSec}s前) 실시간=$${r.price.toFixed(2)}+양운✓ | 1m${poly1.pattern} | 체결${aggressionPctRaw}%+RVOL${rvolRaw.toFixed(2)}x → Kumo$${tgt!.kumoTop.toFixed(2)}(${r.scoring.totalScore}점)`, { td5, poly1, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore, targetPrice: td5.ema200, livePrice: r.price, retestTouch: td5.retestTouch });
 
           candidates.push(r);
         }
