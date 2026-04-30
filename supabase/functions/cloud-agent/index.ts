@@ -2273,28 +2273,39 @@ Deno.serve(async (req) => {
           const isPenny = r.isPenny;
 
           // ============================================================
-          // ★★★ [Hard-Criteria Gate] 25봉 하락 추세 조건 제거 (사용자 요청)
-          // 정책: "다음 조건 모두 충족해야만 매수."
-          //   ① Phase 1 타겟 유니버스 포함 (= 20일 평균 거래대금 ≥ ₩30억 + 가격 필터 + EMA25 갭 ≤ -5% 통과)
-          //   ② 체결강도(aggression) ≥ 85%
-          // 하나라도 미달 시 즉시 탈락. 25봉 하락/음봉 필터는 폐기.
+          // ★★★ [Golden Rule Hard-Criteria Gate] 사용자 최종 설계 (3단계 검증)
+          // 1단계: Phase1 사냥감 통과 (EMA200 우상향+위/이격≤5%/Kumo 양운/구름 두께) — Phase1 빌드에서 강제
+          // 2단계: 1분봉 리테스트 — 현재가가 EMA200 ±3% 이내 (자석 궤도)
+          // 3단계: 체결강도 ≥ 120% + 거래량 폭발 RVOL ≥ 2.0
+          // 하나라도 미달 시 즉시 탈락.
           // ============================================================
           const tgt = targetMap.get(r.sym);
           const isPhase1Target = !!tgt;
 
-          // 체결강도 (지표 점수가 아닌 raw % 값) — ★ [골든 클라우드 Validation] 85%+ 진짜 돌파만 인정
+          // 체결강도 raw % — Golden Rule 3단계: 120%+ 강제
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
-          const isAggressionOk = aggressionPctRaw >= 85;
+          const isAggressionOk = aggressionPctRaw >= 120;
 
-          const hardCriteriaPass = isPhase1Target && isAggressionOk;
+          // 거래량 폭발 (RVOL ≥ 2.0)
+          const rvolRaw = r.scoring.indicators?.rvol?.rvol || 0;
+          const isVolumeBurst = rvolRaw >= 2.0;
+
+          // 자석 궤도 (현재가-EMA200 이격 ≤ 3%) — 1분봉 리테스트 근사
+          const ema200 = tgt?.ema200 || 0;
+          const distPct = ema200 > 0 ? Math.abs(r.price - ema200) / ema200 : 1;
+          const isMagnetOrbit = distPct <= 0.03;
+
+          const hardCriteriaPass = isPhase1Target && isAggressionOk && isVolumeBurst && isMagnetOrbit;
 
           if (!hardCriteriaPass) {
-            // 사유 로그 (Phase1 타겟인데 탈락한 경우만 기록 — 노이즈 최소화)
+            // 사유 로그 (Phase1 타겟인데 탈락한 경우만)
             if (isPhase1Target) {
               const reasons: string[] = [];
-              if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<85%`);
-              await addLog('unified', 'hold', r.sym, `[GoldenCloud-탈락] ${r.sym} 사냥감이나 [${reasons.join('|')}] → 가짜 돌파(Validation 미달) 진입 보류`, { aggressionPctRaw });
+              if (!isMagnetOrbit) reasons.push(`🧲이격${(distPct*100).toFixed(2)}%>3%`);
+              if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<120%`);
+              if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<2.0`);
+              await addLog('unified', 'hold', r.sym, `[GoldenRule-탈락] ${r.sym} [${reasons.join('|')}] → 자석 궤도/체결강도/거래량 미달`, { distPct, aggressionPctRaw, rvolRaw });
             }
             continue;
           }
