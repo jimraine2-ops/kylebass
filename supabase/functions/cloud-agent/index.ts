@@ -888,14 +888,23 @@ async function polygonDailyMetrics(symbol: string): Promise<{
 // ============================================================
 interface Td5mCheck {
   ok: boolean;          // 게이트 통과 여부
-  ema200: number;
-  distPct: number;      // |price-ema200|/ema200
-  inOrbit: boolean;     // 2~3% 이내 자석 궤도
-  aboveKumo: boolean;   // 캔들이 양운(Kumo) 위
+  ema200: number;       // ★ target_price — Twelve Data가 그려준 '길'
+  kumoTop: number;      // ★ 양운 상단 (메모리 보관)
+  kumoBottom: number;
+  spanA: number;
+  spanB: number;
+  distPct: number;      // |실시간가-ema200|/ema200 (Finnhub 실시간가 기준 재계산)
+  inOrbit: boolean;     // 자석 궤도 ≤3% (실시간가 기준)
+  aboveKumo: boolean;   // 실시간가가 양운 위
+  retestTouch: boolean; // ★ 실시간가가 EMA200 ±0.3% 터치 (리테스트 발생)
   reason: string;
+  fetchedAt: number;    // 지표 수집 시각 (지연 모니터링)
 }
+// ★ 지연 극복: 5분봉 지표는 5분 동안 변하지 않으므로 메모리에 길게 보관
+//    매 1초 사이클마다 Finnhub 실시간가만 갱신해서 target에 닿는지 감시
 const td5mCache = new Map<string, { ts: number; data: Td5mCheck }>();
-const TD_5M_TTL_MS = 90_000; // 90초 캐시 (Free tier 보호)
+const TD_5M_TTL_MS = 300_000; // 5분 캐시 — 5분봉이 한 번 닫혀야 의미 있게 갱신됨
+const RETEST_TOUCH_PCT = 0.003; // ±0.3% 이내면 '리테스트 발생'
 
 async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td5mCheck> {
   const cached = td5mCache.get(symbol);
