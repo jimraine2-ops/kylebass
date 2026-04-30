@@ -1,8 +1,9 @@
+import { forwardRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { useAgentStatus } from "@/hooks/useAgentStatus";
 import { Cloud, Activity, AlertTriangle } from "lucide-react";
 
-export function ServerStatusBanner() {
+export const ServerStatusBanner = forwardRef<HTMLDivElement>((_props, ref) => {
   const { data: status, isLoading } = useAgentStatus();
 
   if (isLoading) return null;
@@ -12,7 +13,7 @@ export function ServerStatusBanner() {
   const totalCycles = status?.total_cycles || 0;
 
   return (
-    <div className={`rounded-lg px-4 py-2.5 flex items-center justify-between flex-wrap gap-2 border ${
+    <div ref={ref} className={`rounded-lg px-4 py-2.5 flex items-center justify-between flex-wrap gap-2 border ${
       isAlive 
         ? 'border-stock-up/50 bg-stock-up/5' 
         : 'border-destructive/50 bg-destructive/5'
@@ -56,4 +57,5 @@ export function ServerStatusBanner() {
       </div>
     </div>
   );
-}
+});
+ServerStatusBanner.displayName = "ServerStatusBanner";

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Sun, Moon, Sunrise, Zap, Radio } from "lucide-react";
 
@@ -46,7 +46,7 @@ const SLIPPAGE_INFO: Record<SessionType, string> = {
   DAY: '슬리피지 0.30%',
 };
 
-export function SessionIndicator() {
+export const SessionIndicator = forwardRef<HTMLDivElement>((_props, ref) => {
   const [sessionInfo, setSessionInfo] = useState(getMarketSession());
   const [etTime, setEtTime] = useState('');
 
@@ -66,7 +66,7 @@ export function SessionIndicator() {
   const slippageNote = SLIPPAGE_INFO[sessionInfo.session];
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div ref={ref} className="flex items-center gap-2 flex-wrap">
       {/* 현재 세션 */}
       <Badge variant="outline" className={`text-xs px-2 py-1 flex items-center gap-1.5 ${style.className}`}>
         <div className="w-2 h-2 rounded-full bg-current animate-pulse" />
@@ -95,4 +95,5 @@ export function SessionIndicator() {
       </span>
     </div>
   );
-}
+});
+SessionIndicator.displayName = "SessionIndicator";
