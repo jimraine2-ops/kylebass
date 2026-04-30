@@ -13,8 +13,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 100; // ★ 동전주: 최저 100원까지 허용
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_KRW = 12000; // ★ ₩12,000 미만 = $9 미만 저가주 전용 (자산 회전율 극대화)
-const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $9
+const MAX_PRICE_KRW = 10000; // ★ ₩10,000 이하 = $7.4 이하 저가주 전용 (자산 회전율 극대화)
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $7.4
 const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
 const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
 const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
