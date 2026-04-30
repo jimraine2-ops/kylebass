@@ -130,19 +130,34 @@ export async function fetchQuantSignals(symbols?: string[]) {
   const inFlight = quantSignalsInFlight.get(key);
   if (inFlight) return inFlight;
 
-  const promise = supabase.functions.invoke('quant-signals', {
+  const invokeOnce = () => supabase.functions.invoke('quant-signals', {
     body: { action: 'analyze', symbols: symbols?.slice(0, 12) },
-  }).then(({ data, error }) => {
-    if (error) throw error;
-    const safeData = data || emptyQuantSignals(symbols);
-    quantSignalsCache.set(key, { data: safeData, ts: Date.now() });
-    return safeData;
-  }).catch((error) => {
-    console.warn('[fetchQuantSignals] using safe fallback:', error);
-    return quantSignalsCache.get(key)?.data || emptyQuantSignals(symbols);
-  }).finally(() => {
-    quantSignalsInFlight.delete(key);
   });
+
+  const promise = invokeOnce()
+    .then(async ({ data, error }) => {
+      // 콜드스타트 일시적 fetch 실패 → 1.2s 후 1회 자동 재시도
+      if (error && /Failed to (send|fetch)/i.test(error.message || '')) {
+        await new Promise((r) => setTimeout(r, 1200));
+        const retry = await invokeOnce();
+        if (retry.error) throw retry.error;
+        return retry.data;
+      }
+      if (error) throw error;
+      return data;
+    })
+    .then((data) => {
+      const safeData = data || emptyQuantSignals(symbols);
+      quantSignalsCache.set(key, { data: safeData, ts: Date.now() });
+      return safeData;
+    })
+    .catch((error) => {
+      console.warn('[fetchQuantSignals] using safe fallback:', error);
+      return quantSignalsCache.get(key)?.data || emptyQuantSignals(symbols);
+    })
+    .finally(() => {
+      quantSignalsInFlight.delete(key);
+    });
 
   quantSignalsInFlight.set(key, promise);
   return promise;
