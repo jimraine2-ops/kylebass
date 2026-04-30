@@ -888,44 +888,65 @@ async function polygonDailyMetrics(symbol: string): Promise<{
 // ============================================================
 interface Td5mCheck {
   ok: boolean;          // 게이트 통과 여부
-  ema200: number;
-  distPct: number;      // |price-ema200|/ema200
-  inOrbit: boolean;     // 2~3% 이내 자석 궤도
-  aboveKumo: boolean;   // 캔들이 양운(Kumo) 위
+  ema200: number;       // ★ target_price — Twelve Data가 그려준 '길'
+  kumoTop: number;      // ★ 양운 상단 (메모리 보관)
+  kumoBottom: number;
+  spanA: number;
+  spanB: number;
+  distPct: number;      // |실시간가-ema200|/ema200 (Finnhub 실시간가 기준 재계산)
+  inOrbit: boolean;     // 자석 궤도 ≤3% (실시간가 기준)
+  aboveKumo: boolean;   // 실시간가가 양운 위
+  retestTouch: boolean; // ★ 실시간가가 EMA200 ±0.3% 터치 (리테스트 발생)
   reason: string;
+  fetchedAt: number;    // 지표 수집 시각 (지연 모니터링)
 }
+// ★ 지연 극복: 5분봉 지표는 5분 동안 변하지 않으므로 메모리에 길게 보관
+//    매 1초 사이클마다 Finnhub 실시간가만 갱신해서 target에 닿는지 감시
 const td5mCache = new Map<string, { ts: number; data: Td5mCheck }>();
-const TD_5M_TTL_MS = 90_000; // 90초 캐시 (Free tier 보호)
+const TD_5M_TTL_MS = 300_000; // 5분 캐시 — 5분봉이 한 번 닫혀야 의미 있게 갱신됨
+const RETEST_TOUCH_PCT = 0.003; // ±0.3% 이내면 '리테스트 발생'
 
 async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td5mCheck> {
+  const empty: Td5mCheck = { ok: false, ema200: 0, kumoTop: 0, kumoBottom: 0, spanA: 0, spanB: 0, distPct: 1, inOrbit: false, aboveKumo: false, retestTouch: false, reason: 'NO_KEY', fetchedAt: 0 };
+
+  // ★ [지연 극복] 캐시 hit: Twelve Data 재호출 없이 메모리의 target_price로 실시간가만 대조
   const cached = td5mCache.get(symbol);
-  if (cached && Date.now() - cached.ts < TD_5M_TTL_MS) return cached.data;
+  if (cached && Date.now() - cached.ts < TD_5M_TTL_MS && cached.data.ema200 > 0) {
+    const d = cached.data;
+    const price = currentPrice || d.ema200;
+    const distPct = d.ema200 > 0 ? Math.abs(price - d.ema200) / d.ema200 : 1;
+    const inOrbit = distPct <= 0.03;
+    const aboveKumo = price > d.kumoTop && d.spanA > d.spanB;
+    const retestTouch = distPct <= RETEST_TOUCH_PCT; // ★ ±0.3% 도달 → 리테스트 발생
+    const ok = inOrbit && aboveKumo;
+    return {
+      ...d, distPct, inOrbit, aboveKumo, retestTouch,
+      reason: ok ? (retestTouch ? 'PASS+리테스트' : 'PASS') : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>3%`}${aboveKumo ? '' : '|양운지지X'}`,
+    };
+  }
+
   const token = Deno.env.get('TWELVE_DATA_API_KEY') || '';
-  const empty: Td5mCheck = { ok: false, ema200: 0, distPct: 1, inOrbit: false, aboveKumo: false, reason: 'NO_KEY' };
   if (!token) return empty;
   // 글로벌 1.5초 스로틀 공유
   const wait = Math.max(0, TD_MIN_INTERVAL_MS - (Date.now() - lastTwelveDataCall));
   if (wait > 0) await new Promise(r => setTimeout(r, wait));
   lastTwelveDataCall = Date.now();
   try {
-    // 5분봉 220개 → EMA200 + Ichimoku Kumo
+    // 5분봉 220개 → EMA200 + Ichimoku Kumo (5분에 한 번만 호출)
     const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=5min&outputsize=220&apikey=${token}`;
     const res = await fetch(url);
     if (!res.ok) return { ...empty, reason: `HTTP_${res.status}` };
     const json = await res.json();
     const values: any[] = Array.isArray(json?.values) ? json.values : [];
     if (values.length < 60) return { ...empty, reason: `BARS_${values.length}` };
-    // Twelve Data는 최신순 → 오래된 순으로 뒤집기
     const bars = values.slice().reverse();
     const closes = bars.map((b: any) => +b.close);
     const highs = bars.map((b: any) => +b.high);
     const lows = bars.map((b: any) => +b.low);
-    // EMA200
     const period = Math.min(200, closes.length);
     const k = 2 / (period + 1);
     let ema200 = closes.slice(0, period).reduce((s: number, v: number) => s + v, 0) / period;
     for (let i = period; i < closes.length; i++) ema200 = closes[i] * k + ema200 * (1 - k);
-    // Ichimoku Kumo
     const N = closes.length;
     const tenkan = (Math.max(...highs.slice(N - 9)) + Math.min(...lows.slice(N - 9))) / 2;
     const kijun  = (Math.max(...highs.slice(N - 26)) + Math.min(...lows.slice(N - 26))) / 2;
@@ -934,14 +955,22 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
     const spanB  = (Math.max(...highs.slice(N - lookbackB)) + Math.min(...lows.slice(N - lookbackB))) / 2;
     const kumoTop = Math.max(spanA, spanB);
     const kumoBottom = Math.min(spanA, spanB);
+
+    // ★ Twelve Data가 그려준 '길'을 메모리에 저장 (target_price = ema200, 양운 = kumoTop/Bottom)
+    // 실시간 가격은 Finnhub에서 currentPrice 인자로 들어옴
     const price = currentPrice || closes[N - 1];
     const distPct = ema200 > 0 ? Math.abs(price - ema200) / ema200 : 1;
-    const inOrbit = distPct <= 0.03; // 자석 궤도 ≤3%
-    const aboveKumo = price > kumoTop && spanA > spanB; // 양운(빨간 구름) 위
+    const inOrbit = distPct <= 0.03;
+    const aboveKumo = price > kumoTop && spanA > spanB;
+    const retestTouch = distPct <= RETEST_TOUCH_PCT;
     const ok = inOrbit && aboveKumo;
     const data: Td5mCheck = {
-      ok, ema200: +ema200.toFixed(4), distPct, inOrbit, aboveKumo,
-      reason: ok ? 'PASS' : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>3%`}${aboveKumo ? '' : '|양운지지X'}`,
+      ok, ema200: +ema200.toFixed(4),
+      kumoTop: +kumoTop.toFixed(4), kumoBottom: +kumoBottom.toFixed(4),
+      spanA: +spanA.toFixed(4), spanB: +spanB.toFixed(4),
+      distPct, inOrbit, aboveKumo, retestTouch,
+      reason: ok ? (retestTouch ? 'PASS+리테스트' : 'PASS') : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>3%`}${aboveKumo ? '' : '|양운지지X'}`,
+      fetchedAt: Date.now(),
     };
     td5mCache.set(symbol, { ts: Date.now(), data });
     return data;
@@ -2466,7 +2495,9 @@ Deno.serve(async (req) => {
           (r as any).newsSentiment = 50;
           (r as any).newsCount = 0;
 
-          await addLog('unified', 'scan', r.sym, `[Triple-API통과] ${r.sym} 🧲5m이격${(td5.distPct*100).toFixed(2)}%+양운✓ | 1m${poly1.pattern} | 체결${aggressionPctRaw}%+RVOL${rvolRaw.toFixed(2)}x → Kumo$${tgt!.kumoTop.toFixed(2)} 마중가(${r.scoring.totalScore}점)`, { td5, poly1, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore });
+          const retestTag = td5.retestTouch ? `🎯리테스트발생(±0.3%)` : `🧲궤도(${(td5.distPct*100).toFixed(2)}%)`;
+          const dataAgeSec = td5.fetchedAt ? Math.floor((Date.now() - td5.fetchedAt) / 1000) : 0;
+          await addLog('unified', 'scan', r.sym, `[Triple-API통과] ${r.sym} ${retestTag} target=$${td5.ema200.toFixed(2)}(지표${dataAgeSec}s前) 실시간=$${r.price.toFixed(2)}+양운✓ | 1m${poly1.pattern} | 체결${aggressionPctRaw}%+RVOL${rvolRaw.toFixed(2)}x → Kumo$${tgt!.kumoTop.toFixed(2)}(${r.scoring.totalScore}점)`, { td5, poly1, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore, targetPrice: td5.ema200, livePrice: r.price, retestTouch: td5.retestTouch });
 
           candidates.push(r);
         }
