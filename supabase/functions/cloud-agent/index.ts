@@ -1760,7 +1760,7 @@ Deno.serve(async (req) => {
           `🏆🔄 [Round ${completedRound} 완료 → Round ${currentRound} 시작!] 수익 목표 ₩${DAILY_TARGET_KRW_CONST.toLocaleString()} 달성! | ` +
           `Round ${completedRound} 수익: ${fmtKRWRaw(profitSaved)} → 안전 자산으로 분리 | ` +
           `누적 총 수익: ${fmtKRWRaw(cumulativeTotalProfitKRW)} | ` +
-          `원금 ${fmtKRWRaw(resetBalance)}으로 재부팅 → 12,000원 미만 필승주 재스캔 개시!`,
+          `원금 ${fmtKRWRaw(resetBalance)}으로 재부팅 → 10,000원 이하 필승주 재스캔 개시!`,
           { 
             completedRound, 
             newRound: currentRound, 
@@ -1941,8 +1941,8 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ★ [저가주 최적화] ₩12,000 미만: 호가 얇아질 때 선제적 매도
-        const isLowPriceStock = toKRW(price) < 12000;
+        // ★ [저가주 최적화] ₩10,000 이하: 호가 얇아질 때 선제적 매도
+        const isLowPriceStock = toKRW(price) <= 10000;
         if (isLowPriceStock && pnlPct >= 2.0 && pnlPct < 3.0 && volumeIntensity < 100) {
           await addLog('unified', 'info', sym, `[저가주 호가 최적화] ${sym} ₩${Math.round(toKRW(price)).toLocaleString()} 저가주 | 체결강도 ${volumeIntensity}%(<100%) + ${pnlPct.toFixed(1)}% → 선제적 ${dynamicTPPct}% 구간 매도 권장`, { volumeIntensity, pnlPct: +pnlPct.toFixed(2), priceKRW: Math.round(toKRW(price)) });
         }
@@ -2363,7 +2363,7 @@ Deno.serve(async (req) => {
       await addLog('system', 'day-break', null, 
         `[Day-Break] 🟢 오전 9시 데이장 사냥 강제 재개! Round ${currentRound} 공격 모드 전환 | ` +
         `원금 ${fmtKRWRaw(DAY_BREAK_CAPITAL)} 세팅 완료 | 누적 수익 유지: ${fmtKRWRaw(dailyPnl)} | ` +
-        `₩12,000↓ 저가주 중 익절확률 95%↑ + AI 추천 2~3% 구간 확보 종목 즉시 투입 | ` +
+        `₩10,000↓ 저가주 중 익절확률 95%↑ + AI 추천 2~3% 구간 확보 종목 즉시 투입 | ` +
         `아시아 세션 수급 + Finnhub 최신 뉴스 결합 종목 최우선 요격`,
         { dayBreak: true, round: currentRound, balance: DAY_BREAK_CAPITAL, dailyPnl }
       );
