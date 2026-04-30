@@ -30,7 +30,7 @@ export function GoldenCloudSniperBanner() {
             </div>
           </div>
           <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/40 text-[10px] font-bold">
-            ACTIVE · 3-Stage Mechanical Gate
+            ACTIVE · Triple-API Mechanical Gate
           </Badge>
         </div>
 
