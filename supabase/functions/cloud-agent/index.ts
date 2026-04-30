@@ -883,6 +883,125 @@ async function polygonDailyMetrics(symbol: string): Promise<{
   };
 }
 
+// ============================================================
+// ★ [최종 설계 - 형님] Twelve Data 5분봉: EMA200 이격도(2~3%) + 양운(Kumo) 지지
+// ============================================================
+interface Td5mCheck {
+  ok: boolean;          // 게이트 통과 여부
+  ema200: number;
+  distPct: number;      // |price-ema200|/ema200
+  inOrbit: boolean;     // 2~3% 이내 자석 궤도
+  aboveKumo: boolean;   // 캔들이 양운(Kumo) 위
+  reason: string;
+}
+const td5mCache = new Map<string, { ts: number; data: Td5mCheck }>();
+const TD_5M_TTL_MS = 90_000; // 90초 캐시 (Free tier 보호)
+
+async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td5mCheck> {
+  const cached = td5mCache.get(symbol);
+  if (cached && Date.now() - cached.ts < TD_5M_TTL_MS) return cached.data;
+  const token = Deno.env.get('TWELVE_DATA_API_KEY') || '';
+  const empty: Td5mCheck = { ok: false, ema200: 0, distPct: 1, inOrbit: false, aboveKumo: false, reason: 'NO_KEY' };
+  if (!token) return empty;
+  // 글로벌 1.5초 스로틀 공유
+  const wait = Math.max(0, TD_MIN_INTERVAL_MS - (Date.now() - lastTwelveDataCall));
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastTwelveDataCall = Date.now();
+  try {
+    // 5분봉 220개 → EMA200 + Ichimoku Kumo
+    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=5min&outputsize=220&apikey=${token}`;
+    const res = await fetch(url);
+    if (!res.ok) return { ...empty, reason: `HTTP_${res.status}` };
+    const json = await res.json();
+    const values: any[] = Array.isArray(json?.values) ? json.values : [];
+    if (values.length < 60) return { ...empty, reason: `BARS_${values.length}` };
+    // Twelve Data는 최신순 → 오래된 순으로 뒤집기
+    const bars = values.slice().reverse();
+    const closes = bars.map((b: any) => +b.close);
+    const highs = bars.map((b: any) => +b.high);
+    const lows = bars.map((b: any) => +b.low);
+    // EMA200
+    const period = Math.min(200, closes.length);
+    const k = 2 / (period + 1);
+    let ema200 = closes.slice(0, period).reduce((s: number, v: number) => s + v, 0) / period;
+    for (let i = period; i < closes.length; i++) ema200 = closes[i] * k + ema200 * (1 - k);
+    // Ichimoku Kumo
+    const N = closes.length;
+    const tenkan = (Math.max(...highs.slice(N - 9)) + Math.min(...lows.slice(N - 9))) / 2;
+    const kijun  = (Math.max(...highs.slice(N - 26)) + Math.min(...lows.slice(N - 26))) / 2;
+    const spanA  = (tenkan + kijun) / 2;
+    const lookbackB = Math.min(52, N);
+    const spanB  = (Math.max(...highs.slice(N - lookbackB)) + Math.min(...lows.slice(N - lookbackB))) / 2;
+    const kumoTop = Math.max(spanA, spanB);
+    const kumoBottom = Math.min(spanA, spanB);
+    const price = currentPrice || closes[N - 1];
+    const distPct = ema200 > 0 ? Math.abs(price - ema200) / ema200 : 1;
+    const inOrbit = distPct <= 0.03; // 자석 궤도 ≤3%
+    const aboveKumo = price > kumoTop && spanA > spanB; // 양운(빨간 구름) 위
+    const ok = inOrbit && aboveKumo;
+    const data: Td5mCheck = {
+      ok, ema200: +ema200.toFixed(4), distPct, inOrbit, aboveKumo,
+      reason: ok ? 'PASS' : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>3%`}${aboveKumo ? '' : '|양운지지X'}`,
+    };
+    td5mCache.set(symbol, { ts: Date.now(), data });
+    return data;
+  } catch (e) {
+    return { ...empty, reason: `ERR_${(e as Error).message?.slice(0, 20)}` };
+  }
+}
+
+// ============================================================
+// ★ [최종 설계 - 막내] Polygon 1분봉: 200 EMA 리테스트 양봉 OR 음봉3개 후 돌파 양봉
+// ============================================================
+interface Polygon1mPattern {
+  ok: boolean;
+  pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'NONE';
+  ema200_1m: number;
+  reason: string;
+}
+const poly1mCache = new Map<string, { ts: number; data: Polygon1mPattern }>();
+const POLY_1M_TTL_MS = 30_000;
+
+async function polygon1mPattern(symbol: string): Promise<Polygon1mPattern> {
+  const cached = poly1mCache.get(symbol);
+  if (cached && Date.now() - cached.ts < POLY_1M_TTL_MS) return cached.data;
+  const empty: Polygon1mPattern = { ok: false, pattern: 'NONE', ema200_1m: 0, reason: 'NO_DATA' };
+  // 최근 250분 1분봉
+  const to = new Date().toISOString().split('T')[0];
+  const from = new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0];
+  const { data, status } = await polygonFetch(`/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/minute/${from}/${to}?adjusted=true&sort=asc&limit=300`);
+  if (status !== 200) return { ...empty, reason: `HTTP_${status}` };
+  const bars = data?.results || [];
+  if (bars.length < 30) return { ...empty, reason: `BARS_${bars.length}` };
+  const closes = bars.map((b: any) => b.c);
+  const opens = bars.map((b: any) => b.o);
+  const lows = bars.map((b: any) => b.l);
+  // 1분봉 EMA200 (가용분으로 fallback)
+  const period = Math.min(200, closes.length);
+  const k = 2 / (period + 1);
+  let ema = closes.slice(0, period).reduce((s: number, v: number) => s + v, 0) / period;
+  for (let i = period; i < closes.length; i++) ema = closes[i] * k + ema * (1 - k);
+  const ema200_1m = ema;
+  const N = closes.length;
+  const c0 = closes[N - 1], o0 = opens[N - 1], l0 = lows[N - 1];
+  const isBull = c0 > o0;
+  // Case A: 리테스트 — 직전 5봉 중 저가가 EMA200 ±0.3% 터치 후 현재봉 양봉
+  const retestTouch = lows.slice(N - 6, N - 1).some((lo: number) => Math.abs(lo - ema200_1m) / ema200_1m <= 0.003);
+  const caseA = retestTouch && isBull && c0 > ema200_1m;
+  // Case B: 음봉 3개 응축 후 강한 양봉 돌파 (현재봉이 직전 3봉 고가 위)
+  const prev3Bear = [N - 4, N - 3, N - 2].every(i => closes[i] < opens[i]);
+  const prev3High = Math.max(closes[N - 4], opens[N - 4], closes[N - 3], opens[N - 3], closes[N - 2], opens[N - 2]);
+  const caseB = prev3Bear && isBull && c0 > prev3High;
+  const pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'NONE' = caseA ? 'RETEST' : caseB ? 'CONDENSATION_BREAKOUT' : 'NONE';
+  const ok = pattern !== 'NONE';
+  const result: Polygon1mPattern = {
+    ok, pattern, ema200_1m: +ema200_1m.toFixed(4),
+    reason: ok ? `${pattern}${caseA ? '(EMA200리테스트)' : '(응축돌파)'}` : '패턴없음',
+  };
+  poly1mCache.set(symbol, { ts: Date.now(), data: result });
+  return result;
+}
+
 async function buildTargetUniverse(
   candidatePool: string[],
   capTypeMap: Map<string, 'large' | 'small'>,
