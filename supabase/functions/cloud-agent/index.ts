@@ -2374,7 +2374,7 @@ Deno.serve(async (req) => {
             (r as any).newsCount = 0;
           }
 
-          await addLog('unified', 'scan', r.sym, `[GoldenCloud-통과] ${r.sym} ☁️구름상단리테스트+체결강도${aggressionPctRaw}%≥85%${newsTag} → Kumo$${tgt!.kumoTop.toFixed(2)} 마중가 매수 후보(${r.scoring.totalScore}점)`, { aggressionPctRaw, score: r.scoring.totalScore, newsSentiment: (r as any).newsSentiment, newsCount: (r as any).newsCount, kumoTop: tgt!.kumoTop });
+          await addLog('unified', 'scan', r.sym, `[GoldenRule-통과] ${r.sym} 🧲EMA200이격${(distPct*100).toFixed(2)}%≤3%+체결강도${aggressionPctRaw}%≥120%+RVOL${rvolRaw.toFixed(2)}x≥2.0${newsTag} → Kumo$${tgt!.kumoTop.toFixed(2)} 마중가 매수 후보(${r.scoring.totalScore}점)`, { distPct, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore, newsSentiment: (r as any).newsSentiment, newsCount: (r as any).newsCount, kumoTop: tgt!.kumoTop });
 
           candidates.push(r);
         }
