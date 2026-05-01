@@ -1086,17 +1086,19 @@ async function buildTargetUniverse(
         if (news.newsCount > 0) newsBullish = news.bullishPct;
       } catch { newsBullish = 50; }
       const newsTag = newsBullish >= 60 ? `📰호재${newsBullish}%` : newsBullish < 40 ? `📰약세${newsBullish}%` : `📰중립${newsBullish}%`;
-      // ★ [Kumo-Sniper v3] 구름 두께 필터: (kumoTop - kumoBottom) / price ≥ 0.5%
+      // ★ [Kumo-Sniper v3-relaxed] 구름 두께 필터: ≥ 0.2% (완화)
       const cloudThicknessPct = m.lastClose > 0 ? (m.kumoTop - m.kumoBottom) / m.lastClose : 0;
-      const thickOk = cloudThicknessPct >= KUMO_THICKNESS_MIN_PCT;
-      // ★ [Golden Rule 1단계] 자석 효과: 현재가-EMA200 이격도 ≤ 5% (5% 이상이면 자격 미달)
+      const thickOk = cloudThicknessPct >= 0.002; // 0.5% → 0.2%
+      // ★ [Golden Rule 1단계-완화] 자석 효과: 현재가-EMA200 이격도 ≤ 15% (5% → 15%)
       const ema200DistPct = m.ema200 > 0 ? Math.abs(m.lastClose - m.ema200) / m.ema200 : 1;
-      const magnetOk = ema200DistPct <= 0.05;
-      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|EMA200${ema200Ok?'✓':'✗'}|🧲자석${magnetOk?'✓':'✗'}(${(ema200DistPct*100).toFixed(2)}%≤5%)|☁️구름${kumoOk?'✓':'✗'}|📏두께${thickOk?'✓':'✗'}(${(cloudThicknessPct*100).toFixed(2)}%)|${newsTag}`;
-      await addLog('system', 'scan', sym, `[GoldenRule·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, ema200DistPct, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, cloudThicknessPct, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, magnetOk, kumoOk, thickOk, newsBullish });
+      const magnetOk = ema200DistPct <= 0.15;
+      // ★ 추세 게이트: EMA200 위 OR 양운 위 (둘 중 하나만 만족해도 통과)
+      const trendOk = ema200Ok || kumoOk;
+      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|추세${trendOk?'✓':'✗'}(EMA200${ema200Ok?'✓':'✗'}/구름${kumoOk?'✓':'✗'})|🧲자석${magnetOk?'✓':'✗'}(${(ema200DistPct*100).toFixed(2)}%≤15%)|📏두께${thickOk?'✓':'✗'}(${(cloudThicknessPct*100).toFixed(2)}%)|${newsTag}`;
+      await addLog('system', 'scan', sym, `[GoldenRule·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, ema200DistPct, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, cloudThicknessPct, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, magnetOk, kumoOk, thickOk, trendOk, newsBullish });
       okCount++;
-      // ★ [Golden Rule 1단계 게이트] 가격 + 거래대금 + EMA200 우상향+위 + 자석(≤5%) + Kumo 양운 위 + 구름 두께
-      if (priceOk && volOk && ema200Ok && magnetOk && kumoOk && thickOk) {
+      // ★ [완화 게이트] 가격 + 거래대금 + 추세(EMA200 OR 양운) + 자석(≤15%) + 두께
+      if (priceOk && volOk && trendOk && magnetOk && thickOk) {
         results.push({
           symbol: sym, price: m.lastClose, ema25: m.ema25, ema200: m.ema200,
           kumoTop: m.kumoTop, kumoBottom: m.kumoBottom,
@@ -2431,27 +2433,30 @@ Deno.serve(async (req) => {
           const isPhase1Target = !!tgt;
           if (!isPhase1Target) continue; // Phase1(일봉) 사냥감만 후속 검증
 
-          // 3단계 - Finnhub 실시간 흐름
+          // 3단계 - Finnhub 실시간 흐름 (완화: 120%→90%, RVOL 2.0→1.5)
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
-          const isAggressionOk = aggressionPctRaw >= 120;
+          const isAggressionOk = aggressionPctRaw >= 90;
           const rvolRaw = r.scoring.indicators?.rvol?.rvol || 0;
-          const isVolumeBurst = rvolRaw >= 2.0;
+          const isVolumeBurst = rvolRaw >= 1.5;
 
           // 1단계 - Twelve Data 5분봉 자석/양운
           const td5 = await td5mMagnetCheck(r.sym, r.price);
           // 2단계 - Polygon 1분봉 패턴
           const poly1 = await polygon1mPattern(r.sym);
 
-          const hardCriteriaPass = td5.ok && poly1.ok && isAggressionOk && isVolumeBurst;
+          // ★ [완화 게이트] Polygon 1m 패턴은 필수, 나머지 3개 중 2개 이상 만족
+          const subChecks = [td5.ok, isAggressionOk, isVolumeBurst];
+          const subPassCount = subChecks.filter(Boolean).length;
+          const hardCriteriaPass = poly1.ok && subPassCount >= 2;
 
           if (!hardCriteriaPass) {
             const reasons: string[] = [];
+            if (!poly1.ok) reasons.push(`1m패턴✗필수(${poly1.reason})`);
             if (!td5.ok) reasons.push(`5m자석/양운✗(${td5.reason})`);
-            if (!poly1.ok) reasons.push(`1m패턴✗(${poly1.reason})`);
-            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<120%`);
-            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<2.0`);
-            await addLog('unified', 'hold', r.sym, `[Triple-API탈락] ${r.sym} [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw });
+            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<90%`);
+            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<1.5`);
+            await addLog('unified', 'hold', r.sym, `[Triple-API탈락] ${r.sym} 보조${subPassCount}/3 [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw, subPassCount });
             continue;
           }
 
