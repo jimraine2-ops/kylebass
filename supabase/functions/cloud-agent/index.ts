@@ -1086,17 +1086,19 @@ async function buildTargetUniverse(
         if (news.newsCount > 0) newsBullish = news.bullishPct;
       } catch { newsBullish = 50; }
       const newsTag = newsBullish >= 60 ? `📰호재${newsBullish}%` : newsBullish < 40 ? `📰약세${newsBullish}%` : `📰중립${newsBullish}%`;
-      // ★ [Kumo-Sniper v3] 구름 두께 필터: (kumoTop - kumoBottom) / price ≥ 0.5%
+      // ★ [Kumo-Sniper v3-relaxed] 구름 두께 필터: ≥ 0.2% (완화)
       const cloudThicknessPct = m.lastClose > 0 ? (m.kumoTop - m.kumoBottom) / m.lastClose : 0;
-      const thickOk = cloudThicknessPct >= KUMO_THICKNESS_MIN_PCT;
-      // ★ [Golden Rule 1단계] 자석 효과: 현재가-EMA200 이격도 ≤ 5% (5% 이상이면 자격 미달)
+      const thickOk = cloudThicknessPct >= 0.002; // 0.5% → 0.2%
+      // ★ [Golden Rule 1단계-완화] 자석 효과: 현재가-EMA200 이격도 ≤ 15% (5% → 15%)
       const ema200DistPct = m.ema200 > 0 ? Math.abs(m.lastClose - m.ema200) / m.ema200 : 1;
-      const magnetOk = ema200DistPct <= 0.05;
-      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|EMA200${ema200Ok?'✓':'✗'}|🧲자석${magnetOk?'✓':'✗'}(${(ema200DistPct*100).toFixed(2)}%≤5%)|☁️구름${kumoOk?'✓':'✗'}|📏두께${thickOk?'✓':'✗'}(${(cloudThicknessPct*100).toFixed(2)}%)|${newsTag}`;
-      await addLog('system', 'scan', sym, `[GoldenRule·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, ema200DistPct, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, cloudThicknessPct, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, magnetOk, kumoOk, thickOk, newsBullish });
+      const magnetOk = ema200DistPct <= 0.15;
+      // ★ 추세 게이트: EMA200 위 OR 양운 위 (둘 중 하나만 만족해도 통과)
+      const trendOk = ema200Ok || kumoOk;
+      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|추세${trendOk?'✓':'✗'}(EMA200${ema200Ok?'✓':'✗'}/구름${kumoOk?'✓':'✗'})|🧲자석${magnetOk?'✓':'✗'}(${(ema200DistPct*100).toFixed(2)}%≤15%)|📏두께${thickOk?'✓':'✗'}(${(cloudThicknessPct*100).toFixed(2)}%)|${newsTag}`;
+      await addLog('system', 'scan', sym, `[GoldenRule·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, ema200DistPct, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, cloudThicknessPct, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, magnetOk, kumoOk, thickOk, trendOk, newsBullish });
       okCount++;
-      // ★ [Golden Rule 1단계 게이트] 가격 + 거래대금 + EMA200 우상향+위 + 자석(≤5%) + Kumo 양운 위 + 구름 두께
-      if (priceOk && volOk && ema200Ok && magnetOk && kumoOk && thickOk) {
+      // ★ [완화 게이트] 가격 + 거래대금 + 추세(EMA200 OR 양운) + 자석(≤15%) + 두께
+      if (priceOk && volOk && trendOk && magnetOk && thickOk) {
         results.push({
           symbol: sym, price: m.lastClose, ema25: m.ema25, ema200: m.ema200,
           kumoTop: m.kumoTop, kumoBottom: m.kumoBottom,
