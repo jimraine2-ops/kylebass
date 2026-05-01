@@ -2433,27 +2433,30 @@ Deno.serve(async (req) => {
           const isPhase1Target = !!tgt;
           if (!isPhase1Target) continue; // Phase1(일봉) 사냥감만 후속 검증
 
-          // 3단계 - Finnhub 실시간 흐름
+          // 3단계 - Finnhub 실시간 흐름 (완화: 120%→90%, RVOL 2.0→1.5)
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
-          const isAggressionOk = aggressionPctRaw >= 120;
+          const isAggressionOk = aggressionPctRaw >= 90;
           const rvolRaw = r.scoring.indicators?.rvol?.rvol || 0;
-          const isVolumeBurst = rvolRaw >= 2.0;
+          const isVolumeBurst = rvolRaw >= 1.5;
 
           // 1단계 - Twelve Data 5분봉 자석/양운
           const td5 = await td5mMagnetCheck(r.sym, r.price);
           // 2단계 - Polygon 1분봉 패턴
           const poly1 = await polygon1mPattern(r.sym);
 
-          const hardCriteriaPass = td5.ok && poly1.ok && isAggressionOk && isVolumeBurst;
+          // ★ [완화 게이트] Polygon 1m 패턴은 필수, 나머지 3개 중 2개 이상 만족
+          const subChecks = [td5.ok, isAggressionOk, isVolumeBurst];
+          const subPassCount = subChecks.filter(Boolean).length;
+          const hardCriteriaPass = poly1.ok && subPassCount >= 2;
 
           if (!hardCriteriaPass) {
             const reasons: string[] = [];
+            if (!poly1.ok) reasons.push(`1m패턴✗필수(${poly1.reason})`);
             if (!td5.ok) reasons.push(`5m자석/양운✗(${td5.reason})`);
-            if (!poly1.ok) reasons.push(`1m패턴✗(${poly1.reason})`);
-            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<120%`);
-            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<2.0`);
-            await addLog('unified', 'hold', r.sym, `[Triple-API탈락] ${r.sym} [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw });
+            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<90%`);
+            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<1.5`);
+            await addLog('unified', 'hold', r.sym, `[Triple-API탈락] ${r.sym} 보조${subPassCount}/3 [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw, subPassCount });
             continue;
           }
 
