@@ -2445,18 +2445,21 @@ Deno.serve(async (req) => {
           // 2단계 - Polygon 1분봉 패턴
           const poly1 = await polygon1mPattern(r.sym);
 
-          // ★ [완화 게이트] Polygon 1m 패턴은 필수, 나머지 3개 중 2개 이상 만족
-          const subChecks = [td5.ok, isAggressionOk, isVolumeBurst];
+          // ★ [완화 게이트 v2] Phase1(일봉 골든클라우드) 통과 자체가 강한 시그널.
+          // 보조 지표 4개(td5/poly1/체결강도/RVOL) 중 2개 이상 통과 시 매수.
+          // Polygon API 실패해도 다른 지표로 보완 가능 (단일 API 의존 제거).
+          const subChecks = [td5.ok, poly1.ok, isAggressionOk, isVolumeBurst];
           const subPassCount = subChecks.filter(Boolean).length;
-          const hardCriteriaPass = poly1.ok && subPassCount >= 2;
+          const MIN_SUB_PASS = 2;
+          const hardCriteriaPass = subPassCount >= MIN_SUB_PASS;
 
           if (!hardCriteriaPass) {
             const reasons: string[] = [];
-            if (!poly1.ok) reasons.push(`1m패턴✗필수(${poly1.reason})`);
             if (!td5.ok) reasons.push(`5m자석/양운✗(${td5.reason})`);
+            if (!poly1.ok) reasons.push(`1m패턴✗(${poly1.reason})`);
             if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<90%`);
             if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<1.5`);
-            await addLog('unified', 'hold', r.sym, `[Triple-API탈락] ${r.sym} 보조${subPassCount}/3 [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw, subPassCount });
+            await addLog('unified', 'hold', r.sym, `[보조지표탈락] ${r.sym} ${subPassCount}/4 (최소${MIN_SUB_PASS}) [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw, subPassCount });
             continue;
           }
 
