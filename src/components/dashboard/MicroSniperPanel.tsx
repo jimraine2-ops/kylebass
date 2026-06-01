@@ -40,8 +40,9 @@ export function MicroSniperPanel() {
   const { data, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["micro-sniper-scan"],
     queryFn: fetchScan,
-    refetchInterval: 60_000, // 1분봉 마감 주기
-    staleTime: 30_000,
+    refetchInterval: 5 * 60_000, // 🛡️ Free Tier 보호: 5분 주기
+    staleTime: 4 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   return (
