@@ -10,6 +10,7 @@ import { SafePauseBanner } from "@/components/dashboard/SafePauseBanner";
 import { HourlyWinRateChart } from "@/components/dashboard/HourlyWinRateChart";
 import { Phase1TargetCard } from "@/components/trading/Phase1TargetCard";
 import { FillRateCard } from "@/components/dashboard/FillRateCard";
+import { MicroSniperPanel } from "@/components/dashboard/MicroSniperPanel";
 
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
@@ -72,6 +73,9 @@ export default function Dashboard() {
 
       {/* Phase 1 타겟 유니버스 */}
       <Phase1TargetCard />
+
+      {/* 🎯 Micro-Sniper: 1분봉 EMA200 × Ichimoku 양운 돌파 (<$5) */}
+      <MicroSniperPanel />
 
       {/* 수익 현황판 */}
       <ProfitScoreboard
