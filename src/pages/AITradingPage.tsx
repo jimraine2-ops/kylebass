@@ -6,6 +6,7 @@ import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
 import { Phase1TargetCard } from "@/components/trading/Phase1TargetCard";
 import { FillRateCard } from "@/components/dashboard/FillRateCard";
 import { GoldenCloudSniperBanner } from "@/components/trading/GoldenCloudSniperBanner";
+import { MicroSniperPanel } from "@/components/dashboard/MicroSniperPanel";
 import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
