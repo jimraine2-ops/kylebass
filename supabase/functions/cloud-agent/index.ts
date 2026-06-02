@@ -13,8 +13,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 100; // ★ 동전주: 최저 100원까지 허용
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_KRW = 10000; // ★ ₩10,000 이하 = $7.4 이하 저가주 전용 (자산 회전율 극대화)
-const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $7.4
+const MAX_PRICE_USD = 5; // ★ $5 미만 저가주 전용 (Micro-Sniper 전략 통일)
+const MAX_PRICE_KRW = Math.floor(MAX_PRICE_USD * KRW_RATE); // ≈ ₩6,750
 const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
 const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
 const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
@@ -770,7 +770,7 @@ async function getQuoteAndCandles(symbol: string) {
 const POLYGON_BASE = 'https://api.polygon.io';
 const TARGET_AVG_DOLLAR_VOLUME_USD = 1_000_000_000 / KRW_RATE; // ★ [Kumo-Sniper v3] ₩10억 ≈ $750K — 잡주 차단 + 종목 풀 확장
 const KUMO_THICKNESS_MIN_PCT = 0.005; // ★ [Kumo-Sniper v3] 구름 두께 ≥ 현재가의 0.5% — 얇은 구름(지지력 부족) 차단
-const PHASE1_MAX_PRICE_USD = 200; // ★ 재완화: $200 이하면 모두 후보 (실거래 후보 확보)
+const PHASE1_MAX_PRICE_USD = 5; // ★ $5 미만 저가주 전용 (User 요청: 5달러 미만만 거래)
 const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
 const TARGET_EMA_GAP_PCT = 0.20; // ★ 공격적 완화: EMA25 대비 +20% 이하면 통과 (극단 과열만 제외)
 const TARGET_PHASE2_GAP_PCT = -0.04; // 매수 마중가: EMA25 × 0.96
