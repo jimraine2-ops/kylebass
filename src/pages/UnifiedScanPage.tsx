@@ -16,6 +16,7 @@ import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { Phase1TargetCard } from "@/components/trading/Phase1TargetCard";
 import { FillRateCard } from "@/components/dashboard/FillRateCard";
 import { GoldenCloudSniperBanner } from "@/components/trading/GoldenCloudSniperBanner";
+import { MicroSniperPanel } from "@/components/dashboard/MicroSniperPanel";
 
 type SortKey = 'score' | 'changePct' | 'rvol';
 
