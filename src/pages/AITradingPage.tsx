@@ -60,6 +60,9 @@ export default function AITradingPage() {
       {/* 실전 체결률 KPI */}
       <FillRateCard />
 
+      {/* 🎯 Micro-Sniper: 1분봉 EMA200 × Ichimoku 양운 돌파 (<$5) */}
+      <MicroSniperPanel />
+
       {/* Agent Log Viewer */}
       <AgentLogViewer />
 
