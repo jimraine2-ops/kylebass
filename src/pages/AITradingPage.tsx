@@ -5,7 +5,7 @@ import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
 import { Phase1TargetCard } from "@/components/trading/Phase1TargetCard";
 import { FillRateCard } from "@/components/dashboard/FillRateCard";
-import { GoldenCloudSniperBanner } from "@/components/trading/GoldenCloudSniperBanner";
+
 import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
