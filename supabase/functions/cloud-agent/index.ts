@@ -763,12 +763,12 @@ async function getQuoteAndCandles(symbol: string) {
 // ============================================================
 // ★★★ [Phase 1] 정적 타겟 유니버스 빌더 (Polygon.io 정밀 EMA)
 // "장중에 종목을 찾지 말고, 장 시작 전에 사냥감을 확정하라"
-// 필터1: 20거래일 평균 거래대금 ≥ ₩30억
+// 필터1: 20거래일 평균 거래대금 ≥ $1.5M (≈ ₩20억)
 // 필터2: 현재가 ≤ $50 (대형주 포함, 후보 풀 확보)
 // 필터3: 현재가 ≤ EMA25 × 0.98 (-2% 이하, 완화)
 // ============================================================
 const POLYGON_BASE = 'https://api.polygon.io';
-const TARGET_AVG_DOLLAR_VOLUME_USD = 1_000_000_000 / KRW_RATE; // ★ [Kumo-Sniper v3] ₩10억 ≈ $750K — 잡주 차단 + 종목 풀 확장
+const TARGET_AVG_DOLLAR_VOLUME_USD = 1_500_000; // ★ $1.5M+ (≈ ₩20억) — 거래량 150만 달러 이상만 매수
 const KUMO_THICKNESS_MIN_PCT = 0.005; // ★ [Kumo-Sniper v3] 구름 두께 ≥ 현재가의 0.5% — 얇은 구름(지지력 부족) 차단
 const PHASE1_MAX_PRICE_USD = 200; // ★ 재완화: $200 이하면 모두 후보 (실거래 후보 확보)
 const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
