@@ -121,7 +121,7 @@ export function Phase1TargetCard() {
         )}
         <div className="mt-2 pt-2 border-t border-border/30 text-[9px] text-muted-foreground flex items-center justify-between flex-wrap gap-1">
           <span>📐 마중가 = EMA25 × 0.93 (7% 아래 그물망 알박기)</span>
-          <span>필터: 가격 ≤ $5 · 20일 거래대금 ≥ $2.22M · 현재가 ≤ EMA25-5%</span>
+          <span>필터: 가격 ≤ $5 · 20일 거래대금 ≥ $1.5M · 현재가 ≤ EMA25-5%</span>
         </div>
       </CardContent>
     </Card>
