@@ -6,7 +6,6 @@ import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
 import { Phase1TargetCard } from "@/components/trading/Phase1TargetCard";
 import { FillRateCard } from "@/components/dashboard/FillRateCard";
 import { GoldenCloudSniperBanner } from "@/components/trading/GoldenCloudSniperBanner";
-import { MicroSniperPanel } from "@/components/dashboard/MicroSniperPanel";
 import { LiveSyncIndicator } from "@/components/trading/LiveSyncIndicator";
 import { useWebSocketPrices } from "@/hooks/useWebSocketPrice";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
@@ -51,14 +50,14 @@ export default function AITradingPage() {
       {/* Server Status Banner */}
       <ServerStatusBanner />
 
+      {/* 🎯 The Golden Rule — 기계적 매수 진입 지시서 */}
+      <GoldenCloudSniperBanner />
+
       {/* Phase 1 Target Universe — 그물망 알박기 Top 5 */}
       <Phase1TargetCard />
 
       {/* 실전 체결률 KPI */}
       <FillRateCard />
-
-      {/* 🎯 Micro-Sniper: 1분봉 EMA200 × Ichimoku 양운 돌파 (<$5) */}
-      <MicroSniperPanel />
 
       {/* Agent Log Viewer */}
       <AgentLogViewer />

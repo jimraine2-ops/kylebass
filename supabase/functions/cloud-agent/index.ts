@@ -13,8 +13,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 100; // ★ 동전주: 최저 100원까지 허용
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_USD = 5; // ★ $5 미만 저가주 전용 (Micro-Sniper 전략 통일)
-const MAX_PRICE_KRW = Math.floor(MAX_PRICE_USD * KRW_RATE); // ≈ ₩6,750
+const MAX_PRICE_KRW = 12000; // ★ ₩12,000 미만 = $9 미만 저가주 전용 (자산 회전율 극대화)
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $9
 const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
 const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
 const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
@@ -770,7 +770,7 @@ async function getQuoteAndCandles(symbol: string) {
 const POLYGON_BASE = 'https://api.polygon.io';
 const TARGET_AVG_DOLLAR_VOLUME_USD = 1_000_000_000 / KRW_RATE; // ★ [Kumo-Sniper v3] ₩10억 ≈ $750K — 잡주 차단 + 종목 풀 확장
 const KUMO_THICKNESS_MIN_PCT = 0.005; // ★ [Kumo-Sniper v3] 구름 두께 ≥ 현재가의 0.5% — 얇은 구름(지지력 부족) 차단
-const PHASE1_MAX_PRICE_USD = 5; // ★ $5 미만 저가주 전용 (User 요청: 5달러 미만만 거래)
+const PHASE1_MAX_PRICE_USD = 200; // ★ 재완화: $200 이하면 모두 후보 (실거래 후보 확보)
 const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
 const TARGET_EMA_GAP_PCT = 0.20; // ★ 공격적 완화: EMA25 대비 +20% 이하면 통과 (극단 과열만 제외)
 const TARGET_PHASE2_GAP_PCT = -0.04; // 매수 마중가: EMA25 × 0.96
@@ -1086,19 +1086,17 @@ async function buildTargetUniverse(
         if (news.newsCount > 0) newsBullish = news.bullishPct;
       } catch { newsBullish = 50; }
       const newsTag = newsBullish >= 60 ? `📰호재${newsBullish}%` : newsBullish < 40 ? `📰약세${newsBullish}%` : `📰중립${newsBullish}%`;
-      // ★ [Kumo-Sniper v3-relaxed] 구름 두께 필터: ≥ 0.2% (완화)
+      // ★ [Kumo-Sniper v3] 구름 두께 필터: (kumoTop - kumoBottom) / price ≥ 0.5%
       const cloudThicknessPct = m.lastClose > 0 ? (m.kumoTop - m.kumoBottom) / m.lastClose : 0;
-      const thickOk = cloudThicknessPct >= 0.002; // 0.5% → 0.2%
-      // ★ [Golden Rule 1단계-완화] 자석 효과: 현재가-EMA200 이격도 ≤ 15% (5% → 15%)
+      const thickOk = cloudThicknessPct >= KUMO_THICKNESS_MIN_PCT;
+      // ★ [Golden Rule 1단계] 자석 효과: 현재가-EMA200 이격도 ≤ 5% (5% 이상이면 자격 미달)
       const ema200DistPct = m.ema200 > 0 ? Math.abs(m.lastClose - m.ema200) / m.ema200 : 1;
-      const magnetOk = ema200DistPct <= 0.15;
-      // ★ 추세 게이트: EMA200 위 OR 양운 위 (둘 중 하나만 만족해도 통과)
-      const trendOk = ema200Ok || kumoOk;
-      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|추세${trendOk?'✓':'✗'}(EMA200${ema200Ok?'✓':'✗'}/구름${kumoOk?'✓':'✗'})|🧲자석${magnetOk?'✓':'✗'}(${(ema200DistPct*100).toFixed(2)}%≤15%)|📏두께${thickOk?'✓':'✗'}(${(cloudThicknessPct*100).toFixed(2)}%)|${newsTag}`;
-      await addLog('system', 'scan', sym, `[GoldenRule·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, ema200DistPct, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, cloudThicknessPct, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, magnetOk, kumoOk, thickOk, trendOk, newsBullish });
+      const magnetOk = ema200DistPct <= 0.05;
+      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|EMA200${ema200Ok?'✓':'✗'}|🧲자석${magnetOk?'✓':'✗'}(${(ema200DistPct*100).toFixed(2)}%≤5%)|☁️구름${kumoOk?'✓':'✗'}|📏두께${thickOk?'✓':'✗'}(${(cloudThicknessPct*100).toFixed(2)}%)|${newsTag}`;
+      await addLog('system', 'scan', sym, `[GoldenRule·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, ema200DistPct, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, cloudThicknessPct, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, magnetOk, kumoOk, thickOk, newsBullish });
       okCount++;
-      // ★ [완화 게이트] 가격 + 거래대금 + 추세(EMA200 OR 양운) + 자석(≤15%) + 두께
-      if (priceOk && volOk && trendOk && magnetOk && thickOk) {
+      // ★ [Golden Rule 1단계 게이트] 가격 + 거래대금 + EMA200 우상향+위 + 자석(≤5%) + Kumo 양운 위 + 구름 두께
+      if (priceOk && volOk && ema200Ok && magnetOk && kumoOk && thickOk) {
         results.push({
           symbol: sym, price: m.lastClose, ema25: m.ema25, ema200: m.ema200,
           kumoTop: m.kumoTop, kumoBottom: m.kumoBottom,
@@ -1762,7 +1760,7 @@ Deno.serve(async (req) => {
           `🏆🔄 [Round ${completedRound} 완료 → Round ${currentRound} 시작!] 수익 목표 ₩${DAILY_TARGET_KRW_CONST.toLocaleString()} 달성! | ` +
           `Round ${completedRound} 수익: ${fmtKRWRaw(profitSaved)} → 안전 자산으로 분리 | ` +
           `누적 총 수익: ${fmtKRWRaw(cumulativeTotalProfitKRW)} | ` +
-          `원금 ${fmtKRWRaw(resetBalance)}으로 재부팅 → 10,000원 이하 필승주 재스캔 개시!`,
+          `원금 ${fmtKRWRaw(resetBalance)}으로 재부팅 → 12,000원 미만 필승주 재스캔 개시!`,
           { 
             completedRound, 
             newRound: currentRound, 
@@ -1943,8 +1941,8 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ★ [저가주 최적화] ₩10,000 이하: 호가 얇아질 때 선제적 매도
-        const isLowPriceStock = toKRW(price) <= 10000;
+        // ★ [저가주 최적화] ₩12,000 미만: 호가 얇아질 때 선제적 매도
+        const isLowPriceStock = toKRW(price) < 12000;
         if (isLowPriceStock && pnlPct >= 2.0 && pnlPct < 3.0 && volumeIntensity < 100) {
           await addLog('unified', 'info', sym, `[저가주 호가 최적화] ${sym} ₩${Math.round(toKRW(price)).toLocaleString()} 저가주 | 체결강도 ${volumeIntensity}%(<100%) + ${pnlPct.toFixed(1)}% → 선제적 ${dynamicTPPct}% 구간 매도 권장`, { volumeIntensity, pnlPct: +pnlPct.toFixed(2), priceKRW: Math.round(toKRW(price)) });
         }
@@ -2365,7 +2363,7 @@ Deno.serve(async (req) => {
       await addLog('system', 'day-break', null, 
         `[Day-Break] 🟢 오전 9시 데이장 사냥 강제 재개! Round ${currentRound} 공격 모드 전환 | ` +
         `원금 ${fmtKRWRaw(DAY_BREAK_CAPITAL)} 세팅 완료 | 누적 수익 유지: ${fmtKRWRaw(dailyPnl)} | ` +
-        `₩10,000↓ 저가주 중 익절확률 95%↑ + AI 추천 2~3% 구간 확보 종목 즉시 투입 | ` +
+        `₩12,000↓ 저가주 중 익절확률 95%↑ + AI 추천 2~3% 구간 확보 종목 즉시 투입 | ` +
         `아시아 세션 수급 + Finnhub 최신 뉴스 결합 종목 최우선 요격`,
         { dayBreak: true, round: currentRound, balance: DAY_BREAK_CAPITAL, dailyPnl }
       );
@@ -2433,33 +2431,27 @@ Deno.serve(async (req) => {
           const isPhase1Target = !!tgt;
           if (!isPhase1Target) continue; // Phase1(일봉) 사냥감만 후속 검증
 
-          // 3단계 - Finnhub 실시간 흐름 (완화: 120%→90%, RVOL 2.0→1.5)
+          // 3단계 - Finnhub 실시간 흐름
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
-          const isAggressionOk = aggressionPctRaw >= 90;
+          const isAggressionOk = aggressionPctRaw >= 120;
           const rvolRaw = r.scoring.indicators?.rvol?.rvol || 0;
-          const isVolumeBurst = rvolRaw >= 1.5;
+          const isVolumeBurst = rvolRaw >= 2.0;
 
           // 1단계 - Twelve Data 5분봉 자석/양운
           const td5 = await td5mMagnetCheck(r.sym, r.price);
           // 2단계 - Polygon 1분봉 패턴
           const poly1 = await polygon1mPattern(r.sym);
 
-          // ★ [완화 게이트 v2] Phase1(일봉 골든클라우드) 통과 자체가 강한 시그널.
-          // 보조 지표 4개(td5/poly1/체결강도/RVOL) 중 2개 이상 통과 시 매수.
-          // Polygon API 실패해도 다른 지표로 보완 가능 (단일 API 의존 제거).
-          const subChecks = [td5.ok, poly1.ok, isAggressionOk, isVolumeBurst];
-          const subPassCount = subChecks.filter(Boolean).length;
-          const MIN_SUB_PASS = 2;
-          const hardCriteriaPass = subPassCount >= MIN_SUB_PASS;
+          const hardCriteriaPass = td5.ok && poly1.ok && isAggressionOk && isVolumeBurst;
 
           if (!hardCriteriaPass) {
             const reasons: string[] = [];
             if (!td5.ok) reasons.push(`5m자석/양운✗(${td5.reason})`);
             if (!poly1.ok) reasons.push(`1m패턴✗(${poly1.reason})`);
-            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<90%`);
-            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<1.5`);
-            await addLog('unified', 'hold', r.sym, `[보조지표탈락] ${r.sym} ${subPassCount}/4 (최소${MIN_SUB_PASS}) [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw, subPassCount });
+            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<120%`);
+            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<2.0`);
+            await addLog('unified', 'hold', r.sym, `[Triple-API탈락] ${r.sym} [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw });
             continue;
           }
 
