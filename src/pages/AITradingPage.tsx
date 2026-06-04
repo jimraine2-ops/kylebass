@@ -50,8 +50,6 @@ export default function AITradingPage() {
       {/* Server Status Banner */}
       <ServerStatusBanner />
 
-      {/* 🎯 The Golden Rule — 기계적 매수 진입 지시서 */}
-      <GoldenCloudSniperBanner />
 
       {/* Phase 1 Target Universe — 그물망 알박기 Top 5 */}
       <Phase1TargetCard />
