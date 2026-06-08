@@ -769,11 +769,12 @@ async function getQuoteAndCandles(symbol: string) {
 // ============================================================
 const POLYGON_BASE = 'https://api.polygon.io';
 const TARGET_AVG_DOLLAR_VOLUME_USD = 1_500_000; // ★ $1.5M+ (≈ ₩20억) — 거래량 150만 달러 이상만 매수
-const KUMO_THICKNESS_MIN_PCT = 0.005; // ★ [Kumo-Sniper v3] 구름 두께 ≥ 현재가의 0.5% — 얇은 구름(지지력 부족) 차단
+const KUMO_THICKNESS_MIN_PCT = 0.003; // ★ 완화: 0.5%→0.3% (얇은 구름도 일부 허용, 후보 확보)
 const PHASE1_MAX_PRICE_USD = 200; // ★ 재완화: $200 이하면 모두 후보 (실거래 후보 확보)
 const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
 const TARGET_EMA_GAP_PCT = 0.20; // ★ 공격적 완화: EMA25 대비 +20% 이하면 통과 (극단 과열만 제외)
 const TARGET_PHASE2_GAP_PCT = -0.04; // 매수 마중가: EMA25 × 0.96
+const PHASE1_MAGNET_PCT = 0.08; // ★ 완화: 5%→8% 자석 범위 (EMA200 이격 허용 확대)
 
 interface TargetUniverseEntry {
   symbol: string;
@@ -904,7 +905,8 @@ interface Td5mCheck {
 //    매 1초 사이클마다 Finnhub 실시간가만 갱신해서 target에 닿는지 감시
 const td5mCache = new Map<string, { ts: number; data: Td5mCheck }>();
 const TD_5M_TTL_MS = 300_000; // 5분 캐시 — 5분봉이 한 번 닫혀야 의미 있게 갱신됨
-const RETEST_TOUCH_PCT = 0.003; // ±0.3% 이내면 '리테스트 발생'
+const RETEST_TOUCH_PCT = 0.005; // ★ 완화: ±0.3%→±0.5% '리테스트 발생' 밴드 확대
+const TD_ORBIT_PCT = 0.05; // ★ 완화: 자석 궤도 3%→5%
 
 async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td5mCheck> {
   const empty: Td5mCheck = { ok: false, ema200: 0, kumoTop: 0, kumoBottom: 0, spanA: 0, spanB: 0, distPct: 1, inOrbit: false, aboveKumo: false, retestTouch: false, reason: 'NO_KEY', fetchedAt: 0 };
@@ -915,7 +917,7 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
     const d = cached.data;
     const price = currentPrice || d.ema200;
     const distPct = d.ema200 > 0 ? Math.abs(price - d.ema200) / d.ema200 : 1;
-    const inOrbit = distPct <= 0.03;
+    const inOrbit = distPct <= TD_ORBIT_PCT;
     const aboveKumo = price > d.kumoTop && d.spanA > d.spanB;
     const retestTouch = distPct <= RETEST_TOUCH_PCT; // ★ ±0.3% 도달 → 리테스트 발생
     const ok = inOrbit && aboveKumo;
@@ -960,7 +962,7 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
     // 실시간 가격은 Finnhub에서 currentPrice 인자로 들어옴
     const price = currentPrice || closes[N - 1];
     const distPct = ema200 > 0 ? Math.abs(price - ema200) / ema200 : 1;
-    const inOrbit = distPct <= 0.03;
+    const inOrbit = distPct <= TD_ORBIT_PCT;
     const aboveKumo = price > kumoTop && spanA > spanB;
     const retestTouch = distPct <= RETEST_TOUCH_PCT;
     const ok = inOrbit && aboveKumo;
@@ -984,7 +986,7 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
 // ============================================================
 interface Polygon1mPattern {
   ok: boolean;
-  pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'NONE';
+  pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'ABOVE_EMA_BULL' | 'NONE';
   ema200_1m: number;
   reason: string;
 }
@@ -1014,18 +1016,21 @@ async function polygon1mPattern(symbol: string): Promise<Polygon1mPattern> {
   const N = closes.length;
   const c0 = closes[N - 1], o0 = opens[N - 1], l0 = lows[N - 1];
   const isBull = c0 > o0;
-  // Case A: 리테스트 — 직전 5봉 중 저가가 EMA200 ±0.3% 터치 후 현재봉 양봉
-  const retestTouch = lows.slice(N - 6, N - 1).some((lo: number) => Math.abs(lo - ema200_1m) / ema200_1m <= 0.003);
+  // Case A: 리테스트 — 직전 5봉 중 저가가 EMA200 ±0.5% 터치 후 현재봉 양봉 (완화)
+  const retestTouch = lows.slice(N - 6, N - 1).some((lo: number) => Math.abs(lo - ema200_1m) / ema200_1m <= 0.005);
   const caseA = retestTouch && isBull && c0 > ema200_1m;
   // Case B: 음봉 3개 응축 후 강한 양봉 돌파 (현재봉이 직전 3봉 고가 위)
   const prev3Bear = [N - 4, N - 3, N - 2].every(i => closes[i] < opens[i]);
   const prev3High = Math.max(closes[N - 4], opens[N - 4], closes[N - 3], opens[N - 3], closes[N - 2], opens[N - 2]);
   const caseB = prev3Bear && isBull && c0 > prev3High;
-  const pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'NONE' = caseA ? 'RETEST' : caseB ? 'CONDENSATION_BREAKOUT' : 'NONE';
+  // ★ Case C [완화 추가]: 현재가 > EMA200_1m + 양봉 + 직전 봉 대비 상승 — 안정적 추세 진입
+  const c1 = closes[N - 2] ?? c0;
+  const caseC = isBull && c0 > ema200_1m && c0 >= c1 && (c0 - ema200_1m) / ema200_1m <= 0.02;
+  const pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'ABOVE_EMA_BULL' | 'NONE' = caseA ? 'RETEST' : caseB ? 'CONDENSATION_BREAKOUT' : caseC ? 'ABOVE_EMA_BULL' : 'NONE';
   const ok = pattern !== 'NONE';
   const result: Polygon1mPattern = {
     ok, pattern, ema200_1m: +ema200_1m.toFixed(4),
-    reason: ok ? `${pattern}${caseA ? '(EMA200리테스트)' : '(응축돌파)'}` : '패턴없음',
+    reason: ok ? `${pattern}${caseA ? '(EMA200리테스트)' : caseB ? '(응축돌파)' : '(EMA위양봉)'}` : '패턴없음',
   };
   poly1mCache.set(symbol, { ts: Date.now(), data: result });
   return result;
@@ -1089,9 +1094,9 @@ async function buildTargetUniverse(
       // ★ [Kumo-Sniper v3] 구름 두께 필터: (kumoTop - kumoBottom) / price ≥ 0.5%
       const cloudThicknessPct = m.lastClose > 0 ? (m.kumoTop - m.kumoBottom) / m.lastClose : 0;
       const thickOk = cloudThicknessPct >= KUMO_THICKNESS_MIN_PCT;
-      // ★ [Golden Rule 1단계] 자석 효과: 현재가-EMA200 이격도 ≤ 5% (5% 이상이면 자격 미달)
+      // ★ [Golden Rule 1단계] 자석 효과: 현재가-EMA200 이격도 ≤ 8% (완화)
       const ema200DistPct = m.ema200 > 0 ? Math.abs(m.lastClose - m.ema200) / m.ema200 : 1;
-      const magnetOk = ema200DistPct <= 0.05;
+      const magnetOk = ema200DistPct <= PHASE1_MAGNET_PCT;
       const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|EMA200${ema200Ok?'✓':'✗'}|🧲자석${magnetOk?'✓':'✗'}(${(ema200DistPct*100).toFixed(2)}%≤5%)|☁️구름${kumoOk?'✓':'✗'}|📏두께${thickOk?'✓':'✗'}(${(cloudThicknessPct*100).toFixed(2)}%)|${newsTag}`;
       await addLog('system', 'scan', sym, `[GoldenRule·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, ema200DistPct, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, cloudThicknessPct, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, magnetOk, kumoOk, thickOk, newsBullish });
       okCount++;
@@ -2424,19 +2429,19 @@ Deno.serve(async (req) => {
           // ★★★ [최종 설계 - Triple-API Hard-Criteria Gate]
           // 1단계 (Twelve Data 5분봉): EMA200 이격 ≤3% + 양운(Kumo) 지지 — 형님의 허락
           // 2단계 (Polygon 1분봉): 200EMA 리테스트 양봉 OR 음봉3개 후 돌파 양봉 — 막내의 타이밍
-          // 3단계 (Finnhub 실시간): 체결강도 ≥120% + RVOL ≥2.0 — 돈의 흐름
+          // 3단계 (Finnhub 실시간): 체결강도 ≥90% + RVOL ≥1.3 — 돈의 흐름 [완화]
           // 뉴스 전략 완전 배제. 세 API 지표가 모두 일치할 때만 진입.
           // ============================================================
           const tgt = targetMap.get(r.sym);
           const isPhase1Target = !!tgt;
           if (!isPhase1Target) continue; // Phase1(일봉) 사냥감만 후속 검증
 
-          // 3단계 - Finnhub 실시간 흐름
+          // 3단계 - Finnhub 실시간 흐름 [완화]
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
-          const isAggressionOk = aggressionPctRaw >= 120;
+          const isAggressionOk = aggressionPctRaw >= 90;
           const rvolRaw = r.scoring.indicators?.rvol?.rvol || 0;
-          const isVolumeBurst = rvolRaw >= 2.0;
+          const isVolumeBurst = rvolRaw >= 1.3;
 
           // 1단계 - Twelve Data 5분봉 자석/양운
           const td5 = await td5mMagnetCheck(r.sym, r.price);
@@ -2449,8 +2454,8 @@ Deno.serve(async (req) => {
             const reasons: string[] = [];
             if (!td5.ok) reasons.push(`5m자석/양운✗(${td5.reason})`);
             if (!poly1.ok) reasons.push(`1m패턴✗(${poly1.reason})`);
-            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<120%`);
-            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<2.0`);
+            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<90%`);
+            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<1.3`);
             await addLog('unified', 'hold', r.sym, `[Triple-API탈락] ${r.sym} [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw });
             continue;
           }
