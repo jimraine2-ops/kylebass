@@ -905,7 +905,8 @@ interface Td5mCheck {
 //    매 1초 사이클마다 Finnhub 실시간가만 갱신해서 target에 닿는지 감시
 const td5mCache = new Map<string, { ts: number; data: Td5mCheck }>();
 const TD_5M_TTL_MS = 300_000; // 5분 캐시 — 5분봉이 한 번 닫혀야 의미 있게 갱신됨
-const RETEST_TOUCH_PCT = 0.003; // ±0.3% 이내면 '리테스트 발생'
+const RETEST_TOUCH_PCT = 0.005; // ★ 완화: ±0.3%→±0.5% '리테스트 발생' 밴드 확대
+const TD_ORBIT_PCT = 0.05; // ★ 완화: 자석 궤도 3%→5%
 
 async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td5mCheck> {
   const empty: Td5mCheck = { ok: false, ema200: 0, kumoTop: 0, kumoBottom: 0, spanA: 0, spanB: 0, distPct: 1, inOrbit: false, aboveKumo: false, retestTouch: false, reason: 'NO_KEY', fetchedAt: 0 };
