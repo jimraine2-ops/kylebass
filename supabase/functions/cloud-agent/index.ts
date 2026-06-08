@@ -962,7 +962,7 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
     // 실시간 가격은 Finnhub에서 currentPrice 인자로 들어옴
     const price = currentPrice || closes[N - 1];
     const distPct = ema200 > 0 ? Math.abs(price - ema200) / ema200 : 1;
-    const inOrbit = distPct <= 0.03;
+    const inOrbit = distPct <= TD_ORBIT_PCT;
     const aboveKumo = price > kumoTop && spanA > spanB;
     const retestTouch = distPct <= RETEST_TOUCH_PCT;
     const ok = inOrbit && aboveKumo;
