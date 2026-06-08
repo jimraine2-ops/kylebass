@@ -2429,19 +2429,19 @@ Deno.serve(async (req) => {
           // ★★★ [최종 설계 - Triple-API Hard-Criteria Gate]
           // 1단계 (Twelve Data 5분봉): EMA200 이격 ≤3% + 양운(Kumo) 지지 — 형님의 허락
           // 2단계 (Polygon 1분봉): 200EMA 리테스트 양봉 OR 음봉3개 후 돌파 양봉 — 막내의 타이밍
-          // 3단계 (Finnhub 실시간): 체결강도 ≥120% + RVOL ≥2.0 — 돈의 흐름
+          // 3단계 (Finnhub 실시간): 체결강도 ≥90% + RVOL ≥1.3 — 돈의 흐름 [완화]
           // 뉴스 전략 완전 배제. 세 API 지표가 모두 일치할 때만 진입.
           // ============================================================
           const tgt = targetMap.get(r.sym);
           const isPhase1Target = !!tgt;
           if (!isPhase1Target) continue; // Phase1(일봉) 사냥감만 후속 검증
 
-          // 3단계 - Finnhub 실시간 흐름
+          // 3단계 - Finnhub 실시간 흐름 [완화]
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
-          const isAggressionOk = aggressionPctRaw >= 120;
+          const isAggressionOk = aggressionPctRaw >= 90;
           const rvolRaw = r.scoring.indicators?.rvol?.rvol || 0;
-          const isVolumeBurst = rvolRaw >= 2.0;
+          const isVolumeBurst = rvolRaw >= 1.3;
 
           // 1단계 - Twelve Data 5분봉 자석/양운
           const td5 = await td5mMagnetCheck(r.sym, r.price);
@@ -2454,8 +2454,8 @@ Deno.serve(async (req) => {
             const reasons: string[] = [];
             if (!td5.ok) reasons.push(`5m자석/양운✗(${td5.reason})`);
             if (!poly1.ok) reasons.push(`1m패턴✗(${poly1.reason})`);
-            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<120%`);
-            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<2.0`);
+            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<90%`);
+            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<1.3`);
             await addLog('unified', 'hold', r.sym, `[Triple-API탈락] ${r.sym} [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw });
             continue;
           }
