@@ -1016,18 +1016,21 @@ async function polygon1mPattern(symbol: string): Promise<Polygon1mPattern> {
   const N = closes.length;
   const c0 = closes[N - 1], o0 = opens[N - 1], l0 = lows[N - 1];
   const isBull = c0 > o0;
-  // Case A: 리테스트 — 직전 5봉 중 저가가 EMA200 ±0.3% 터치 후 현재봉 양봉
-  const retestTouch = lows.slice(N - 6, N - 1).some((lo: number) => Math.abs(lo - ema200_1m) / ema200_1m <= 0.003);
+  // Case A: 리테스트 — 직전 5봉 중 저가가 EMA200 ±0.5% 터치 후 현재봉 양봉 (완화)
+  const retestTouch = lows.slice(N - 6, N - 1).some((lo: number) => Math.abs(lo - ema200_1m) / ema200_1m <= 0.005);
   const caseA = retestTouch && isBull && c0 > ema200_1m;
   // Case B: 음봉 3개 응축 후 강한 양봉 돌파 (현재봉이 직전 3봉 고가 위)
   const prev3Bear = [N - 4, N - 3, N - 2].every(i => closes[i] < opens[i]);
   const prev3High = Math.max(closes[N - 4], opens[N - 4], closes[N - 3], opens[N - 3], closes[N - 2], opens[N - 2]);
   const caseB = prev3Bear && isBull && c0 > prev3High;
-  const pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'NONE' = caseA ? 'RETEST' : caseB ? 'CONDENSATION_BREAKOUT' : 'NONE';
+  // ★ Case C [완화 추가]: 현재가 > EMA200_1m + 양봉 + 직전 봉 대비 상승 — 안정적 추세 진입
+  const c1 = closes[N - 2] ?? c0;
+  const caseC = isBull && c0 > ema200_1m && c0 >= c1 && (c0 - ema200_1m) / ema200_1m <= 0.02;
+  const pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'ABOVE_EMA_BULL' | 'NONE' = caseA ? 'RETEST' : caseB ? 'CONDENSATION_BREAKOUT' : caseC ? 'ABOVE_EMA_BULL' : 'NONE';
   const ok = pattern !== 'NONE';
   const result: Polygon1mPattern = {
     ok, pattern, ema200_1m: +ema200_1m.toFixed(4),
-    reason: ok ? `${pattern}${caseA ? '(EMA200리테스트)' : '(응축돌파)'}` : '패턴없음',
+    reason: ok ? `${pattern}${caseA ? '(EMA200리테스트)' : caseB ? '(응축돌파)' : '(EMA위양봉)'}` : '패턴없음',
   };
   poly1mCache.set(symbol, { ts: Date.now(), data: result });
   return result;
