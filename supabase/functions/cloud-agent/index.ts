@@ -986,7 +986,7 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
 // ============================================================
 interface Polygon1mPattern {
   ok: boolean;
-  pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'NONE';
+  pattern: 'RETEST' | 'CONDENSATION_BREAKOUT' | 'ABOVE_EMA_BULL' | 'NONE';
   ema200_1m: number;
   reason: string;
 }
