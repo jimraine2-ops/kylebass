@@ -917,7 +917,7 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
     const d = cached.data;
     const price = currentPrice || d.ema200;
     const distPct = d.ema200 > 0 ? Math.abs(price - d.ema200) / d.ema200 : 1;
-    const inOrbit = distPct <= 0.03;
+    const inOrbit = distPct <= TD_ORBIT_PCT;
     const aboveKumo = price > d.kumoTop && d.spanA > d.spanB;
     const retestTouch = distPct <= RETEST_TOUCH_PCT; // ★ ±0.3% 도달 → 리테스트 발생
     const ok = inOrbit && aboveKumo;
