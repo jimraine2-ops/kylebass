@@ -769,11 +769,12 @@ async function getQuoteAndCandles(symbol: string) {
 // ============================================================
 const POLYGON_BASE = 'https://api.polygon.io';
 const TARGET_AVG_DOLLAR_VOLUME_USD = 1_500_000; // ★ $1.5M+ (≈ ₩20억) — 거래량 150만 달러 이상만 매수
-const KUMO_THICKNESS_MIN_PCT = 0.005; // ★ [Kumo-Sniper v3] 구름 두께 ≥ 현재가의 0.5% — 얇은 구름(지지력 부족) 차단
+const KUMO_THICKNESS_MIN_PCT = 0.003; // ★ 완화: 0.5%→0.3% (얇은 구름도 일부 허용, 후보 확보)
 const PHASE1_MAX_PRICE_USD = 200; // ★ 재완화: $200 이하면 모두 후보 (실거래 후보 확보)
 const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
 const TARGET_EMA_GAP_PCT = 0.20; // ★ 공격적 완화: EMA25 대비 +20% 이하면 통과 (극단 과열만 제외)
 const TARGET_PHASE2_GAP_PCT = -0.04; // 매수 마중가: EMA25 × 0.96
+const PHASE1_MAGNET_PCT = 0.08; // ★ 완화: 5%→8% 자석 범위 (EMA200 이격 허용 확대)
 
 interface TargetUniverseEntry {
   symbol: string;
