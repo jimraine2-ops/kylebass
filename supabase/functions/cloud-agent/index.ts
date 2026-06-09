@@ -13,8 +13,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 100; // ★ 동전주: 최저 100원까지 허용
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_KRW = 27000; // ★ 사용자 지시 완화: $5 → $20 ($20 ≈ ₩27,000) — 진입 후보 확대
-const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $20
+const MAX_PRICE_KRW = 6750; // ★ 진입가 상한: $5 (≈ ₩6,750)
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $5
 const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
 const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
 const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
