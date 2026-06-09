@@ -13,8 +13,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 100; // ★ 동전주: 최저 100원까지 허용
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_KRW = 6750; // ★ ₩6,750 미만 = $5 미만 저가주 전용 (자산 회전율 극대화)
-const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $5
+const MAX_PRICE_KRW = 27000; // ★ 사용자 지시 완화: $5 → $20 ($20 ≈ ₩27,000) — 진입 후보 확대
+const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $20
 const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
 const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
 const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
@@ -768,13 +768,13 @@ async function getQuoteAndCandles(symbol: string) {
 // 필터3: 현재가 ≤ EMA25 × 0.98 (-2% 이하, 완화)
 // ============================================================
 const POLYGON_BASE = 'https://api.polygon.io';
-const TARGET_AVG_DOLLAR_VOLUME_USD = 1_500_000; // ★ $1.5M+ (≈ ₩20억) — 거래량 150만 달러 이상만 매수
+const TARGET_AVG_DOLLAR_VOLUME_USD = 500_000; // ★ 완화: $1.5M → $0.5M (저가주 풀 확보)
 const KUMO_THICKNESS_MIN_PCT = 0.003; // ★ 완화: 0.5%→0.3% (얇은 구름도 일부 허용, 후보 확보)
-const PHASE1_MAX_PRICE_USD = 200; // ★ 재완화: $200 이하면 모두 후보 (실거래 후보 확보)
+const PHASE1_MAX_PRICE_USD = 20; // ★ 사용자 지시: $5 → $20 가격 상한 (메모리 갱신 완료)
 const PHASE1_MIN_PRICE_USD = MIN_PRICE_USD; // 동전주 하한 유지
 const TARGET_EMA_GAP_PCT = 0.20; // ★ 공격적 완화: EMA25 대비 +20% 이하면 통과 (극단 과열만 제외)
 const TARGET_PHASE2_GAP_PCT = -0.04; // 매수 마중가: EMA25 × 0.96
-const PHASE1_MAGNET_PCT = 0.08; // ★ 완화: 5%→8% 자석 범위 (EMA200 이격 허용 확대)
+const PHASE1_MAGNET_PCT = 0.12; // ★ 완화: 8%→12% 자석 범위 (강세장 이격 허용)
 
 interface TargetUniverseEntry {
   symbol: string;
@@ -1100,8 +1100,8 @@ async function buildTargetUniverse(
       const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|EMA200${ema200Ok?'✓':'✗'}|🧲자석${magnetOk?'✓':'✗'}(${(ema200DistPct*100).toFixed(2)}%≤5%)|☁️구름${kumoOk?'✓':'✗'}|📏두께${thickOk?'✓':'✗'}(${(cloudThicknessPct*100).toFixed(2)}%)|${newsTag}`;
       await addLog('system', 'scan', sym, `[GoldenRule·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, ema200DistPct, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, cloudThicknessPct, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, magnetOk, kumoOk, thickOk, newsBullish });
       okCount++;
-      // ★ [Golden Rule 1단계 게이트] 가격 + 거래대금 + EMA200 우상향+위 + 자석(≤5%) + Kumo 양운 위 + 구름 두께
-      if (priceOk && volOk && ema200Ok && magnetOk && kumoOk && thickOk) {
+      // ★ [완화 게이트] 가격 + 거래대금 + EMA200 위 + (자석 ≤12% OR Kumo 양운) + 두께 — 자석/구름 OR 처리
+      if (priceOk && volOk && ema200Ok && (magnetOk || kumoOk) && thickOk) {
         results.push({
           symbol: sym, price: m.lastClose, ema25: m.ema25, ema200: m.ema200,
           kumoTop: m.kumoTop, kumoBottom: m.kumoBottom,
