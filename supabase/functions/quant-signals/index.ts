@@ -35,36 +35,40 @@ function getToken(): string {
   return key;
 }
 
-async function finnhubFetch(path: string, retries = 2) {
+async function finnhubFetch(path: string, retries = 1) {
   const cached = getCached(path);
   if (cached) return cached;
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
-  for (let attempt = 0; attempt < retries; attempt++) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const timer = setTimeout(() => ctrl.abort(), 2500);
     try {
       const res = await fetch(url, { signal: ctrl.signal });
       clearTimeout(timer);
-      if (res.status === 429) { await res.text(); await new Promise(r => setTimeout(r, 400 * (attempt + 1))); continue; }
-      if (res.status === 502 || res.status === 503) { await res.text(); await new Promise(r => setTimeout(r, 300 * (attempt + 1))); continue; }
+      if (res.status === 429 || res.status === 502 || res.status === 503) {
+        await res.text();
+        if (attempt === retries) return null;
+        await new Promise(r => setTimeout(r, 200));
+        continue;
+      }
       if (!res.ok) { await res.text(); return null; }
       const ct = res.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) {
-        const txt = await res.text();
-        if (txt.trim().startsWith('<!') || txt.includes('<html')) { await new Promise(r => setTimeout(r, 300 * (attempt + 1))); continue; }
-      }
+      if (!ct.includes('application/json')) { await res.text(); return null; }
       const json = await res.json();
       setCache(path, json);
       return json;
     } catch {
       clearTimeout(timer);
-      if (attempt === retries - 1) return null;
-      await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+      if (attempt === retries) return null;
     }
   }
   return null;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([p, new Promise<null>(r => setTimeout(() => r(null), ms))]);
 }
 
 // ===== Technical Indicator Helpers =====
@@ -395,13 +399,16 @@ Deno.serve(async (req) => {
       ];
       const targetSymbols: string[] = (symbols || defaultSymbols).slice(0, 12);
       const results: any[] = [];
-      const deadline = Date.now() + 60_000; // 60s budget
+      const deadline = Date.now() + 25_000; // 25s hard budget
 
       for (let i = 0; i < targetSymbols.length; i += 6) {
         if (Date.now() > deadline) break;
         const batch = targetSymbols.slice(i, i + 6);
-        const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
-        for (const r of batchResults) { if (r) results.push(r); }
+        const batchResults = await withTimeout(
+          Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null))),
+          8000
+        );
+        if (batchResults) for (const r of batchResults) { if (r) results.push(r); }
       }
 
       const premium = results.filter(r => r.price >= 10).sort((a, b) => b.totalScore - a.totalScore);
@@ -426,11 +433,14 @@ Deno.serve(async (req) => {
       superScanRotationIdx = (startIdx + BATCH_SIZE) % universe.length;
 
       // Analyze current batch (new data) with time budget
-      const deadline = Date.now() + 60_000;
+      const deadline = Date.now() + 25_000;
       for (let i = 0; i < currentBatch.length; i += 6) {
         if (Date.now() > deadline) break;
         const batch = currentBatch.slice(i, i + 6);
-        await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
+        await withTimeout(
+          Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null))),
+          8000
+        );
       }
 
       // Gather ALL cached results (from this and previous calls)
