@@ -395,17 +395,13 @@ Deno.serve(async (req) => {
       ];
       const targetSymbols: string[] = (symbols || defaultSymbols).slice(0, 12);
       const results: any[] = [];
+      const deadline = Date.now() + 60_000; // 60s budget
 
-      if (targetSymbols.length <= 4) {
-        const batchResults = await Promise.all(targetSymbols.map(sym => analyzeSymbol(sym).catch(() => null)));
+      for (let i = 0; i < targetSymbols.length; i += 6) {
+        if (Date.now() > deadline) break;
+        const batch = targetSymbols.slice(i, i + 6);
+        const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
         for (const r of batchResults) { if (r) results.push(r); }
-      } else {
-        for (let i = 0; i < targetSymbols.length; i += 4) {
-          const batch = targetSymbols.slice(i, i + 4);
-          const batchResults = await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
-          for (const r of batchResults) { if (r) results.push(r); }
-          if (i + 4 < targetSymbols.length) await new Promise(resolve => setTimeout(resolve, 300));
-        }
       }
 
       const premium = results.filter(r => r.price >= 10).sort((a, b) => b.totalScore - a.totalScore);
