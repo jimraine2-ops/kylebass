@@ -425,11 +425,12 @@ Deno.serve(async (req) => {
       }
       superScanRotationIdx = (startIdx + BATCH_SIZE) % universe.length;
 
-      // Analyze current batch (new data)
-      for (let i = 0; i < currentBatch.length; i += 4) {
-        const batch = currentBatch.slice(i, i + 4);
+      // Analyze current batch (new data) with time budget
+      const deadline = Date.now() + 60_000;
+      for (let i = 0; i < currentBatch.length; i += 6) {
+        if (Date.now() > deadline) break;
+        const batch = currentBatch.slice(i, i + 6);
         await Promise.all(batch.map(sym => analyzeSymbol(sym).catch(() => null)));
-        if (i + 4 < currentBatch.length) await new Promise(r => setTimeout(r, 250));
       }
 
       // Gather ALL cached results (from this and previous calls)
