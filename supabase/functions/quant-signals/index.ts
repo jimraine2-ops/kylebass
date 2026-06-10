@@ -35,36 +35,40 @@ function getToken(): string {
   return key;
 }
 
-async function finnhubFetch(path: string, retries = 2) {
+async function finnhubFetch(path: string, retries = 1) {
   const cached = getCached(path);
   if (cached) return cached;
   const token = getToken();
   const sep = path.includes('?') ? '&' : '?';
   const url = `${FINNHUB_BASE}${path}${sep}token=${token}`;
-  for (let attempt = 0; attempt < retries; attempt++) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const timer = setTimeout(() => ctrl.abort(), 2500);
     try {
       const res = await fetch(url, { signal: ctrl.signal });
       clearTimeout(timer);
-      if (res.status === 429) { await res.text(); await new Promise(r => setTimeout(r, 400 * (attempt + 1))); continue; }
-      if (res.status === 502 || res.status === 503) { await res.text(); await new Promise(r => setTimeout(r, 300 * (attempt + 1))); continue; }
+      if (res.status === 429 || res.status === 502 || res.status === 503) {
+        await res.text();
+        if (attempt === retries) return null;
+        await new Promise(r => setTimeout(r, 200));
+        continue;
+      }
       if (!res.ok) { await res.text(); return null; }
       const ct = res.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) {
-        const txt = await res.text();
-        if (txt.trim().startsWith('<!') || txt.includes('<html')) { await new Promise(r => setTimeout(r, 300 * (attempt + 1))); continue; }
-      }
+      if (!ct.includes('application/json')) { await res.text(); return null; }
       const json = await res.json();
       setCache(path, json);
       return json;
     } catch {
       clearTimeout(timer);
-      if (attempt === retries - 1) return null;
-      await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+      if (attempt === retries) return null;
     }
   }
   return null;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([p, new Promise<null>(r => setTimeout(() => r(null), ms))]);
 }
 
 // ===== Technical Indicator Helpers =====
