@@ -85,7 +85,7 @@ export default function Dashboard() {
       />
 
       {/* KPI Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* 총 잔고 */}
         <Card>
           <CardContent className="p-3">
@@ -96,6 +96,20 @@ export default function Dashboard() {
             <p className="text-base font-bold font-mono">₩{Math.round(balance).toLocaleString('ko-KR')}</p>
             <p className={`text-[11px] font-mono font-semibold ${totalReturn >= 0 ? 'text-stock-up' : 'text-stock-down'}`}>
               {totalReturn >= 0 ? '▲' : '▼'} {totalReturn >= 0 ? '+' : ''}{totalReturn.toFixed(2)}%
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 보유 종목 */}
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+              <Briefcase className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-medium">보유 종목</span>
+            </div>
+            <p className="text-base font-bold font-mono">{openPositions.length}개</p>
+            <p className="text-[11px] text-muted-foreground">
+              승률 {stats.winRate || 0}% · {stats.totalTrades || 0}거래
             </p>
           </CardContent>
         </Card>
@@ -117,7 +131,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-
 
       {/* 보유종목 */}
       <div className="grid grid-cols-1 gap-4">

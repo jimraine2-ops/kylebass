@@ -259,7 +259,7 @@ export function IntegratedKPIDashboard({ wsGetPrice, wsConnected, fxRate = 1350 
           </div>
           <div className="border-l-2 border-cyan-500/40 pl-2 space-y-0.5">
             <p className="font-semibold text-cyan-400">[Phase 1] 데이장 선제 타격 — 그물망 알박기</p>
-            <p>🎯 Polygon.io 정밀 EMA25 산출 → 3-필터(거래대금 $0.5M+ / 가격 $20↓ / 자석 ≤12% OR Kumo양운)</p>
+            <p>🎯 Polygon.io 정밀 EMA25 산출 → 3-필터(거래대금 30억+ / 가격 ₩12,000↓ / EMA-5%↓)</p>
             <p>🪤 EMA25 × 0.93 마중가 알박기 → 가격이 닿는 순간 즉시 체결</p>
             <p>♾️ 익절 후 Top 5 재계산 → 무한 루프</p>
           </div>
