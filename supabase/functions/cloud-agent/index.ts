@@ -960,7 +960,7 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
     // 실시간 가격은 Finnhub에서 currentPrice 인자로 들어옴
     const price = currentPrice || closes[N - 1];
     const distPct = ema200 > 0 ? Math.abs(price - ema200) / ema200 : 1;
-    const inOrbit = distPct <= 0.03;
+    const inOrbit = distPct <= 0.08; // 보정 2026-06-14
     const aboveKumo = price > kumoTop && spanA > spanB;
     const retestTouch = distPct <= RETEST_TOUCH_PCT;
     const ok = inOrbit && aboveKumo;
@@ -969,7 +969,7 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
       kumoTop: +kumoTop.toFixed(4), kumoBottom: +kumoBottom.toFixed(4),
       spanA: +spanA.toFixed(4), spanB: +spanB.toFixed(4),
       distPct, inOrbit, aboveKumo, retestTouch,
-      reason: ok ? (retestTouch ? 'PASS+리테스트' : 'PASS') : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>3%`}${aboveKumo ? '' : '|양운지지X'}`,
+      reason: ok ? (retestTouch ? 'PASS+리테스트' : 'PASS') : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>8%`}${aboveKumo ? '' : '|양운지지X'}`,
       fetchedAt: Date.now(),
     };
     td5mCache.set(symbol, { ts: Date.now(), data });
