@@ -915,13 +915,13 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
     const d = cached.data;
     const price = currentPrice || d.ema200;
     const distPct = d.ema200 > 0 ? Math.abs(price - d.ema200) / d.ema200 : 1;
-    const inOrbit = distPct <= 0.03;
+    const inOrbit = distPct <= 0.08; // 보정 2026-06-14: 3%→8% (거래 활성화)
     const aboveKumo = price > d.kumoTop && d.spanA > d.spanB;
     const retestTouch = distPct <= RETEST_TOUCH_PCT; // ★ ±0.3% 도달 → 리테스트 발생
     const ok = inOrbit && aboveKumo;
     return {
       ...d, distPct, inOrbit, aboveKumo, retestTouch,
-      reason: ok ? (retestTouch ? 'PASS+리테스트' : 'PASS') : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>3%`}${aboveKumo ? '' : '|양운지지X'}`,
+      reason: ok ? (retestTouch ? 'PASS+리테스트' : 'PASS') : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>8%`}${aboveKumo ? '' : '|양운지지X'}`,
     };
   }
 
