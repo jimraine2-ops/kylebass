@@ -915,13 +915,13 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
     const d = cached.data;
     const price = currentPrice || d.ema200;
     const distPct = d.ema200 > 0 ? Math.abs(price - d.ema200) / d.ema200 : 1;
-    const inOrbit = distPct <= 0.08; // 보정 2026-06-14: 3%→8% (거래 활성화)
+    const inOrbit = distPct <= 0.03;
     const aboveKumo = price > d.kumoTop && d.spanA > d.spanB;
     const retestTouch = distPct <= RETEST_TOUCH_PCT; // ★ ±0.3% 도달 → 리테스트 발생
     const ok = inOrbit && aboveKumo;
     return {
       ...d, distPct, inOrbit, aboveKumo, retestTouch,
-      reason: ok ? (retestTouch ? 'PASS+리테스트' : 'PASS') : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>8%`}${aboveKumo ? '' : '|양운지지X'}`,
+      reason: ok ? (retestTouch ? 'PASS+리테스트' : 'PASS') : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>3%`}${aboveKumo ? '' : '|양운지지X'}`,
     };
   }
 
@@ -960,7 +960,7 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
     // 실시간 가격은 Finnhub에서 currentPrice 인자로 들어옴
     const price = currentPrice || closes[N - 1];
     const distPct = ema200 > 0 ? Math.abs(price - ema200) / ema200 : 1;
-    const inOrbit = distPct <= 0.08; // 보정 2026-06-14
+    const inOrbit = distPct <= 0.03;
     const aboveKumo = price > kumoTop && spanA > spanB;
     const retestTouch = distPct <= RETEST_TOUCH_PCT;
     const ok = inOrbit && aboveKumo;
@@ -969,7 +969,7 @@ async function td5mMagnetCheck(symbol: string, currentPrice: number): Promise<Td
       kumoTop: +kumoTop.toFixed(4), kumoBottom: +kumoBottom.toFixed(4),
       spanA: +spanA.toFixed(4), spanB: +spanB.toFixed(4),
       distPct, inOrbit, aboveKumo, retestTouch,
-      reason: ok ? (retestTouch ? 'PASS+리테스트' : 'PASS') : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>8%`}${aboveKumo ? '' : '|양운지지X'}`,
+      reason: ok ? (retestTouch ? 'PASS+리테스트' : 'PASS') : `${inOrbit ? '' : `이격${(distPct*100).toFixed(2)}%>3%`}${aboveKumo ? '' : '|양운지지X'}`,
       fetchedAt: Date.now(),
     };
     td5mCache.set(symbol, { ts: Date.now(), data });
@@ -1089,10 +1089,10 @@ async function buildTargetUniverse(
       // ★ [Kumo-Sniper v3] 구름 두께 필터: (kumoTop - kumoBottom) / price ≥ 0.5%
       const cloudThicknessPct = m.lastClose > 0 ? (m.kumoTop - m.kumoBottom) / m.lastClose : 0;
       const thickOk = cloudThicknessPct >= KUMO_THICKNESS_MIN_PCT;
-      // ★ [Golden Rule 1단계 — 거래 활성화 보정 2026-06-14] 자석 ≤15% (양운 위 종목은 추세 추종, 5%는 너무 타이트해 6/9 이후 거래 0건)
+      // ★ [Golden Rule 1단계] 자석 효과: 현재가-EMA200 이격도 ≤ 5% (5% 이상이면 자격 미달)
       const ema200DistPct = m.ema200 > 0 ? Math.abs(m.lastClose - m.ema200) / m.ema200 : 1;
-      const magnetOk = ema200DistPct <= 0.15;
-      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|EMA200${ema200Ok?'✓':'✗'}|🧲자석${magnetOk?'✓':'✗'}(${(ema200DistPct*100).toFixed(2)}%≤15%)|☁️구름${kumoOk?'✓':'✗'}|📏두께${thickOk?'✓':'✗'}(${(cloudThicknessPct*100).toFixed(2)}%)|${newsTag}`;
+      const magnetOk = ema200DistPct <= 0.05;
+      const filterTag = `가격${priceOk?'✓':'✗'}($${m.lastClose.toFixed(2)})|거래대금${volOk?'✓':'✗'}($${(m.avgDollarVolUSD/1e6).toFixed(2)}M)|EMA갭${gapOk?'✓':'✗'}(${(gap*100).toFixed(2)}%)|EMA200${ema200Ok?'✓':'✗'}|🧲자석${magnetOk?'✓':'✗'}(${(ema200DistPct*100).toFixed(2)}%≤5%)|☁️구름${kumoOk?'✓':'✗'}|📏두께${thickOk?'✓':'✗'}(${(cloudThicknessPct*100).toFixed(2)}%)|${newsTag}`;
       await addLog('system', 'scan', sym, `[GoldenRule·${sym}] 200 OK (${elapsed}ms/${m.bars}봉) ${filterTag}`, { sym, status: 200, price: m.lastClose, ema25: m.ema25, ema200: m.ema200, ema200DistPct, kumoTop: m.kumoTop, kumoBottom: m.kumoBottom, cloudThicknessPct, gap, avgVolUSD: m.avgDollarVolUSD, priceOk, volOk, gapOk, ema200Ok, magnetOk, kumoOk, thickOk, newsBullish });
       okCount++;
       // ★ [Golden Rule 1단계 게이트] 가격 + 거래대금 + EMA200 우상향+위 + 자석(≤5%) + Kumo 양운 위 + 구름 두께
@@ -2434,9 +2434,9 @@ Deno.serve(async (req) => {
           // 3단계 - Finnhub 실시간 흐름
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
-          const isAggressionOk = aggressionPctRaw >= 100; // 보정 2026-06-14: 120→100 (거래 활성화)
+          const isAggressionOk = aggressionPctRaw >= 120;
           const rvolRaw = r.scoring.indicators?.rvol?.rvol || 0;
-          const isVolumeBurst = rvolRaw >= 1.5; // 보정 2026-06-14: 2.0→1.5
+          const isVolumeBurst = rvolRaw >= 2.0;
 
           // 1단계 - Twelve Data 5분봉 자석/양운
           const td5 = await td5mMagnetCheck(r.sym, r.price);
@@ -2449,8 +2449,8 @@ Deno.serve(async (req) => {
             const reasons: string[] = [];
             if (!td5.ok) reasons.push(`5m자석/양운✗(${td5.reason})`);
             if (!poly1.ok) reasons.push(`1m패턴✗(${poly1.reason})`);
-            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<100%`);
-            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<1.5`);
+            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<120%`);
+            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<2.0`);
             await addLog('unified', 'hold', r.sym, `[Triple-API탈락] ${r.sym} [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw });
             continue;
           }
