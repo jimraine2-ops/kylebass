@@ -3,6 +3,7 @@ import { IntegratedKPIDashboard } from "@/components/trading/IntegratedKPIDashbo
 import { SessionIndicator } from "@/components/trading/SessionIndicator";
 import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
+import { SystemStatusIndicator } from "@/components/trading/SystemStatusIndicator";
 import { Phase1TargetCard } from "@/components/trading/Phase1TargetCard";
 import { FillRateCard } from "@/components/dashboard/FillRateCard";
 import { GoldenCloudSniperBanner } from "@/components/trading/GoldenCloudSniperBanner";
