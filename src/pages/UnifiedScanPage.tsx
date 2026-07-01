@@ -107,6 +107,7 @@ export default function UnifiedScanPage() {
 
       {/* ☁️🎯 Golden Cloud Sniper — 4단계 전략 배너 */}
       <GoldenCloudSniperBanner />
+      <SystemStatusIndicator />
 
       {/* Phase 1 Target Universe — 그물망 알박기 Top 5 (AI 트레이딩과 동일) */}
       <Phase1TargetCard />
