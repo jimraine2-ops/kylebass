@@ -2434,9 +2434,9 @@ Deno.serve(async (req) => {
           // 3단계 - Finnhub 실시간 흐름
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
           const aggressionPctRaw = aggrRaw ? parseInt(aggrRaw) : 0;
-          const isAggressionOk = aggressionPctRaw >= 120;
+          const isAggressionOk = aggressionPctRaw >= 100; // ★ [TV재가동] 120% → 100% 완화
           const rvolRaw = r.scoring.indicators?.rvol?.rvol || 0;
-          const isVolumeBurst = rvolRaw >= 2.0;
+          const isVolumeBurst = rvolRaw >= 1.5; // ★ [TV재가동] 2.0 → 1.5 완화
 
           // 1단계 - Twelve Data 5분봉 자석/양운
           const td5 = await td5mMagnetCheck(r.sym, r.price);
