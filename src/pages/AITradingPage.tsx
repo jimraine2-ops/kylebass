@@ -54,6 +54,9 @@ export default function AITradingPage() {
       {/* 🎯 The Golden Rule — 기계적 매수 진입 지시서 */}
       <GoldenCloudSniperBanner />
 
+      {/* [시스템 상태 지시등] + 최근 에러 로그 리스트 */}
+      <SystemStatusIndicator />
+
       {/* Phase 1 Target Universe — 그물망 알박기 Top 5 */}
       <Phase1TargetCard />
 
