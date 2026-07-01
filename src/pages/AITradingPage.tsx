@@ -3,6 +3,7 @@ import { IntegratedKPIDashboard } from "@/components/trading/IntegratedKPIDashbo
 import { SessionIndicator } from "@/components/trading/SessionIndicator";
 import { ServerStatusBanner } from "@/components/trading/ServerStatusBanner";
 import { AgentLogViewer } from "@/components/trading/AgentLogViewer";
+import { SystemStatusIndicator } from "@/components/trading/SystemStatusIndicator";
 import { Phase1TargetCard } from "@/components/trading/Phase1TargetCard";
 import { FillRateCard } from "@/components/dashboard/FillRateCard";
 import { GoldenCloudSniperBanner } from "@/components/trading/GoldenCloudSniperBanner";
@@ -52,6 +53,9 @@ export default function AITradingPage() {
 
       {/* 🎯 The Golden Rule — 기계적 매수 진입 지시서 */}
       <GoldenCloudSniperBanner />
+
+      {/* [시스템 상태 지시등] + 최근 에러 로그 리스트 */}
+      <SystemStatusIndicator />
 
       {/* Phase 1 Target Universe — 그물망 알박기 Top 5 */}
       <Phase1TargetCard />
