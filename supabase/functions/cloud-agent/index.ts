@@ -13,8 +13,8 @@ const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const KRW_RATE = 1350;
 const MIN_PRICE_KRW = 100; // ★ 동전주: 최저 100원까지 허용
 const MIN_PRICE_USD = MIN_PRICE_KRW / KRW_RATE;
-const MAX_PRICE_KRW = 12000; // ★ ₩12,000 미만 = $9 미만 저가주 전용 (자산 회전율 극대화)
-const MAX_PRICE_USD = MAX_PRICE_KRW / KRW_RATE; // ≈ $9
+const MAX_PRICE_USD = 5; // ★ [TV 1분봉 재가동] 현재가 $5 미만만 기계적 진입
+const MAX_PRICE_KRW = Math.floor(MAX_PRICE_USD * KRW_RATE); // ≈ ₩6,750
 const PENNY_THRESHOLD_USD = 1.00; // ★ $1 미만 = 동전주
 const PENNY_THRESHOLD_KRW = 2000; // ★ ₩2,000 이하 = 동전주
 const PENNY_ENTRY_SCORE = 70; // ★ 동전주 진입 문턱: 70점
@@ -991,6 +991,146 @@ interface Polygon1mPattern {
 const poly1mCache = new Map<string, { ts: number; data: Polygon1mPattern }>();
 const POLY_1M_TTL_MS = 30_000;
 
+interface TradingView1mCheck {
+  ok: boolean;
+  openAboveEma200: boolean;
+  bullCloud: boolean;
+  priceAboveCloud: boolean;
+  open: number;
+  currentPrice: number;
+  ema200: number;
+  spanA: number;
+  spanB: number;
+  bars: number;
+  status: number;
+  reason: string;
+}
+
+const tv1mCache = new Map<string, { ts: number; data: TradingView1mCheck }>();
+const TV_1M_TTL_MS = 45_000;
+
+async function polygon1mTradingViewCheck(symbol: string): Promise<TradingView1mCheck> {
+  const cached = tv1mCache.get(symbol);
+  if (cached && Date.now() - cached.ts < TV_1M_TTL_MS) return cached.data;
+
+  const empty: TradingView1mCheck = {
+    ok: false, openAboveEma200: false, bullCloud: false, priceAboveCloud: false,
+    open: 0, currentPrice: 0, ema200: 0, spanA: 0, spanB: 0, bars: 0, status: 0, reason: 'NO_DATA',
+  };
+
+  const to = new Date().toISOString().split('T')[0];
+  const from = new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0];
+  const { data, status } = await polygonFetch(`/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/minute/${from}/${to}?adjusted=true&sort=asc&limit=300`);
+  if (status !== 200) return { ...empty, status, reason: `HTTP_${status}` };
+
+  const bars = data?.results || [];
+  if (bars.length < 60) return { ...empty, status: 204, bars: bars.length, reason: `BARS_${bars.length}` };
+
+  const closes = bars.map((b: any) => Number(b.c));
+  const opens = bars.map((b: any) => Number(b.o));
+  const highs = bars.map((b: any) => Number(b.h));
+  const lows = bars.map((b: any) => Number(b.l));
+  const N = closes.length;
+
+  const period = Math.min(200, N);
+  const k = 2 / (period + 1);
+  let ema200 = closes.slice(0, period).reduce((s: number, v: number) => s + v, 0) / period;
+  for (let i = period; i < N; i++) ema200 = closes[i] * k + ema200 * (1 - k);
+
+  const tenkan = (Math.max(...highs.slice(N - 9)) + Math.min(...lows.slice(N - 9))) / 2;
+  const kijun = (Math.max(...highs.slice(N - 26)) + Math.min(...lows.slice(N - 26))) / 2;
+  const spanA = (tenkan + kijun) / 2;
+  const lookbackB = Math.min(52, N);
+  const spanB = (Math.max(...highs.slice(N - lookbackB)) + Math.min(...lows.slice(N - lookbackB))) / 2;
+
+  const open = opens[N - 1];
+  const currentPrice = closes[N - 1];
+  const openAboveEma200 = open > ema200;
+  const bullCloud = spanA > spanB;
+  const priceAboveCloud = currentPrice > spanA && currentPrice > spanB;
+  const ok = openAboveEma200 && bullCloud && priceAboveCloud && currentPrice > 0 && currentPrice < MAX_PRICE_USD;
+  const reasons: string[] = [];
+  if (!openAboveEma200) reasons.push(`Open≤EMA200(${open.toFixed(4)}≤${ema200.toFixed(4)})`);
+  if (!bullCloud) reasons.push(`양운X(A:${spanA.toFixed(4)}≤B:${spanB.toFixed(4)})`);
+  if (!priceAboveCloud) reasons.push(`구름상단돌파X(C:${currentPrice.toFixed(4)}≤Top:${Math.max(spanA, spanB).toFixed(4)})`);
+  if (currentPrice >= MAX_PRICE_USD) reasons.push(`가격$${currentPrice.toFixed(2)}≥$5`);
+
+  const result: TradingView1mCheck = {
+    ok, openAboveEma200, bullCloud, priceAboveCloud,
+    open: +open.toFixed(4), currentPrice: +currentPrice.toFixed(4), ema200: +ema200.toFixed(4),
+    spanA: +spanA.toFixed(4), spanB: +spanB.toFixed(4), bars: N, status: 200,
+    reason: ok ? 'TV_1M_PASS' : reasons.join('|'),
+  };
+  tv1mCache.set(symbol, { ts: Date.now(), data: result });
+  return result;
+}
+
+async function finnhub1mTradingViewCheck(symbol: string): Promise<TradingView1mCheck> {
+  const empty: TradingView1mCheck = {
+    ok: false, openAboveEma200: false, bullCloud: false, priceAboveCloud: false,
+    open: 0, currentPrice: 0, ema200: 0, spanA: 0, spanB: 0, bars: 0, status: 0, reason: 'NO_FINNHUB_1M',
+  };
+  const to = Math.floor(Date.now() / 1000);
+  const from = to - 8 * 60 * 60;
+  const candles = await finnhubFetch(`/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=1&from=${from}&to=${to}`);
+  if (!candles || candles.s !== 'ok' || !Array.isArray(candles.c)) {
+    return { ...empty, status: 204, reason: `FINNHUB_${candles?.s || 'NO_DATA'}` };
+  }
+  const closes = candles.c.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v > 0);
+  const opens = candles.o.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v > 0);
+  const highs = candles.h.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v > 0);
+  const lows = candles.l.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v > 0);
+  const N = Math.min(closes.length, opens.length, highs.length, lows.length);
+  if (N < 60) return { ...empty, status: 204, bars: N, reason: `FINNHUB_BARS_${N}` };
+
+  const c = closes.slice(-N), o = opens.slice(-N), h = highs.slice(-N), l = lows.slice(-N);
+  const period = Math.min(200, N);
+  const k = 2 / (period + 1);
+  let ema200 = c.slice(0, period).reduce((s: number, v: number) => s + v, 0) / period;
+  for (let i = period; i < N; i++) ema200 = c[i] * k + ema200 * (1 - k);
+  const tenkan = (Math.max(...h.slice(N - 9)) + Math.min(...l.slice(N - 9))) / 2;
+  const kijun = (Math.max(...h.slice(N - 26)) + Math.min(...l.slice(N - 26))) / 2;
+  const spanA = (tenkan + kijun) / 2;
+  const lookbackB = Math.min(52, N);
+  const spanB = (Math.max(...h.slice(N - lookbackB)) + Math.min(...l.slice(N - lookbackB))) / 2;
+  const open = o[N - 1];
+  const currentPrice = c[N - 1];
+  const openAboveEma200 = open > ema200;
+  const bullCloud = spanA > spanB;
+  const priceAboveCloud = currentPrice > spanA && currentPrice > spanB;
+  const ok = openAboveEma200 && bullCloud && priceAboveCloud && currentPrice > 0 && currentPrice < MAX_PRICE_USD;
+  const reasons: string[] = [];
+  if (!openAboveEma200) reasons.push(`Open≤EMA200(${open.toFixed(4)}≤${ema200.toFixed(4)})`);
+  if (!bullCloud) reasons.push(`양운X(A:${spanA.toFixed(4)}≤B:${spanB.toFixed(4)})`);
+  if (!priceAboveCloud) reasons.push(`구름상단돌파X(C:${currentPrice.toFixed(4)}≤Top:${Math.max(spanA, spanB).toFixed(4)})`);
+  if (currentPrice >= MAX_PRICE_USD) reasons.push(`가격$${currentPrice.toFixed(2)}≥$5`);
+  return {
+    ok, openAboveEma200, bullCloud, priceAboveCloud,
+    open: +open.toFixed(4), currentPrice: +currentPrice.toFixed(4), ema200: +ema200.toFixed(4),
+    spanA: +spanA.toFixed(4), spanB: +spanB.toFixed(4), bars: N, status: 200,
+    reason: ok ? 'TV_1M_PASS_FINNHUB' : reasons.join('|'),
+  };
+}
+
+async function tradingView1mCheck(symbol: string): Promise<TradingView1mCheck> {
+  const cached = tv1mCache.get(symbol);
+  if (cached && Date.now() - cached.ts < TV_1M_TTL_MS) return cached.data;
+  const poly = await polygon1mTradingViewCheck(symbol);
+  if (poly.ok) {
+    tv1mCache.set(symbol, { ts: Date.now(), data: poly });
+    return poly;
+  }
+  const shouldFallbackToFinnhub = poly.status === 429 || poly.status === 403 || poly.status === 0 || poly.status === 204 || poly.reason.startsWith('BARS_');
+  if (!shouldFallbackToFinnhub) {
+    tv1mCache.set(symbol, { ts: Date.now(), data: poly });
+    return poly;
+  }
+  const fh = await finnhub1mTradingViewCheck(symbol);
+  const result = { ...fh, reason: fh.ok ? `${fh.reason}+POLY_FALLBACK` : `${fh.reason}|POLY_${poly.reason}` };
+  tv1mCache.set(symbol, { ts: Date.now(), data: result });
+  return result;
+}
+
 async function polygon1mPattern(symbol: string): Promise<Polygon1mPattern> {
   const cached = poly1mCache.get(symbol);
   if (cached && Date.now() - cached.ts < POLY_1M_TTL_MS) return cached.data;
@@ -1052,9 +1192,9 @@ async function buildTargetUniverse(
   await addLog('system', 'scan', null, `[GoldenCloud] 🎯 사냥감 빌드 시작 — Polygon EMA25/EMA200/Ichimoku Kumo + Finnhub 24h 뉴스 (풀: ${candidatePool.length}개)`, {});
 
   const results: TargetUniverseEntry[] = [];
-  // ★ Polygon 무료 = 5 req/min → 사이클당 4개만 호출 (60초 한도 내 안전)
+  // ★ Polygon 무료 = 5 req/min → Phase1은 1개만 점검하고, 나머지는 TV 1분봉 직접 게이트로 처리
   // 풀이 크면 매 사이클 다른 슬라이스를 점진적으로 스캔
-  const SAMPLES_PER_CYCLE = 4;
+  const SAMPLES_PER_CYCLE = 1;
   const startIdx = Math.floor(Date.now() / 60000) % Math.max(1, Math.ceil(candidatePool.length / SAMPLES_PER_CYCLE));
   const sliced = candidatePool.slice(startIdx * SAMPLES_PER_CYCLE, startIdx * SAMPLES_PER_CYCLE + SAMPLES_PER_CYCLE);
 
@@ -1125,7 +1265,7 @@ async function buildTargetUniverse(
       await addLog('system', 'warning', sym, `[Phase1·${sym}] ❓ HTTP ${m.status} (${elapsed}ms)`, { sym, status: m.status });
     }
 
-    // 13초 간격 (5 req/min 안전 마진)
+    // 13초 간격 (SAMPLES_PER_CYCLE=1이라 일반적으로 대기 없음)
     if (sym !== sliced[sliced.length - 1] && !rateLimited) {
       await new Promise(r => setTimeout(r, 13000));
     }
@@ -1238,9 +1378,12 @@ async function discoverAllUSStocks(): Promise<string[]> {
     const symbols = await res.json();
     if (!Array.isArray(symbols)) return discoveredSymbols;
     // Filter: only common stocks (type=Common Stock), exclude OTC/penny shell
+    const majorMic = new Set(['XNYS', 'XNAS', 'ARCX', 'BATS', 'IEXG']);
     discoveredSymbols = symbols
       .filter((s: any) => s.type === 'Common Stock' && s.symbol && !s.symbol.includes('.'))
-      .map((s: any) => s.symbol as string)
+      .filter((s: any) => !s.mic || majorMic.has(String(s.mic)))
+      .map((s: any) => String(s.symbol).toUpperCase())
+      .filter((s: string) => /^[A-Z]{1,5}$/.test(s) && !s.endsWith('F'))
       .filter((s: string) => !LARGE_SET.has(s) && !SMALL_SET.has(s)); // 기존 풀과 중복 제거
     lastDiscoveryTime = now;
     return discoveredSymbols;
@@ -1506,11 +1649,15 @@ Deno.serve(async (req) => {
     const entryRelax = sessionInfo.entryRelax;
     const sessionRvolMin = 2.0;
 
-    // ★ 전 종목 동적 발견: 비활성화 (타임아웃 방지 — 기존 풀 443개로 충분)
-    // try {
-    //   const discovered = await discoverAllUSStocks();
-    //   ...
-    // } catch { }
+    // ★ [전면수정] 동적 발견 재가동: 정적 리스트가 오래된/상폐 종목으로 막히는 현상 방지
+    try {
+      const discovered = await discoverAllUSStocks();
+      if (discovered.length > 0) {
+        await addLog('system', 'scan', null, `[동적발견] Finnhub US 공통주 ${discovered.length}개 확보 — $5 미만 1분봉 조건 후보 순환 투입`, { discoveredCount: discovered.length });
+      }
+    } catch (e) {
+      await addLog('system', 'warning', null, `[동적발견] 심볼 확장 실패: ${(e as Error).message}`, {});
+    }
     const sessionSlippage = sessionInfo.aggressiveSlippage; // ★ 공격적 체결 슬리피지
 
     // ★ 필승 로직: 정규장 개장 직후 15분(09:30~09:45 ET) 뇌동매매 방지
@@ -1577,18 +1724,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ 전 종목 확장: 동적 발견 종목에서도 슬롯 충전
-    const dynSymbols = discoveredSymbols.length > 0 ? discoveredSymbols : [];
-    const dynStart = (cycleCount * 50) % Math.max(1, dynSymbols.length);
-    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(20, dynSymbols.length); i++) {
-      const sym = dynSymbols[(dynStart + i) % dynSymbols.length];
-      if (!activeUnifiedList.has(sym)) {
-        activeUnifiedList.add(sym);
-        currentSmall.push(sym);
-      }
-    }
-
-    // Fill remaining slots with rotation (기존 풀)
+    // Fill remaining slots with rotation (기존 검증 풀 우선)
     const largeArr = Array.from(LARGE_SET);
     const largeStart = (cycleCount * LARGE_SLOTS) % largeArr.length;
     for (let i = 0; currentLarge.length < LARGE_SLOTS && i < largeArr.length; i++) {
@@ -1603,6 +1739,17 @@ Deno.serve(async (req) => {
     const smallStart = (cycleCount * SMALL_SLOTS) % smallArr.length;
     for (let i = 0; currentSmall.length < SMALL_SLOTS && i < smallArr.length; i++) {
       const sym = smallArr[(smallStart + i) % smallArr.length];
+      if (!activeUnifiedList.has(sym)) {
+        activeUnifiedList.add(sym);
+        currentSmall.push(sym);
+      }
+    }
+
+    // ★ 전 종목 확장: 기존 검증 풀이 부족할 때만 정규거래소 동적 발견 종목 투입
+    const dynSymbols = discoveredSymbols.length > 0 ? discoveredSymbols : [];
+    const dynStart = (cycleCount * 50) % Math.max(1, dynSymbols.length);
+    for (let i = 0; currentSmall.length < SMALL_SLOTS && i < Math.min(30, dynSymbols.length); i++) {
+      const sym = dynSymbols[(dynStart + i) % dynSymbols.length];
       if (!activeUnifiedList.has(sym)) {
         activeUnifiedList.add(sym);
         currentSmall.push(sym);
@@ -1675,8 +1822,8 @@ Deno.serve(async (req) => {
     const targetMap = new Map(targetUniverse.map(t => [t.symbol, t]));
     if (targetUniverse.length > 0) {
       const heldSet = new Set(heldSymbols);
-      SCAN_SYMBOLS = Array.from(new Set([...targetSet, ...heldSet]));
-      await addLog('system', 'scan', null, `[Phase1] 🎯 스캔 범위 축소 → 타겟 ${targetSet.size}개 + 보유 ${heldSet.size}개 = ${SCAN_SYMBOLS.length}개 집중 타격 | 마중가 알박기 적용`, { targets: targetUniverse.map(t => ({ symbol: t.symbol, ema25: t.ema25, gap: t.emaGapPct, limit: t.limitPriceUSD })) });
+      SCAN_SYMBOLS = Array.from(new Set([...SCAN_SYMBOLS, ...targetSet, ...heldSet]));
+      await addLog('system', 'scan', null, `[Phase1] 🎯 타겟 ${targetSet.size}개를 기존 스캔 ${SCAN_SYMBOLS.length}개에 추가 — TV 1분봉 직접 게이트 병행 가동`, { targets: targetUniverse.map(t => ({ symbol: t.symbol, ema25: t.ema25, gap: t.emaGapPct, limit: t.limitPriceUSD })) });
     }
 
     // ★★★ [통합 잔고 검증 Reconciliation]
@@ -2429,7 +2576,6 @@ Deno.serve(async (req) => {
           // ============================================================
           const tgt = targetMap.get(r.sym);
           const isPhase1Target = !!tgt;
-          if (!isPhase1Target) continue; // Phase1(일봉) 사냥감만 후속 검증
 
           // 3단계 - Finnhub 실시간 흐름
           const aggrRaw = r.scoring.indicators?.aggression?.details?.match(/(\d+)%/)?.[1];
@@ -2438,20 +2584,29 @@ Deno.serve(async (req) => {
           const rvolRaw = r.scoring.indicators?.rvol?.rvol || 0;
           const isVolumeBurst = rvolRaw >= 1.5; // ★ [TV재가동] 2.0 → 1.5 완화
 
-          // 1단계 - Twelve Data 5분봉 자석/양운
-          const td5 = await td5mMagnetCheck(r.sym, r.price);
-          // 2단계 - Polygon 1분봉 패턴
-          const poly1 = await polygon1mPattern(r.sym);
+          // ★ [최우선] TradingView 1분봉 기계식 스크리너 조건
+          // 가격<$5 + Open>EMA200 + 양운(A>B) + 현재가가 구름 완전 상향 돌파
+          const tv1 = await tradingView1mCheck(r.sym);
+          const tvMechanicalPass = tv1.ok;
 
-          const hardCriteriaPass = td5.ok && poly1.ok && isAggressionOk && isVolumeBurst;
+          // 1단계 - Twelve Data 5분봉 자석/양운
+          const td5 = isPhase1Target ? await td5mMagnetCheck(r.sym, r.price) : null;
+          // 2단계 - Polygon 1분봉 패턴
+          const poly1 = isPhase1Target ? await polygon1mPattern(r.sym) : null;
+
+          const tripleApiPass = !!(isPhase1Target && td5?.ok && poly1?.ok && isAggressionOk && isVolumeBurst);
+          const hardCriteriaPass = tvMechanicalPass || tripleApiPass;
 
           if (!hardCriteriaPass) {
             const reasons: string[] = [];
-            if (!td5.ok) reasons.push(`5m자석/양운✗(${td5.reason})`);
-            if (!poly1.ok) reasons.push(`1m패턴✗(${poly1.reason})`);
-            if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<120%`);
-            if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<2.0`);
-            await addLog('unified', 'hold', r.sym, `[Triple-API탈락] ${r.sym} [${reasons.join('|')}]`, { td5, poly1, aggressionPctRaw, rvolRaw });
+            if (!tv1.ok) reasons.push(`TV1m✗(${tv1.reason})`);
+            if (isPhase1Target) {
+              if (!td5?.ok) reasons.push(`5m자석/양운✗(${td5?.reason || 'NO_TD'})`);
+              if (!poly1?.ok) reasons.push(`1m패턴✗(${poly1?.reason || 'NO_POLY'})`);
+              if (!isAggressionOk) reasons.push(`체결강도${aggressionPctRaw}%<100%`);
+              if (!isVolumeBurst) reasons.push(`RVOL${rvolRaw.toFixed(2)}<1.5`);
+            }
+            await addLog('unified', 'hold', r.sym, `[매수게이트탈락] ${r.sym} [${reasons.join('|')}]`, { tv1, td5, poly1, aggressionPctRaw, rvolRaw, isPhase1Target });
             continue;
           }
 
@@ -2480,9 +2635,12 @@ Deno.serve(async (req) => {
           (r as any).volumeRank = volumeRankMap.get(r.sym) || 999;
           (r as any).tradingValueUSD = tradingVal;
           (r as any).hardCriteriaPass = true;
+          (r as any).tv1mPass = tvMechanicalPass;
+          (r as any).tv1m = tv1;
+          (r as any).tripleApiPass = tripleApiPass;
           (r as any).aggressionPctRaw = aggressionPctRaw;
-          (r as any).td5mDistPct = td5.distPct;
-          (r as any).poly1mPattern = poly1.pattern;
+          (r as any).td5mDistPct = td5?.distPct ?? null;
+          (r as any).poly1mPattern = poly1?.pattern ?? null;
 
           // ★ 골든 클라우드 사냥감 메타 (마중가 = Kumo 상단)
           (r as any).isPhase1Target = true;
@@ -2495,9 +2653,13 @@ Deno.serve(async (req) => {
           (r as any).newsSentiment = 50;
           (r as any).newsCount = 0;
 
-          const retestTag = td5.retestTouch ? `🎯리테스트발생(±0.3%)` : `🧲궤도(${(td5.distPct*100).toFixed(2)}%)`;
-          const dataAgeSec = td5.fetchedAt ? Math.floor((Date.now() - td5.fetchedAt) / 1000) : 0;
-          await addLog('unified', 'scan', r.sym, `[Triple-API통과] ${r.sym} ${retestTag} target=$${td5.ema200.toFixed(2)}(지표${dataAgeSec}s前) 실시간=$${r.price.toFixed(2)}+양운✓ | 1m${poly1.pattern} | 체결${aggressionPctRaw}%+RVOL${rvolRaw.toFixed(2)}x → Kumo$${tgt!.kumoTop.toFixed(2)}(${r.scoring.totalScore}점)`, { td5, poly1, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore, targetPrice: td5.ema200, livePrice: r.price, retestTouch: td5.retestTouch });
+          if (tvMechanicalPass) {
+            await addLog('unified', 'scan', r.sym, `[TV-1m통과] ${r.sym} $${r.price.toFixed(4)}<$5 | Open $${tv1.open.toFixed(4)} > EMA200 $${tv1.ema200.toFixed(4)} | 양운 A(${tv1.spanA.toFixed(4)})>B(${tv1.spanB.toFixed(4)}) | 현재가 구름상단 돌파 ✓ → -0.5% 지정가 매수 준비`, { tv1, score: r.scoring.totalScore, livePrice: r.price });
+          } else if (td5 && poly1 && tgt) {
+            const retestTag = td5.retestTouch ? `🎯리테스트발생(±0.3%)` : `🧲궤도(${(td5.distPct*100).toFixed(2)}%)`;
+            const dataAgeSec = td5.fetchedAt ? Math.floor((Date.now() - td5.fetchedAt) / 1000) : 0;
+            await addLog('unified', 'scan', r.sym, `[Triple-API통과] ${r.sym} ${retestTag} target=$${td5.ema200.toFixed(2)}(지표${dataAgeSec}s前) 실시간=$${r.price.toFixed(2)}+양운✓ | 1m${poly1.pattern} | 체결${aggressionPctRaw}%+RVOL${rvolRaw.toFixed(2)}x → Kumo$${tgt.kumoTop.toFixed(2)}(${r.scoring.totalScore}점)`, { td5, poly1, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore, targetPrice: td5.ema200, livePrice: r.price, retestTouch: td5.retestTouch });
+          }
 
           candidates.push(r);
         }
@@ -2577,6 +2739,14 @@ Deno.serve(async (req) => {
     // ★ 뉴스 감성 + 기업 가치 분석: 상위 10개 후보에만 적용 (타임아웃 방지)
     const preFilteredTop = candidates.slice(0, 10);
     for (const c of preFilteredTop) {
+      if ((c as any).tv1mPass) {
+        (c as any).newsSentiment = 50;
+        (c as any).newsCount = 0;
+        (c as any).valueGrade = 'N/A';
+        (c as any).valueScore = 0;
+        (c as any).valueVerified = false;
+        continue;
+      }
       try {
         const news = await getNewsSentiment(c.sym);
         (c as any).newsSentiment = news.bullishPct;
@@ -2620,11 +2790,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ★ [Hard-Criteria 단일 게이트] 후보 수집 단계에서 이미 4-AND 통과한 종목만 들어왔으므로,
-    //    여기서는 추가 점수 필터/뉴스 필터 없이 그대로 통과시킨다.
-    //    (가치등급 D만 차단 — 펀더멘털 위험 회피)
+    // ★ [Hard-Criteria 단일 게이트] 후보 수집 단계에서 이미 기술 조건 통과한 종목만 들어왔으므로,
+    //    여기서는 뉴스/가치/점수로 추가 차단하지 않는다. (사용자 지시: 뉴스 전략 완전 배제)
     const filteredCandidates = candidates.filter(c => {
-      if ((c as any)._valueBlocked) return false;
       return (c as any).hardCriteriaPass === true;
     });
     const topCandidates = filteredCandidates.slice(0, 5);
@@ -2643,6 +2811,8 @@ Deno.serve(async (req) => {
       // ★ 동전주 개수 표시
       const pennyCount = topCandidates.filter(c => (c as any).isPennyStock).length;
       await addLog('unified', 'scan', null, `[🌐전종목스캔] [${timeStr}] 매수 후보 ${candidates.length}개 중 TOP ${topCandidates.length}개 집중 투자 (🪙동전주 ${pennyCount}개): ${summary}`, {});
+    } else {
+      await addLog('system', 'warning', null, `[파이프라인진단] 매수 후보 0개 — 스캔 ${SCAN_SYMBOLS.length}개, Phase1타겟 ${targetUniverse.length}개, 게이트로그를 확인하세요. 이제 Phase1이 비어도 TV 1분봉 조건으로 직접 후보화합니다.`, { scanCount: SCAN_SYMBOLS.length, targetCount: targetUniverse.length, candidateCount: candidates.length });
     }
 
     for (const r of topCandidates) {
@@ -2684,7 +2854,11 @@ Deno.serve(async (req) => {
       let adjustedPrice: number;
       let orderType = 'MARKET';
       const kumoLimit = (r as any).phase1KumoTop as number | undefined;
-      if (kumoLimit && kumoLimit > 0) {
+      if ((r as any).tv1mPass) {
+        // ★ TradingView 조건: 현재가 대비 1% 미만 아래 지정가. 0.5% 아래로 체결 가능성과 지시 조건을 동시 충족.
+        adjustedPrice = +(r.price * 0.995).toFixed(4);
+        orderType = 'LIMIT(TV-1m -0.5%)';
+      } else if (kumoLimit && kumoLimit > 0) {
         // Kumo 상단 마중가 (현재가보다 낮을 때만 = 리테스트 대기, 아니면 현재가 기준 Passive Fill)
         adjustedPrice = kumoLimit < r.price ? +kumoLimit.toFixed(4) : passivePrice;
         orderType = kumoLimit < r.price ? 'LIMIT(☁️Kumo-Retest)' : 'LIMIT(Passive)';
@@ -2700,10 +2874,10 @@ Deno.serve(async (req) => {
         orderType = 'LIMIT(Aggressive)';
       }
 
-      // ★ [전략 동기화] 초기 SL -10% / TP +15% 통일
-      const stopLoss = +(adjustedPrice * 0.90).toFixed(4);
-      // ★ 선취매/예측형: TP +20% (정규장 폭발 대비), 일반: +15%
-      const tpMultiplier = (isAccumEntry || isCriticalPatternEntry || isPredictive) && isLowVolumeSession ? 1.20 : 1.15;
+      // ★ TV 1분봉 기계식: 익절 +1.5%, 손절 -1.5% 고정. 그 외 기존 전략은 기존 TP/SL 유지.
+      const isTvMechanical = (r as any).tv1mPass === true;
+      const stopLoss = +(adjustedPrice * (isTvMechanical ? 0.985 : 0.90)).toFixed(4);
+      const tpMultiplier = isTvMechanical ? 1.015 : ((isAccumEntry || isCriticalPatternEntry || isPredictive) && isLowVolumeSession ? 1.20 : 1.15);
       const takeProfit = +(adjustedPrice * tpMultiplier).toFixed(4);
       const splitOrderNote = isAccumEntry ? ' | 📦분할잠입매집(5분할 조용히 체결)' : '';
       const tsGuardTag = tsGuard.isGuarded ? ` | ⏱️Timestamp Guard(${dataAge.toFixed(1)}s→${PASSIVE_FILL_TICKS}호가↓)` : '';
@@ -2738,8 +2912,10 @@ Deno.serve(async (req) => {
       const roundTag = currentRound > 1 ? `[Round ${currentRound}] ` : '';
       const isPhase1 = (r as any).isPhase1Target === true;
       const phase1Tag = isPhase1 ? ` | 🎯GoldenCloud(EMA200:$${(r as any).phase1Ema200?.toFixed(2)}/☁️Kumo:$${(r as any).phase1KumoBottom?.toFixed(2)}~$${(r as any).phase1KumoTop?.toFixed(2)}/리테스트마중가:$${(r as any).phase1Limit?.toFixed(2)})` : '';
-      const preBuyLabel = isPhase1 ? '🎯Phase1마중가체결' : isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
-      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${isPhase1 ? 'Phase1 그물망 알박기 매수' : valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수'} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: 3.0% (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${phase1Tag}${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
+      const tvTag = isTvMechanical ? ` | 📺TV1m(Open>EMA200+양운+구름돌파) TP+1.5%/SL-1.5%` : '';
+      const preBuyLabel = isTvMechanical ? '📺TV1분봉기계매수' : isPhase1 ? '🎯Phase1마중가체결' : isPennyEntry ? '🪙동전주매수' : isPredictive ? '🔮예측형선취매' : isAccumEntry ? '선취매 완료: 정규장 폭발 대기 중' : isCriticalPatternEntry ? '🎯필승패턴매수' : isSuperEntry ? '🎯15%슈퍼매수' : tripleVerified ? '💎가치기반우량저가주매수' : '10대지표매수';
+      const buyModeText = isTvMechanical ? 'TradingView 1분봉 조건 기계 매수' : isPhase1 ? 'Phase1 그물망 알박기 매수' : valueVerified ? '가치 기반 우량 저가주 매수' : '10대 지표 매수';
+      const logMsg = `${roundTag}[${preBuyLabel}] [${sessionLabel}] [${timeStr}] ${r.sym} ${r.scoring.totalScore}점 → ${buyModeText} | PnL: 신규 | 신뢰도: ${winProb}% | 익절 예측 확정률: ${winProb}% ${tripleVerified ? '(가치 검증 완료)' : ''} | 기업 가치 등급: ${valueGrade} ${valueVerified ? '(우량) ★추가' : ''} | AI 추천 매도: ${isTvMechanical ? '1.5%' : '3.0%'} (${valueVerified ? '가치 뒷받침 시 홀딩 권장' : '표준'}) [${capLabel}|${tier}|${orderType}|${qty}주@${fmtKRW(adjustedPrice)}|${fmtKRWRaw(costKRW)}]${tvTag}${phase1Tag}${spreadNote}${volRankTag}${burstTag}${pennyBuyTag}${condensationTag}${superTag}${criticalTag}${valueTag}${tripleTag}${tsGuardTag}${passiveTag}${predictiveTag}${liqRatioTag} | 지표: [${indDetails}] | [잔고: ${fmtKRWRaw(balanceBefore)} → ${fmtKRWRaw(newBuyBalance)}]`;
 
       // ★ 필승 패턴 알림
       if (isCriticalPatternEntry) {
@@ -2756,14 +2932,21 @@ Deno.serve(async (req) => {
         await addLog('unified', 'milestone', r.sym, `🪙 [동전주 물량선점 매수] ${r.sym} $${r.price.toFixed(4)}(${fmtKRW(r.price)}) × ${qty}주 | 호가 한 칸 변동 = 큰 수익! | 본절보호: +${PENNY_BREAKEVEN_PCT}% | 철갑홀딩: ${PENNY_IRON_HOLD_SCORE}점↑`, { price: r.price, qty, isPenny: true, score: r.scoring.totalScore });
       }
 
-      await supabase.from('unified_trades').insert({
+      const { error: insertErr } = await supabase.from('unified_trades').insert({
         symbol: r.sym, side: 'buy', quantity: qty, price: adjustedPrice,
         stop_loss: stopLoss, take_profit: takeProfit, status: 'open',
         cap_type: r.capType,
         entry_score: r.scoring.totalScore,
         ai_reason: logMsg, ai_confidence: valueVerified ? Math.max(r.scoring.totalScore, 98) : r.scoring.totalScore,
       });
-      await supabase.from('unified_wallet').update({ balance: newBuyBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
+      if (insertErr) {
+        await addLog('unified', 'error', r.sym, `[ORDER_INSERT_FAILED] ${r.sym} 매수 기록 실패: ${insertErr.message}`, { insertErr, logMsg });
+        continue;
+      }
+      const { error: walletErr } = await supabase.from('unified_wallet').update({ balance: newBuyBalance, updated_at: now.toISOString() }).eq('id', wallet.id);
+      if (walletErr) {
+        await addLog('unified', 'error', r.sym, `[WALLET_UPDATE_FAILED] ${r.sym} 매수 후 잔고 갱신 실패: ${walletErr.message}`, { walletErr, newBuyBalance });
+      }
       balance = newBuyBalance;
       openCount++;
       await addLog('unified', 'buy', r.sym, logMsg, { score: r.scoring.totalScore, metCount: r.scoring.metCount, qty, costKRW, capType: r.capType, indicators: r.scoring.indicators, isSuperPattern: isSuperEntry, isPenny: isPennyEntry, valueGrade, valueScore: (r as any).valueScore || 0, valueVerified, tripleVerified, winProb });
