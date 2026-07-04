@@ -2643,13 +2643,16 @@ Deno.serve(async (req) => {
           (r as any).poly1mPattern = poly1?.pattern ?? null;
 
           // ★ 골든 클라우드 사냥감 메타 (마중가 = Kumo 상단)
-          (r as any).isPhase1Target = true;
-          (r as any).phase1Limit = tgt!.limitPriceUSD;
-          (r as any).phase1Ema25 = tgt!.ema25;
-          (r as any).phase1Ema200 = tgt!.ema200;
-          (r as any).phase1KumoTop = tgt!.kumoTop;
-          (r as any).phase1KumoBottom = tgt!.kumoBottom;
-          (r as any).phase1EmaGapPct = tgt!.emaGapPct;
+          // TV 1분봉 직접 게이트로 통과한 종목은 Phase1 타겟이 없을 수 있으므로 안전 분기
+          (r as any).isPhase1Target = isPhase1Target;
+          if (tgt) {
+            (r as any).phase1Limit = tgt.limitPriceUSD;
+            (r as any).phase1Ema25 = tgt.ema25;
+            (r as any).phase1Ema200 = tgt.ema200;
+            (r as any).phase1KumoTop = tgt.kumoTop;
+            (r as any).phase1KumoBottom = tgt.kumoBottom;
+            (r as any).phase1EmaGapPct = tgt.emaGapPct;
+          }
           (r as any).newsSentiment = 50;
           (r as any).newsCount = 0;
 
