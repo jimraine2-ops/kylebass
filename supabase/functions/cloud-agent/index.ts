@@ -2621,6 +2621,16 @@ Deno.serve(async (req) => {
           const cp = r.scoring.criticalPatterns;
           const accumPattern = r.scoring.accumulation;
 
+          // ★ [볼륨 300K 우선] 최근 5분봉 평균 거래량 계산 (Finnhub 1분봉 volumes)
+          const recentVols = (r.data?.volumes || []).slice(-5);
+          const recentAvgVolShares = recentVols.length > 0
+            ? recentVols.reduce((s: number, v: number) => s + (v || 0), 0) / recentVols.length
+            : 0;
+          const lastBarVolShares = (r.data?.volumes || []).slice(-1)[0] || 0;
+          (r as any).recentAvgVolShares = recentAvgVolShares;
+          (r as any).lastBarVolShares = lastBarVolShares;
+          (r as any).isHighVolume300K = recentAvgVolShares >= 300_000 || lastBarVolShares >= 300_000;
+
           (r as any).isVolumeBurst = rvol >= 2.0;
           (r as any).isPennyStock = isPenny;
           (r as any).isAccumulationEntry = false;
@@ -2656,12 +2666,15 @@ Deno.serve(async (req) => {
           (r as any).newsSentiment = 50;
           (r as any).newsCount = 0;
 
+          const volTag = (r as any).isHighVolume300K
+            ? `🔊고볼륨✓(최근5분평균${Math.floor((r as any).recentAvgVolShares/1000)}K주≥300K → 우선매수)`
+            : `🔈저볼륨(최근5분평균${Math.floor((r as any).recentAvgVolShares/1000)}K주<300K)`;
           if (tvMechanicalPass) {
-            await addLog('unified', 'scan', r.sym, `[TV-1m통과] ${r.sym} $${r.price.toFixed(4)}<$5 | Open $${tv1.open.toFixed(4)} > EMA200 $${tv1.ema200.toFixed(4)} | 양운 A(${tv1.spanA.toFixed(4)})>B(${tv1.spanB.toFixed(4)}) | 현재가 구름상단 돌파 ✓ → -0.5% 지정가 매수 준비`, { tv1, score: r.scoring.totalScore, livePrice: r.price });
+            await addLog('unified', 'scan', r.sym, `[TV-1m통과] ${r.sym} $${r.price.toFixed(4)}<$5 | Open $${tv1.open.toFixed(4)} > EMA200 $${tv1.ema200.toFixed(4)} | 양운 A(${tv1.spanA.toFixed(4)})>B(${tv1.spanB.toFixed(4)}) | 구름상단 돌파 ✓ | ${volTag} → -0.5% 지정가 매수 준비`, { tv1, score: r.scoring.totalScore, livePrice: r.price, recentAvgVolShares: (r as any).recentAvgVolShares, isHighVolume300K: (r as any).isHighVolume300K });
           } else if (td5 && poly1 && tgt) {
             const retestTag = td5.retestTouch ? `🎯리테스트발생(±0.3%)` : `🧲궤도(${(td5.distPct*100).toFixed(2)}%)`;
             const dataAgeSec = td5.fetchedAt ? Math.floor((Date.now() - td5.fetchedAt) / 1000) : 0;
-            await addLog('unified', 'scan', r.sym, `[Triple-API통과] ${r.sym} ${retestTag} target=$${td5.ema200.toFixed(2)}(지표${dataAgeSec}s前) 실시간=$${r.price.toFixed(2)}+양운✓ | 1m${poly1.pattern} | 체결${aggressionPctRaw}%+RVOL${rvolRaw.toFixed(2)}x → Kumo$${tgt.kumoTop.toFixed(2)}(${r.scoring.totalScore}점)`, { td5, poly1, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore, targetPrice: td5.ema200, livePrice: r.price, retestTouch: td5.retestTouch });
+            await addLog('unified', 'scan', r.sym, `[Triple-API통과] ${r.sym} ${retestTag} target=$${td5.ema200.toFixed(2)}(지표${dataAgeSec}s前) 실시간=$${r.price.toFixed(2)}+양운✓ | 1m${poly1.pattern} | 체결${aggressionPctRaw}%+RVOL${rvolRaw.toFixed(2)}x | ${volTag} → Kumo$${tgt.kumoTop.toFixed(2)}(${r.scoring.totalScore}점)`, { td5, poly1, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore, targetPrice: td5.ema200, livePrice: r.price, retestTouch: td5.retestTouch, recentAvgVolShares: (r as any).recentAvgVolShares, isHighVolume300K: (r as any).isHighVolume300K });
           }
 
           candidates.push(r);
@@ -2708,6 +2721,10 @@ Deno.serve(async (req) => {
       const aTgt = (a as any).isPhase1Target ? 10 : 0;
       const bTgt = (b as any).isPhase1Target ? 10 : 0;
       if (aTgt !== bTgt) return bTgt - aTgt;
+      // ★ [볼륨 300K 우선] 사용자 지시: 최근 거래량 300K 이상 종목 우선 매수
+      const aHV = (a as any).isHighVolume300K ? 8 : 0;
+      const bHV = (b as any).isHighVolume300K ? 8 : 0;
+      if (aHV !== bHV) return bHV - aHV;
       // ★ 동전주($1 미만) 차순위
       const aPenny = (a as any).isPennyStock ? 5 : 0;
       const bPenny = (b as any).isPennyStock ? 5 : 0;
