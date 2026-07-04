@@ -2666,12 +2666,15 @@ Deno.serve(async (req) => {
           (r as any).newsSentiment = 50;
           (r as any).newsCount = 0;
 
+          const volTag = (r as any).isHighVolume300K
+            ? `🔊고볼륨✓(최근5분평균${Math.floor((r as any).recentAvgVolShares/1000)}K주≥300K → 우선매수)`
+            : `🔈저볼륨(최근5분평균${Math.floor((r as any).recentAvgVolShares/1000)}K주<300K)`;
           if (tvMechanicalPass) {
-            await addLog('unified', 'scan', r.sym, `[TV-1m통과] ${r.sym} $${r.price.toFixed(4)}<$5 | Open $${tv1.open.toFixed(4)} > EMA200 $${tv1.ema200.toFixed(4)} | 양운 A(${tv1.spanA.toFixed(4)})>B(${tv1.spanB.toFixed(4)}) | 현재가 구름상단 돌파 ✓ → -0.5% 지정가 매수 준비`, { tv1, score: r.scoring.totalScore, livePrice: r.price });
+            await addLog('unified', 'scan', r.sym, `[TV-1m통과] ${r.sym} $${r.price.toFixed(4)}<$5 | Open $${tv1.open.toFixed(4)} > EMA200 $${tv1.ema200.toFixed(4)} | 양운 A(${tv1.spanA.toFixed(4)})>B(${tv1.spanB.toFixed(4)}) | 구름상단 돌파 ✓ | ${volTag} → -0.5% 지정가 매수 준비`, { tv1, score: r.scoring.totalScore, livePrice: r.price, recentAvgVolShares: (r as any).recentAvgVolShares, isHighVolume300K: (r as any).isHighVolume300K });
           } else if (td5 && poly1 && tgt) {
             const retestTag = td5.retestTouch ? `🎯리테스트발생(±0.3%)` : `🧲궤도(${(td5.distPct*100).toFixed(2)}%)`;
             const dataAgeSec = td5.fetchedAt ? Math.floor((Date.now() - td5.fetchedAt) / 1000) : 0;
-            await addLog('unified', 'scan', r.sym, `[Triple-API통과] ${r.sym} ${retestTag} target=$${td5.ema200.toFixed(2)}(지표${dataAgeSec}s前) 실시간=$${r.price.toFixed(2)}+양운✓ | 1m${poly1.pattern} | 체결${aggressionPctRaw}%+RVOL${rvolRaw.toFixed(2)}x → Kumo$${tgt.kumoTop.toFixed(2)}(${r.scoring.totalScore}점)`, { td5, poly1, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore, targetPrice: td5.ema200, livePrice: r.price, retestTouch: td5.retestTouch });
+            await addLog('unified', 'scan', r.sym, `[Triple-API통과] ${r.sym} ${retestTag} target=$${td5.ema200.toFixed(2)}(지표${dataAgeSec}s前) 실시간=$${r.price.toFixed(2)}+양운✓ | 1m${poly1.pattern} | 체결${aggressionPctRaw}%+RVOL${rvolRaw.toFixed(2)}x | ${volTag} → Kumo$${tgt.kumoTop.toFixed(2)}(${r.scoring.totalScore}점)`, { td5, poly1, aggressionPctRaw, rvolRaw, score: r.scoring.totalScore, targetPrice: td5.ema200, livePrice: r.price, retestTouch: td5.retestTouch, recentAvgVolShares: (r as any).recentAvgVolShares, isHighVolume300K: (r as any).isHighVolume300K });
           }
 
           candidates.push(r);
