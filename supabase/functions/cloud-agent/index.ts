@@ -2621,6 +2621,16 @@ Deno.serve(async (req) => {
           const cp = r.scoring.criticalPatterns;
           const accumPattern = r.scoring.accumulation;
 
+          // ★ [볼륨 300K 우선] 최근 5분봉 평균 거래량 계산 (Finnhub 1분봉 volumes)
+          const recentVols = (r.data?.volumes || []).slice(-5);
+          const recentAvgVolShares = recentVols.length > 0
+            ? recentVols.reduce((s: number, v: number) => s + (v || 0), 0) / recentVols.length
+            : 0;
+          const lastBarVolShares = (r.data?.volumes || []).slice(-1)[0] || 0;
+          (r as any).recentAvgVolShares = recentAvgVolShares;
+          (r as any).lastBarVolShares = lastBarVolShares;
+          (r as any).isHighVolume300K = recentAvgVolShares >= 300_000 || lastBarVolShares >= 300_000;
+
           (r as any).isVolumeBurst = rvol >= 2.0;
           (r as any).isPennyStock = isPenny;
           (r as any).isAccumulationEntry = false;
