@@ -2718,6 +2718,10 @@ Deno.serve(async (req) => {
       const aTgt = (a as any).isPhase1Target ? 10 : 0;
       const bTgt = (b as any).isPhase1Target ? 10 : 0;
       if (aTgt !== bTgt) return bTgt - aTgt;
+      // ★ [볼륨 300K 우선] 사용자 지시: 최근 거래량 300K 이상 종목 우선 매수
+      const aHV = (a as any).isHighVolume300K ? 8 : 0;
+      const bHV = (b as any).isHighVolume300K ? 8 : 0;
+      if (aHV !== bHV) return bHV - aHV;
       // ★ 동전주($1 미만) 차순위
       const aPenny = (a as any).isPennyStock ? 5 : 0;
       const bPenny = (b as any).isPennyStock ? 5 : 0;
