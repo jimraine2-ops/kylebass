@@ -13,11 +13,20 @@ import { useMemo } from "react";
 export function SystemStatusIndicator() {
   const { data: logs = [] } = useAgentLogs(200);
 
-  const { status, recentErrors, blockReasons } = useMemo(() => {
+  const { status, recentErrors, blockReasons, recoveredFatalCount } = useMemo(() => {
     const now = Date.now();
     const fifteenMin = 15 * 60 * 1000;
     const recent = (logs as any[]).filter(l => now - new Date(l.created_at).getTime() < fifteenMin);
-    const errs = recent.filter(l => ['error', 'fill_failed', 'warning'].includes(l.action));
+    const fatalErrors = recent.filter(l => ['error', 'fill_failed'].includes(l.action));
+    const warnings = recent.filter(l => l.action === 'warning');
+    const latestFatalAt = fatalErrors.reduce((max, l) => Math.max(max, new Date(l.created_at).getTime()), 0);
+    const latestProgressAt = recent
+      .filter(l => !['error', 'fill_failed'].includes(l.action))
+      .reduce((max, l) => Math.max(max, new Date(l.created_at).getTime()), 0);
+    const activeFatalErrors = latestFatalAt > latestProgressAt
+      ? fatalErrors.filter(l => new Date(l.created_at).getTime() >= latestFatalAt)
+      : [];
+    const errs = [...activeFatalErrors, ...warnings].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     // 매수 정지 원인 집계 (Triple-API 탈락 사유)
     const holds = recent.filter(l => l.action === 'hold' && typeof l.message === 'string' && l.message.includes('탈락'));
     const reasonCounts: Record<string, number> = {};
@@ -32,8 +41,8 @@ export function SystemStatusIndicator() {
       });
     });
     const topReasons = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1]).slice(0, 4);
-    const st = errs.length === 0 ? 'ok' : errs.some(e => e.action === 'error') ? 'error' : 'warn';
-    return { status: st, recentErrors: errs.slice(0, 20), blockReasons: topReasons };
+    const st = activeFatalErrors.length > 0 ? 'error' : warnings.length > 0 ? 'warn' : 'ok';
+    return { status: st, recentErrors: errs.slice(0, 20), blockReasons: topReasons, recoveredFatalCount: fatalErrors.length - activeFatalErrors.length };
   }, [logs]);
 
   const statusStyle = status === 'ok'
@@ -54,7 +63,7 @@ export function SystemStatusIndicator() {
             시스템 상태: {status === 'ok' ? '정상 (녹색)' : status === 'warn' ? '경고 (황색)' : '오류 (적색)'}
           </div>
           <Badge variant="outline" className="text-[10px] font-mono ml-auto">
-            15분 내 에러 {recentErrors.length}건
+            활성 이슈 {recentErrors.length}건
           </Badge>
         </CardTitle>
       </CardHeader>
@@ -73,6 +82,11 @@ export function SystemStatusIndicator() {
         )}
         <div>
           <div className="text-[10px] font-semibold text-muted-foreground mb-1">📋 최근 시스템 에러 로그</div>
+          {recoveredFatalCount > 0 && status !== 'error' && (
+            <p className="text-xs text-muted-foreground py-2">
+              최근 치명 오류 {recoveredFatalCount}건은 이후 엔진 진행 로그가 확인되어 복구 처리됨
+            </p>
+          )}
           {recentErrors.length === 0 ? (
             <p className="text-xs text-muted-foreground py-3 text-center">에러 없음 — 시스템 정상 가동 중</p>
           ) : (
