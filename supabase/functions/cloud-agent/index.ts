@@ -1011,6 +1011,7 @@ interface TradingView1mCheck {
 
 const tv1mCache = new Map<string, { ts: number; data: TradingView1mCheck }>();
 const TV_1M_TTL_MS = 45_000;
+let td1mFallbackBudget = 6; // 한 사이클당 Twelve Data 1분봉 복구 호출 상한 — 타임아웃/무료한도 보호
 
 async function polygon1mTradingViewCheck(symbol: string): Promise<TradingView1mCheck> {
   const cached = tv1mCache.get(symbol);
@@ -1202,6 +1203,12 @@ async function tradingView1mCheck(symbol: string): Promise<TradingView1mCheck> {
     tv1mCache.set(symbol, { ts: Date.now(), data: result });
     return result;
   }
+  if (td1mFallbackBudget <= 0) {
+    const result = { ...fh, reason: `${fh.reason}|POLY_${poly.reason}|TD_BUDGET_EXHAUSTED` };
+    tv1mCache.set(symbol, { ts: Date.now(), data: result });
+    return result;
+  }
+  td1mFallbackBudget--;
   const td = await twelveData1mTradingViewCheck(symbol);
   const result = td.ok
     ? { ...td, reason: `${td.reason}+DATA_SOURCE_FALLBACK(${poly.reason}|${fh.reason})` }
