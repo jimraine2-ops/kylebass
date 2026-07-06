@@ -2730,12 +2730,13 @@ Deno.serve(async (req) => {
           const cp = r.scoring.criticalPatterns;
           const accumPattern = r.scoring.accumulation;
 
-          // ★ [볼륨 300K 우선] 최근 5분봉 평균 거래량 계산 (Finnhub 1분봉 volumes)
+          // ★ [볼륨 300K 우선] 1분봉 데이터 소스의 최근 5봉 평균/마지막 봉 거래량 우선 사용
           const recentVols = (r.data?.volumes || []).slice(-5);
-          const recentAvgVolShares = recentVols.length > 0
+          const fallbackAvgVolShares = recentVols.length > 0
             ? recentVols.reduce((s: number, v: number) => s + (v || 0), 0) / recentVols.length
             : 0;
-          const lastBarVolShares = (r.data?.volumes || []).slice(-1)[0] || 0;
+          const recentAvgVolShares = tv1.avgVolume5 || fallbackAvgVolShares;
+          const lastBarVolShares = tv1.latestVolume || (r.data?.volumes || []).slice(-1)[0] || 0;
           (r as any).recentAvgVolShares = recentAvgVolShares;
           (r as any).lastBarVolShares = lastBarVolShares;
           (r as any).isHighVolume300K = recentAvgVolShares >= 300_000 || lastBarVolShares >= 300_000;
