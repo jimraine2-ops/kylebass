@@ -1738,6 +1738,7 @@ Deno.serve(async (req) => {
     }).not('id', 'is', null);
 
     const now = new Date();
+    td1mFallbackBudget = 6;
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const sessionInfo = getMarketSession();
     const sessionLabel = sessionInfo.label;
