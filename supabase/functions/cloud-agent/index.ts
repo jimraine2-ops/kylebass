@@ -1791,9 +1791,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Fill 30 active slots — ★ 타임아웃 방지: 15 대형 + 15 소형 = 30개 정예 슬롯
-    const LARGE_SLOTS = 15;
-    const SMALL_SLOTS = 15;
+    // Step 2: Fill active slots — ★ 300K+ 저가주 핫풀 우선, 대형주는 최소 감시만 유지
+    const LARGE_SLOTS = 5;
+    const SMALL_SLOTS = 27;
+    const PRIORITY_300K_SLOTS = 20;
 
     const currentLarge: string[] = [];
     const currentSmall: string[] = [];
@@ -1816,6 +1817,16 @@ Deno.serve(async (req) => {
         activeUnifiedList.add(sym);
         currentLarge.push(sym);
       } else if ((SMALL_SET.has(sym) || !LARGE_SET.has(sym)) && currentSmall.length < SMALL_SLOTS) {
+        activeUnifiedList.add(sym);
+        currentSmall.push(sym);
+      }
+    }
+
+    // ★ 사용 지시 반영: 거래량 300K+ 가능성이 높은 $5 미만 핫풀을 스캔 슬롯 전면에 고정 배치
+    const priorityStart = (cycleCount * PRIORITY_300K_SLOTS) % PRIORITY_300K_UNDER5_UNIVERSE.length;
+    for (let i = 0; currentSmall.length < Math.min(SMALL_SLOTS, PRIORITY_300K_SLOTS) && i < PRIORITY_300K_UNDER5_UNIVERSE.length; i++) {
+      const sym = PRIORITY_300K_UNDER5_UNIVERSE[(priorityStart + i) % PRIORITY_300K_UNDER5_UNIVERSE.length];
+      if (!activeUnifiedList.has(sym)) {
         activeUnifiedList.add(sym);
         currentSmall.push(sym);
       }
@@ -1908,6 +1919,7 @@ Deno.serve(async (req) => {
         const type = LARGE_SET.has(sym) ? 'large' : 'small';
         addToPool(sym, type);
       }
+      for (const s of PRIORITY_300K_UNDER5_UNIVERSE) { if (phase1Pool.length >= 200) break; addToPool(s, 'small'); }
       // ★ 부족하면 SMALL_SET(저가주) 우선 → LARGE_SET 보강 (저가 후보 확보 우선)
       for (const s of SMALL_SET) { if (phase1Pool.length >= 200) break; addToPool(s, 'small'); }
       for (const s of LARGE_SET) { if (phase1Pool.length >= 200) break; addToPool(s, 'large'); }
