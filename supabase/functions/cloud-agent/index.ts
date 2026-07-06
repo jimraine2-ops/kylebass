@@ -1004,6 +1004,9 @@ interface TradingView1mCheck {
   bars: number;
   status: number;
   reason: string;
+  latestVolume?: number;
+  avgVolume5?: number;
+  source?: 'polygon' | 'finnhub' | 'twelvedata' | 'fallback';
 }
 
 const tv1mCache = new Map<string, { ts: number; data: TradingView1mCheck }>();
@@ -1030,6 +1033,7 @@ async function polygon1mTradingViewCheck(symbol: string): Promise<TradingView1mC
   const opens = bars.map((b: any) => Number(b.o));
   const highs = bars.map((b: any) => Number(b.h));
   const lows = bars.map((b: any) => Number(b.l));
+  const volumes = bars.map((b: any) => Number(b.v || 0));
   const N = closes.length;
 
   const period = Math.min(200, N);
@@ -1060,6 +1064,9 @@ async function polygon1mTradingViewCheck(symbol: string): Promise<TradingView1mC
     open: +open.toFixed(4), currentPrice: +currentPrice.toFixed(4), ema200: +ema200.toFixed(4),
     spanA: +spanA.toFixed(4), spanB: +spanB.toFixed(4), bars: N, status: 200,
     reason: ok ? 'TV_1M_PASS' : reasons.join('|'),
+    latestVolume: volumes[N - 1] || 0,
+    avgVolume5: volumes.slice(-5).reduce((s: number, v: number) => s + (v || 0), 0) / Math.max(1, Math.min(5, volumes.length)),
+    source: 'polygon',
   };
   tv1mCache.set(symbol, { ts: Date.now(), data: result });
   return result;
@@ -1080,6 +1087,7 @@ async function finnhub1mTradingViewCheck(symbol: string): Promise<TradingView1mC
   const opens = candles.o.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v > 0);
   const highs = candles.h.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v > 0);
   const lows = candles.l.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v > 0);
+  const volumes = (candles.v || []).map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v >= 0);
   const N = Math.min(closes.length, opens.length, highs.length, lows.length);
   if (N < 60) return { ...empty, status: 204, bars: N, reason: `FINNHUB_BARS_${N}` };
 
@@ -1109,7 +1117,70 @@ async function finnhub1mTradingViewCheck(symbol: string): Promise<TradingView1mC
     open: +open.toFixed(4), currentPrice: +currentPrice.toFixed(4), ema200: +ema200.toFixed(4),
     spanA: +spanA.toFixed(4), spanB: +spanB.toFixed(4), bars: N, status: 200,
     reason: ok ? 'TV_1M_PASS_FINNHUB' : reasons.join('|'),
+    latestVolume: volumes[N - 1] || 0,
+    avgVolume5: volumes.slice(-5).reduce((s: number, v: number) => s + (v || 0), 0) / Math.max(1, Math.min(5, volumes.length)),
+    source: 'finnhub',
   };
+}
+
+async function twelveData1mTradingViewCheck(symbol: string): Promise<TradingView1mCheck> {
+  const empty: TradingView1mCheck = {
+    ok: false, openAboveEma200: false, bullCloud: false, priceAboveCloud: false,
+    open: 0, currentPrice: 0, ema200: 0, spanA: 0, spanB: 0, bars: 0, status: 0, reason: 'NO_TD_1M', source: 'twelvedata',
+  };
+  const token = Deno.env.get('TWELVE_DATA_API_KEY') || '';
+  if (!token) return { ...empty, reason: 'TD_NO_KEY' };
+  const wait = Math.max(0, TD_MIN_INTERVAL_MS - (Date.now() - lastTwelveDataCall));
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastTwelveDataCall = Date.now();
+  try {
+    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=1min&outputsize=220&apikey=${token}`;
+    const res = await fetch(url);
+    if (!res.ok) return { ...empty, status: res.status, reason: `TD_HTTP_${res.status}` };
+    const json = await res.json();
+    const values: any[] = Array.isArray(json?.values) ? json.values : [];
+    if (values.length < 60) return { ...empty, status: 204, bars: values.length, reason: `TD_BARS_${values.length}` };
+    const bars = values.slice().reverse();
+    const closes = bars.map((b: any) => Number(b.close)).filter((v: number) => Number.isFinite(v) && v > 0);
+    const opens = bars.map((b: any) => Number(b.open)).filter((v: number) => Number.isFinite(v) && v > 0);
+    const highs = bars.map((b: any) => Number(b.high)).filter((v: number) => Number.isFinite(v) && v > 0);
+    const lows = bars.map((b: any) => Number(b.low)).filter((v: number) => Number.isFinite(v) && v > 0);
+    const volumes = bars.map((b: any) => Number(b.volume || 0)).filter((v: number) => Number.isFinite(v) && v >= 0);
+    const N = Math.min(closes.length, opens.length, highs.length, lows.length);
+    if (N < 60) return { ...empty, status: 204, bars: N, reason: `TD_BARS_${N}` };
+    const c = closes.slice(-N), o = opens.slice(-N), h = highs.slice(-N), l = lows.slice(-N), v = volumes.slice(-N);
+    const period = Math.min(200, N);
+    const k = 2 / (period + 1);
+    let ema200 = c.slice(0, period).reduce((s: number, value: number) => s + value, 0) / period;
+    for (let i = period; i < N; i++) ema200 = c[i] * k + ema200 * (1 - k);
+    const tenkan = (Math.max(...h.slice(N - 9)) + Math.min(...l.slice(N - 9))) / 2;
+    const kijun = (Math.max(...h.slice(N - 26)) + Math.min(...l.slice(N - 26))) / 2;
+    const spanA = (tenkan + kijun) / 2;
+    const lookbackB = Math.min(52, N);
+    const spanB = (Math.max(...h.slice(N - lookbackB)) + Math.min(...l.slice(N - lookbackB))) / 2;
+    const open = o[N - 1];
+    const currentPrice = c[N - 1];
+    const openAboveEma200 = open > ema200;
+    const bullCloud = spanA > spanB;
+    const priceAboveCloud = currentPrice > spanA && currentPrice > spanB;
+    const ok = openAboveEma200 && bullCloud && priceAboveCloud && currentPrice > 0 && currentPrice < MAX_PRICE_USD;
+    const reasons: string[] = [];
+    if (!openAboveEma200) reasons.push(`Open≤EMA200(${open.toFixed(4)}≤${ema200.toFixed(4)})`);
+    if (!bullCloud) reasons.push(`양운X(A:${spanA.toFixed(4)}≤B:${spanB.toFixed(4)})`);
+    if (!priceAboveCloud) reasons.push(`구름상단돌파X(C:${currentPrice.toFixed(4)}≤Top:${Math.max(spanA, spanB).toFixed(4)})`);
+    if (currentPrice >= MAX_PRICE_USD) reasons.push(`가격$${currentPrice.toFixed(2)}≥$5`);
+    return {
+      ok, openAboveEma200, bullCloud, priceAboveCloud,
+      open: +open.toFixed(4), currentPrice: +currentPrice.toFixed(4), ema200: +ema200.toFixed(4),
+      spanA: +spanA.toFixed(4), spanB: +spanB.toFixed(4), bars: N, status: 200,
+      reason: ok ? 'TV_1M_PASS_TD' : reasons.join('|'),
+      latestVolume: v[N - 1] || 0,
+      avgVolume5: v.slice(-5).reduce((s: number, value: number) => s + (value || 0), 0) / Math.max(1, Math.min(5, v.length)),
+      source: 'twelvedata',
+    };
+  } catch (e) {
+    return { ...empty, status: -1, reason: `TD_ERR_${(e as Error).message?.slice(0, 20)}` };
+  }
 }
 
 async function tradingView1mCheck(symbol: string): Promise<TradingView1mCheck> {
@@ -1126,7 +1197,15 @@ async function tradingView1mCheck(symbol: string): Promise<TradingView1mCheck> {
     return poly;
   }
   const fh = await finnhub1mTradingViewCheck(symbol);
-  const result = { ...fh, reason: fh.ok ? `${fh.reason}+POLY_FALLBACK` : `${fh.reason}|POLY_${poly.reason}` };
+  if (fh.ok) {
+    const result = { ...fh, reason: `${fh.reason}+POLY_FALLBACK` };
+    tv1mCache.set(symbol, { ts: Date.now(), data: result });
+    return result;
+  }
+  const td = await twelveData1mTradingViewCheck(symbol);
+  const result = td.ok
+    ? { ...td, reason: `${td.reason}+DATA_SOURCE_FALLBACK(${poly.reason}|${fh.reason})` }
+    : { ...td, reason: `${fh.reason}|POLY_${poly.reason}|${td.reason}` };
   tv1mCache.set(symbol, { ts: Date.now(), data: result });
   return result;
 }
