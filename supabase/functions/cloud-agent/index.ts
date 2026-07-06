@@ -1124,7 +1124,7 @@ async function finnhub1mTradingViewCheck(symbol: string): Promise<TradingView1mC
   };
 }
 
-async function twelveData1mTradingViewCheck(symbol: string): Promise<TradingView1mCheck> {
+async function twelveData1mTradingViewCheck(symbol: string, livePrice?: number): Promise<TradingView1mCheck> {
   const empty: TradingView1mCheck = {
     ok: false, openAboveEma200: false, bullCloud: false, priceAboveCloud: false,
     open: 0, currentPrice: 0, ema200: 0, spanA: 0, spanB: 0, bars: 0, status: 0, reason: 'NO_TD_1M', source: 'twelvedata',
@@ -1160,7 +1160,7 @@ async function twelveData1mTradingViewCheck(symbol: string): Promise<TradingView
     const lookbackB = Math.min(52, N);
     const spanB = (Math.max(...h.slice(N - lookbackB)) + Math.min(...l.slice(N - lookbackB))) / 2;
     const open = o[N - 1];
-    const currentPrice = c[N - 1];
+    const currentPrice = livePrice && livePrice > 0 ? livePrice : c[N - 1];
     const openAboveEma200 = open > ema200;
     const bullCloud = spanA > spanB;
     const priceAboveCloud = currentPrice > spanA && currentPrice > spanB;
@@ -1184,7 +1184,7 @@ async function twelveData1mTradingViewCheck(symbol: string): Promise<TradingView
   }
 }
 
-async function tradingView1mCheck(symbol: string): Promise<TradingView1mCheck> {
+async function tradingView1mCheck(symbol: string, livePrice?: number): Promise<TradingView1mCheck> {
   const cached = tv1mCache.get(symbol);
   if (cached && Date.now() - cached.ts < TV_1M_TTL_MS) return cached.data;
   const poly = await polygon1mTradingViewCheck(symbol);
@@ -1209,7 +1209,7 @@ async function tradingView1mCheck(symbol: string): Promise<TradingView1mCheck> {
     return result;
   }
   td1mFallbackBudget--;
-  const td = await twelveData1mTradingViewCheck(symbol);
+  const td = await twelveData1mTradingViewCheck(symbol, livePrice);
   const result = td.ok
     ? { ...td, reason: `${td.reason}+DATA_SOURCE_FALLBACK(${poly.reason}|${fh.reason})` }
     : { ...td, reason: `${fh.reason}|POLY_${poly.reason}|${td.reason}` };
