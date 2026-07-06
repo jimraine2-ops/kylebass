@@ -1441,9 +1441,19 @@ const SMALL_CAP_UNIVERSE = [
   'XELA', 'XNET', 'ZENV',
 ];
 
+// ★ [정상화 핫풀] 기존 정적 리스트가 상폐/데이터부족 종목으로 채워질 때를 막는 300K+ 우선 스캔 풀
+// 실시간 가격 필터($5 미만)와 1분봉 게이트는 아래에서 다시 검증한다.
+const PRIORITY_300K_UNDER5_UNIVERSE = [
+  'SOUN', 'BBAI', 'KULR', 'RGTI', 'QUBT', 'QBTS', 'OPEN', 'WULF', 'CIFR', 'BITF',
+  'HUT', 'BTBT', 'SNDL', 'TLRY', 'NIO', 'LCID', 'CHPT', 'PLUG', 'FCEL', 'EVGO',
+  'BLNK', 'MVIS', 'LAZR', 'OUST', 'AEVA', 'GSAT', 'LUMN', 'SIRI', 'NOK', 'BB',
+  'TELL', 'MARA', 'RIOT', 'DNA', 'BNGO', 'SENS', 'CLOV', 'WISH', 'SKLZ', 'ATER',
+  'XELA', 'KORE', 'STEM', 'EOSE', 'AMPX', 'RCAT', 'OPFI', 'GDRX', 'GRPN', 'HIMX',
+];
+
 // Deduplicate
 const LARGE_SET = new Set(LARGE_CAP_UNIVERSE);
-const SMALL_SET = new Set(SMALL_CAP_UNIVERSE.filter(s => !LARGE_SET.has(s)));
+const SMALL_SET = new Set([...PRIORITY_300K_UNDER5_UNIVERSE, ...SMALL_CAP_UNIVERSE].filter(s => !LARGE_SET.has(s)));
 
 // ===== Dynamic Discovery: Finnhub 전 종목 심볼 확장 =====
 let discoveredSymbols: string[] = [];
