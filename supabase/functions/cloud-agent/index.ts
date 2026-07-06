@@ -2647,9 +2647,12 @@ Deno.serve(async (req) => {
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
     const MAX_POSITIONS = 5; // ★ 정예 1~5선: 100만 원을 최대 5개에 분산 투입
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
+    const availableSlots = Math.max(0, MAX_POSITIONS - openCount);
+    const targetCandidateCount = Math.max(1, Math.min(availableSlots, 3));
 
     if (!marketBuyHalt && !isOpeningRush && !safePauseActive) {
       for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
+        if (availableSlots <= 0 || candidates.length >= targetCandidateCount) break;
         const batch = SCAN_SYMBOLS.slice(i, i + 5);
         const results = await Promise.all(batch.map(async (sym) => {
           try {
@@ -2788,6 +2791,10 @@ Deno.serve(async (req) => {
           }
 
           candidates.push(r);
+        }
+        if (candidates.length >= targetCandidateCount) {
+          await addLog('system', 'scan', null, `[Fast-Execution] 매수 후보 ${candidates.length}개 확보 — 제한시간 보호를 위해 잔여 스캔 중단 후 즉시 주문 단계 진입`, { candidateCount: candidates.length, targetCandidateCount });
+          break;
         }
         if (i + 5 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 150)); // ★ 300→150ms
       }
