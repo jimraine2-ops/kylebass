@@ -2695,7 +2695,7 @@ Deno.serve(async (req) => {
 
           // ★ [최우선] TradingView 1분봉 기계식 스크리너 조건
           // 가격<$5 + Open>EMA200 + 양운(A>B) + 현재가가 구름 완전 상향 돌파
-          const tv1 = await tradingView1mCheck(r.sym);
+          const tv1 = await tradingView1mCheck(r.sym, r.price);
           const tvMechanicalPass = tv1.ok;
 
           // 1단계 - Twelve Data 5분봉 자석/양운
