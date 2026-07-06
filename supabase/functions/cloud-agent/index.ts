@@ -1004,10 +1004,14 @@ interface TradingView1mCheck {
   bars: number;
   status: number;
   reason: string;
+  latestVolume?: number;
+  avgVolume5?: number;
+  source?: 'polygon' | 'finnhub' | 'twelvedata' | 'fallback';
 }
 
 const tv1mCache = new Map<string, { ts: number; data: TradingView1mCheck }>();
 const TV_1M_TTL_MS = 45_000;
+let td1mFallbackBudget = 6; // 한 사이클당 Twelve Data 1분봉 복구 호출 상한 — 타임아웃/무료한도 보호
 
 async function polygon1mTradingViewCheck(symbol: string): Promise<TradingView1mCheck> {
   const cached = tv1mCache.get(symbol);
@@ -1030,6 +1034,7 @@ async function polygon1mTradingViewCheck(symbol: string): Promise<TradingView1mC
   const opens = bars.map((b: any) => Number(b.o));
   const highs = bars.map((b: any) => Number(b.h));
   const lows = bars.map((b: any) => Number(b.l));
+  const volumes = bars.map((b: any) => Number(b.v || 0));
   const N = closes.length;
 
   const period = Math.min(200, N);
@@ -1060,6 +1065,9 @@ async function polygon1mTradingViewCheck(symbol: string): Promise<TradingView1mC
     open: +open.toFixed(4), currentPrice: +currentPrice.toFixed(4), ema200: +ema200.toFixed(4),
     spanA: +spanA.toFixed(4), spanB: +spanB.toFixed(4), bars: N, status: 200,
     reason: ok ? 'TV_1M_PASS' : reasons.join('|'),
+    latestVolume: volumes[N - 1] || 0,
+    avgVolume5: volumes.slice(-5).reduce((s: number, v: number) => s + (v || 0), 0) / Math.max(1, Math.min(5, volumes.length)),
+    source: 'polygon',
   };
   tv1mCache.set(symbol, { ts: Date.now(), data: result });
   return result;
@@ -1080,6 +1088,7 @@ async function finnhub1mTradingViewCheck(symbol: string): Promise<TradingView1mC
   const opens = candles.o.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v > 0);
   const highs = candles.h.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v > 0);
   const lows = candles.l.map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v > 0);
+  const volumes = (candles.v || []).map((v: any) => Number(v)).filter((v: number) => Number.isFinite(v) && v >= 0);
   const N = Math.min(closes.length, opens.length, highs.length, lows.length);
   if (N < 60) return { ...empty, status: 204, bars: N, reason: `FINNHUB_BARS_${N}` };
 
@@ -1109,10 +1118,73 @@ async function finnhub1mTradingViewCheck(symbol: string): Promise<TradingView1mC
     open: +open.toFixed(4), currentPrice: +currentPrice.toFixed(4), ema200: +ema200.toFixed(4),
     spanA: +spanA.toFixed(4), spanB: +spanB.toFixed(4), bars: N, status: 200,
     reason: ok ? 'TV_1M_PASS_FINNHUB' : reasons.join('|'),
+    latestVolume: volumes[N - 1] || 0,
+    avgVolume5: volumes.slice(-5).reduce((s: number, v: number) => s + (v || 0), 0) / Math.max(1, Math.min(5, volumes.length)),
+    source: 'finnhub',
   };
 }
 
-async function tradingView1mCheck(symbol: string): Promise<TradingView1mCheck> {
+async function twelveData1mTradingViewCheck(symbol: string, livePrice?: number): Promise<TradingView1mCheck> {
+  const empty: TradingView1mCheck = {
+    ok: false, openAboveEma200: false, bullCloud: false, priceAboveCloud: false,
+    open: 0, currentPrice: 0, ema200: 0, spanA: 0, spanB: 0, bars: 0, status: 0, reason: 'NO_TD_1M', source: 'twelvedata',
+  };
+  const token = Deno.env.get('TWELVE_DATA_API_KEY') || '';
+  if (!token) return { ...empty, reason: 'TD_NO_KEY' };
+  const wait = Math.max(0, TD_MIN_INTERVAL_MS - (Date.now() - lastTwelveDataCall));
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastTwelveDataCall = Date.now();
+  try {
+    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=1min&outputsize=220&apikey=${token}`;
+    const res = await fetch(url);
+    if (!res.ok) return { ...empty, status: res.status, reason: `TD_HTTP_${res.status}` };
+    const json = await res.json();
+    const values: any[] = Array.isArray(json?.values) ? json.values : [];
+    if (values.length < 60) return { ...empty, status: 204, bars: values.length, reason: `TD_BARS_${values.length}` };
+    const bars = values.slice().reverse();
+    const closes = bars.map((b: any) => Number(b.close)).filter((v: number) => Number.isFinite(v) && v > 0);
+    const opens = bars.map((b: any) => Number(b.open)).filter((v: number) => Number.isFinite(v) && v > 0);
+    const highs = bars.map((b: any) => Number(b.high)).filter((v: number) => Number.isFinite(v) && v > 0);
+    const lows = bars.map((b: any) => Number(b.low)).filter((v: number) => Number.isFinite(v) && v > 0);
+    const volumes = bars.map((b: any) => Number(b.volume || 0)).filter((v: number) => Number.isFinite(v) && v >= 0);
+    const N = Math.min(closes.length, opens.length, highs.length, lows.length);
+    if (N < 60) return { ...empty, status: 204, bars: N, reason: `TD_BARS_${N}` };
+    const c = closes.slice(-N), o = opens.slice(-N), h = highs.slice(-N), l = lows.slice(-N), v = volumes.slice(-N);
+    const period = Math.min(200, N);
+    const k = 2 / (period + 1);
+    let ema200 = c.slice(0, period).reduce((s: number, value: number) => s + value, 0) / period;
+    for (let i = period; i < N; i++) ema200 = c[i] * k + ema200 * (1 - k);
+    const tenkan = (Math.max(...h.slice(N - 9)) + Math.min(...l.slice(N - 9))) / 2;
+    const kijun = (Math.max(...h.slice(N - 26)) + Math.min(...l.slice(N - 26))) / 2;
+    const spanA = (tenkan + kijun) / 2;
+    const lookbackB = Math.min(52, N);
+    const spanB = (Math.max(...h.slice(N - lookbackB)) + Math.min(...l.slice(N - lookbackB))) / 2;
+    const open = o[N - 1];
+    const currentPrice = livePrice && livePrice > 0 ? livePrice : c[N - 1];
+    const openAboveEma200 = open > ema200;
+    const bullCloud = spanA > spanB;
+    const priceAboveCloud = currentPrice > spanA && currentPrice > spanB;
+    const ok = openAboveEma200 && bullCloud && priceAboveCloud && currentPrice > 0 && currentPrice < MAX_PRICE_USD;
+    const reasons: string[] = [];
+    if (!openAboveEma200) reasons.push(`Open≤EMA200(${open.toFixed(4)}≤${ema200.toFixed(4)})`);
+    if (!bullCloud) reasons.push(`양운X(A:${spanA.toFixed(4)}≤B:${spanB.toFixed(4)})`);
+    if (!priceAboveCloud) reasons.push(`구름상단돌파X(C:${currentPrice.toFixed(4)}≤Top:${Math.max(spanA, spanB).toFixed(4)})`);
+    if (currentPrice >= MAX_PRICE_USD) reasons.push(`가격$${currentPrice.toFixed(2)}≥$5`);
+    return {
+      ok, openAboveEma200, bullCloud, priceAboveCloud,
+      open: +open.toFixed(4), currentPrice: +currentPrice.toFixed(4), ema200: +ema200.toFixed(4),
+      spanA: +spanA.toFixed(4), spanB: +spanB.toFixed(4), bars: N, status: 200,
+      reason: ok ? 'TV_1M_PASS_TD' : reasons.join('|'),
+      latestVolume: v[N - 1] || 0,
+      avgVolume5: v.slice(-5).reduce((s: number, value: number) => s + (value || 0), 0) / Math.max(1, Math.min(5, v.length)),
+      source: 'twelvedata',
+    };
+  } catch (e) {
+    return { ...empty, status: -1, reason: `TD_ERR_${(e as Error).message?.slice(0, 20)}` };
+  }
+}
+
+async function tradingView1mCheck(symbol: string, livePrice?: number): Promise<TradingView1mCheck> {
   const cached = tv1mCache.get(symbol);
   if (cached && Date.now() - cached.ts < TV_1M_TTL_MS) return cached.data;
   const poly = await polygon1mTradingViewCheck(symbol);
@@ -1126,7 +1198,21 @@ async function tradingView1mCheck(symbol: string): Promise<TradingView1mCheck> {
     return poly;
   }
   const fh = await finnhub1mTradingViewCheck(symbol);
-  const result = { ...fh, reason: fh.ok ? `${fh.reason}+POLY_FALLBACK` : `${fh.reason}|POLY_${poly.reason}` };
+  if (fh.ok) {
+    const result = { ...fh, reason: `${fh.reason}+POLY_FALLBACK` };
+    tv1mCache.set(symbol, { ts: Date.now(), data: result });
+    return result;
+  }
+  if (td1mFallbackBudget <= 0) {
+    const result = { ...fh, reason: `${fh.reason}|POLY_${poly.reason}|TD_BUDGET_EXHAUSTED` };
+    tv1mCache.set(symbol, { ts: Date.now(), data: result });
+    return result;
+  }
+  td1mFallbackBudget--;
+  const td = await twelveData1mTradingViewCheck(symbol, livePrice);
+  const result = td.ok
+    ? { ...td, reason: `${td.reason}+DATA_SOURCE_FALLBACK(${poly.reason}|${fh.reason})` }
+    : { ...td, reason: `${fh.reason}|POLY_${poly.reason}|${td.reason}` };
   tv1mCache.set(symbol, { ts: Date.now(), data: result });
   return result;
 }
@@ -1355,9 +1441,19 @@ const SMALL_CAP_UNIVERSE = [
   'XELA', 'XNET', 'ZENV',
 ];
 
+// ★ [정상화 핫풀] 기존 정적 리스트가 상폐/데이터부족 종목으로 채워질 때를 막는 300K+ 우선 스캔 풀
+// 실시간 가격 필터($5 미만)와 1분봉 게이트는 아래에서 다시 검증한다.
+const PRIORITY_300K_UNDER5_UNIVERSE = [
+  'SOUN', 'BBAI', 'KULR', 'RGTI', 'QUBT', 'QBTS', 'OPEN', 'WULF', 'CIFR', 'BITF',
+  'HUT', 'BTBT', 'SNDL', 'TLRY', 'NIO', 'LCID', 'CHPT', 'PLUG', 'FCEL', 'EVGO',
+  'BLNK', 'MVIS', 'LAZR', 'OUST', 'AEVA', 'GSAT', 'LUMN', 'SIRI', 'NOK', 'BB',
+  'TELL', 'MARA', 'RIOT', 'DNA', 'BNGO', 'SENS', 'CLOV', 'WISH', 'SKLZ', 'ATER',
+  'XELA', 'KORE', 'STEM', 'EOSE', 'AMPX', 'RCAT', 'OPFI', 'GDRX', 'GRPN', 'HIMX',
+];
+
 // Deduplicate
 const LARGE_SET = new Set(LARGE_CAP_UNIVERSE);
-const SMALL_SET = new Set(SMALL_CAP_UNIVERSE.filter(s => !LARGE_SET.has(s)));
+const SMALL_SET = new Set([...PRIORITY_300K_UNDER5_UNIVERSE, ...SMALL_CAP_UNIVERSE].filter(s => !LARGE_SET.has(s)));
 
 // ===== Dynamic Discovery: Finnhub 전 종목 심볼 확장 =====
 let discoveredSymbols: string[] = [];
@@ -1642,6 +1738,7 @@ Deno.serve(async (req) => {
     }).not('id', 'is', null);
 
     const now = new Date();
+    td1mFallbackBudget = 6;
     const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const sessionInfo = getMarketSession();
     const sessionLabel = sessionInfo.label;
@@ -1694,9 +1791,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Fill 30 active slots — ★ 타임아웃 방지: 15 대형 + 15 소형 = 30개 정예 슬롯
-    const LARGE_SLOTS = 15;
-    const SMALL_SLOTS = 15;
+    // Step 2: Fill active slots — ★ 300K+ 저가주 핫풀 우선, 대형주는 최소 감시만 유지
+    const LARGE_SLOTS = 5;
+    const SMALL_SLOTS = 27;
+    const PRIORITY_300K_SLOTS = 20;
 
     const currentLarge: string[] = [];
     const currentSmall: string[] = [];
@@ -1719,6 +1817,16 @@ Deno.serve(async (req) => {
         activeUnifiedList.add(sym);
         currentLarge.push(sym);
       } else if ((SMALL_SET.has(sym) || !LARGE_SET.has(sym)) && currentSmall.length < SMALL_SLOTS) {
+        activeUnifiedList.add(sym);
+        currentSmall.push(sym);
+      }
+    }
+
+    // ★ 사용 지시 반영: 거래량 300K+ 가능성이 높은 $5 미만 핫풀을 스캔 슬롯 전면에 고정 배치
+    const priorityStart = (cycleCount * PRIORITY_300K_SLOTS) % PRIORITY_300K_UNDER5_UNIVERSE.length;
+    for (let i = 0; currentSmall.length < Math.min(SMALL_SLOTS, PRIORITY_300K_SLOTS) && i < PRIORITY_300K_UNDER5_UNIVERSE.length; i++) {
+      const sym = PRIORITY_300K_UNDER5_UNIVERSE[(priorityStart + i) % PRIORITY_300K_UNDER5_UNIVERSE.length];
+      if (!activeUnifiedList.has(sym)) {
         activeUnifiedList.add(sym);
         currentSmall.push(sym);
       }
@@ -1811,6 +1919,7 @@ Deno.serve(async (req) => {
         const type = LARGE_SET.has(sym) ? 'large' : 'small';
         addToPool(sym, type);
       }
+      for (const s of PRIORITY_300K_UNDER5_UNIVERSE) { if (phase1Pool.length >= 200) break; addToPool(s, 'small'); }
       // ★ 부족하면 SMALL_SET(저가주) 우선 → LARGE_SET 보강 (저가 후보 확보 우선)
       for (const s of SMALL_SET) { if (phase1Pool.length >= 200) break; addToPool(s, 'small'); }
       for (const s of LARGE_SET) { if (phase1Pool.length >= 200) break; addToPool(s, 'large'); }
@@ -2538,9 +2647,12 @@ Deno.serve(async (req) => {
     let openCount = (openPos || []).filter(p => p.status === 'open').length;
     const MAX_POSITIONS = 5; // ★ 정예 1~5선: 100만 원을 최대 5개에 분산 투입
     const candidates: { sym: string; price: number; scoring: any; capType: 'large' | 'small' }[] = [];
+    const availableSlots = Math.max(0, MAX_POSITIONS - openCount);
+    const targetCandidateCount = Math.max(1, Math.min(availableSlots, 3));
 
     if (!marketBuyHalt && !isOpeningRush && !safePauseActive) {
       for (let i = 0; i < SCAN_SYMBOLS.length; i += 5) {
+        if (availableSlots <= 0 || candidates.length >= targetCandidateCount) break;
         const batch = SCAN_SYMBOLS.slice(i, i + 5);
         const results = await Promise.all(batch.map(async (sym) => {
           try {
@@ -2586,7 +2698,7 @@ Deno.serve(async (req) => {
 
           // ★ [최우선] TradingView 1분봉 기계식 스크리너 조건
           // 가격<$5 + Open>EMA200 + 양운(A>B) + 현재가가 구름 완전 상향 돌파
-          const tv1 = await tradingView1mCheck(r.sym);
+          const tv1 = await tradingView1mCheck(r.sym, r.price);
           const tvMechanicalPass = tv1.ok;
 
           // 1단계 - Twelve Data 5분봉 자석/양운
@@ -2621,12 +2733,13 @@ Deno.serve(async (req) => {
           const cp = r.scoring.criticalPatterns;
           const accumPattern = r.scoring.accumulation;
 
-          // ★ [볼륨 300K 우선] 최근 5분봉 평균 거래량 계산 (Finnhub 1분봉 volumes)
+          // ★ [볼륨 300K 우선] 1분봉 데이터 소스의 최근 5봉 평균/마지막 봉 거래량 우선 사용
           const recentVols = (r.data?.volumes || []).slice(-5);
-          const recentAvgVolShares = recentVols.length > 0
+          const fallbackAvgVolShares = recentVols.length > 0
             ? recentVols.reduce((s: number, v: number) => s + (v || 0), 0) / recentVols.length
             : 0;
-          const lastBarVolShares = (r.data?.volumes || []).slice(-1)[0] || 0;
+          const recentAvgVolShares = tv1.avgVolume5 || fallbackAvgVolShares;
+          const lastBarVolShares = tv1.latestVolume || (r.data?.volumes || []).slice(-1)[0] || 0;
           (r as any).recentAvgVolShares = recentAvgVolShares;
           (r as any).lastBarVolShares = lastBarVolShares;
           (r as any).isHighVolume300K = recentAvgVolShares >= 300_000 || lastBarVolShares >= 300_000;
@@ -2678,6 +2791,10 @@ Deno.serve(async (req) => {
           }
 
           candidates.push(r);
+        }
+        if (candidates.length >= targetCandidateCount) {
+          await addLog('system', 'scan', null, `[Fast-Execution] 매수 후보 ${candidates.length}개 확보 — 제한시간 보호를 위해 잔여 스캔 중단 후 즉시 주문 단계 진입`, { candidateCount: candidates.length, targetCandidateCount });
+          break;
         }
         if (i + 5 < SCAN_SYMBOLS.length) await new Promise(resolve => setTimeout(resolve, 150)); // ★ 300→150ms
       }
